@@ -1,0 +1,7 @@
+.git
+.vercel
+node_modules
+dist
+supabase
+CMS_SETUP.md
+*.log

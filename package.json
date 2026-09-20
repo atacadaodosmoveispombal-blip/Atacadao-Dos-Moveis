@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "node scripts/build-vercel.mjs",
     "dev": "node server.js",
     "start": "node server.js",
     "check": "node --check app.js && node --check hero-carousel.js && node --check storefront-cms.js && node --check admin-app.js",
