@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Atacarejo dos Móveis — móveis para todos os momentos</title>
+<meta name="description" content="Móveis para todos os momentos com preço baixo, entrega rápida e atendimento pelo WhatsApp.">
+<link rel="icon" href="assets/logo.png?v=png2"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="styles.css?v=banner-library-1">
+</head>
+<body>
+<div class="topbar"><div>🚚 Mais conforto, da nossa loja para sua casa</div><div>▣ </div><div></div><div>⌕ Cuidar da sua casa começa aqui</div><div class="instagram">Siga @menorprecomoveis ↗</div></div>
+<header class="header"><div class="head-main"><button class="icon-btn menu" type="button" aria-label="Abrir menu" aria-expanded="false" aria-controls="drawer">☰</button><a class="brand" href="#inicio" aria-label="Atacarejo dos Móveis — início"><img src="assets/logo.png?v=png2" alt="Atacarejo dos Móveis" width="320" height="145"></a><div class="search-wrap"><input id="search" type="search" autocomplete="off" enterkeyhint="search" placeholder="Busque por sofá, cama, guarda-roupa..." aria-label="Buscar produtos" aria-controls="suggestions" aria-expanded="false"><button id="searchBtn" type="button" aria-label="Pesquisar">⌕</button><div id="suggestions" role="listbox" aria-label="Sugestões de busca"></div></div><div class="head-actions"><button class="head-action" type="button" id="accountBtn" aria-label="Minha conta">♙<span>Minha conta<small>Entrar / Cadastrar</small></span></button><button class="head-action" type="button" id="favBtn" aria-label="Favoritos">♡<span>Favoritos<small id="favCount">0 itens</small></span></button><button class="head-action cart-head" type="button" id="cartBtn" aria-label="Abrir sacola">🛒<span>Sacola<small id="cartCount">0 itens</small></span><b id="cartBadge">0</b></button></div></div><nav class="nav" aria-label="Navegação principal"><button id="categoriesMenu" class="categories-menu" type="button">☰ <span>Todas as categorias</span></button><a href="#inicio" data-nav-home>Início</a><a href="#catalogo" data-nav-offers>Ofertas</a><a href="#catalogo" data-nav-category="Sala">Sala</a><a href="#catalogo" data-nav-category="Quarto">Quarto</a><a href="#catalogo" data-nav-category="Cozinha">Cozinha</a><a href="#catalogo" data-nav-category="Escritório">Escritório</a><a href="#catalogo" data-nav-category="Eletrodomésticos">Eletros</a><a href="#catalogo" data-nav-category="Todas">Todas as categorias</a></nav></header>
+<main id="inicio">
+<section class="hero"><div class="hero-copy"><p class="eyebrow">MÓVEIS PARA TODOS OS MOMENTOS</p><h1>Sua casa com<br><em>mais conforto<br>e economia.</em></h1><p>Móveis para combinar com a sua<br>casa, seu estilo e seu bolso.</p><button class="btn yellow" onclick="filterCategory('Todas')">EXPLORAR PRODUTOS <span>→</span></button></div><div class="hero-art hero-carousel" aria-roledescription="carrossel" aria-label="Ambientes para inspirar sua casa"><div class="hero-slides" aria-live="off"><figure class="hero-slide is-active" data-hero-slide><img src="assets/editorial-room-clean.png" alt="Sala de estar aconchegante com sofá e decoração" width="1600" height="1100" fetchpriority="high"><figcaption><small>SALA DE ESTAR</small><strong>Sua casa, do seu jeito.</strong></figcaption></figure><figure class="hero-slide" data-hero-slide aria-hidden="true"><img src="https://images.unsplash.com/photo-1618220179428-22790b461013?auto=format&amp;fit=crop&amp;w=1600&amp;q=82" alt="Sala de jantar contemporânea com mesa e cadeiras" width="1600" height="1100" loading="lazy"><figcaption><small>SALA DE JANTAR</small><strong>Encontros que viram memórias.</strong></figcaption></figure><figure class="hero-slide" data-hero-slide aria-hidden="true"><img src="https://images.unsplash.com/photo-1556911220-bff31c812dba?auto=format&amp;fit=crop&amp;w=1600&amp;q=82" alt="Cozinha clara e funcional com mobiliário planejado" width="1600" height="1100" loading="lazy"><figcaption><small>COZINHA</small><strong>A cozinha que combina com você.</strong></figcaption></figure><figure class="hero-slide" data-hero-slide aria-hidden="true"><img src="https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&amp;fit=crop&amp;w=1600&amp;q=82" alt="Quarto confortável com cama e iluminação suave" width="1600" height="1100" loading="lazy"><figcaption><small>QUARTO</small><strong>Conforto para descansar.</strong></figcaption></figure><figure class="hero-slide" data-hero-slide aria-hidden="true"><img src="https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&amp;fit=crop&amp;w=1600&amp;q=82" alt="Ambiente completo integrado para receber família e amigos" width="1600" height="1100" loading="lazy"><figcaption><small>AMBIENTE COMPLETO</small><strong>Mais espaço para viver bem.</strong></figcaption></figure></div><button class="hero-arrow hero-prev" type="button" aria-label="Ver ambiente anterior">‹</button><button class="hero-arrow hero-next" type="button" aria-label="Ver próximo ambiente">›</button><div class="hero-dots" role="group" aria-label="Escolher ambiente"><button class="is-active" type="button" aria-label="Mostrar Sala de estar" aria-current="true"></button><button type="button" aria-label="Mostrar Sala de jantar"></button><button type="button" aria-label="Mostrar Cozinha"></button><button type="button" aria-label="Mostrar Quarto"></button><button type="button" aria-label="Mostrar Ambiente completo"></button></div></div></section>
+<section class="section" id="categorias"><div class="section-head"><div><p class="eyebrow environment-eyebrow">COMPRE POR AMBIENTE</p><h2>Um carinho para <em>cada ambiente</em></h2><p>Escolha o ambiente e descubra móveis que combinam com a sua vida.</p></div><a class="environment-link" href="#catalogo">Ver todos os ambientes <span aria-hidden="true">→</span></a></div><div class="category-carousel"><button class="category-arrow category-prev" type="button" aria-label="Ambientes anteriores">‹</button><div class="category-row" id="categoryRow"></div><button class="category-arrow category-next" type="button" aria-label="Próximos ambientes">›</button></div></section>
+<section class="office-showcase" id="escritorio">
+  <div class="office-feature">
+    <div class="office-copy"><p>CONFORTO PARA PRODUZIR MAIS</p><h2>Seu escritório mais <em>bonito e funcional.</em></h2><span>Mesas, cadeiras e soluções de organização para trabalhar ou estudar com conforto todos os dias.</span><button class="office-cta" type="button" onclick="filterCategory('Escritório')">Ver tudo para escritório <b aria-hidden="true">→</b></button></div>
+    <div class="office-image" role="img" aria-label="Escritório moderno com mesa e cadeira"><div><small>IDEIAS PARA O SEU ESPAÇO</small><strong>Trabalhe do seu jeito.</strong></div></div>
+  </div>
+  <div class="office-products"><div class="office-products-head"><div><p>DESTAQUES PARA O HOME OFFICE</p><h3>Escolhas para transformar sua rotina</h3></div><button type="button" onclick="filterCategory('Escritório')">Ver todos <span aria-hidden="true">→</span></button></div><div class="office-grid" id="officeGrid"></div></div>
+</section>
+<section class="section offers" id="ofertas"><div class="section-head"><div><h2><span class="fire">♨</span> Ofertas do dia</h2><p>Os melhores preços para você aproveitar agora!</p></div><div class="countdown"><small>OFERTAS TERMINAM EM</small><b>08 <i>DIAS</i></b><b>17 <i>HORAS</i></b><b>32 <i>MIN</i></b><b>15 <i>SEG</i></b></div><a href="#catalogo">Ver todas →</a></div><div class="product-grid" id="offerGrid"></div></section>
+<section class="banner-strip"><div class="promo sofa"><div><span>SEMANA</span><strong>do SOFÁ</strong><small>CONFORTO COM PREÇO BAIXO</small><button class="btn yellow" onclick="filterCategory('Sala')">Ver ofertas →</button></div></div><div class="promo bedroom"><div><span>QUARTOS</span><strong>com ESTILO</strong><small>Seu descanso merece o melhor</small><button class="btn yellow" onclick="filterCategory('Quarto')">Confira →</button></div></div></section>
+<section class="section" id="mais-vendidos"><div class="section-head"><div><h2>Mais vendidos</h2><p>Escolhas que fazem sucesso em todos os lares</p></div><a href="#catalogo">Ver catálogo →</a></div><div class="product-grid" id="bestGrid"></div></section>
+<section class="ambient-promo"><div class="ambient-copy"><p>ESPAÇO PARA NOVOS MOMENTOS</p><h2>Seu cantinho merece<br>esse aconchego.</h2><span>Ideias para renovar a sala e aproveitar cada encontro.</span><button class="btn yellow" onclick="filterCategory('Sala')">Encontre seu sofá&nbsp; →</button></div><div class="ambient-image"></div></section>
+
+</main>
+<section id="catalogo" class="catalogue section"><div class="section-head"><div><p class="eyebrow catalog-eyebrow">ESCOLHIDOS PARA A SUA CASA</p><h2>Encontre seu <em>próximo móvel</em></h2><p id="resultLabel">Ver todos os produtos</p></div><a id="catalogLink" class="catalog-link" href="#catalogo">Ver os produtos →</a><div class="catalog-tools"><select id="sort" aria-label="Ordenar produtos"><option>Mais relevantes</option><option>Menor preço</option><option>Maior preço</option></select><button class="filter-btn" id="filterToggle" type="button">☷ Filtros</button></div></div><div class="filter-pills" id="filterPills"></div><div class="product-grid" id="catalogGrid"></div></section>
+<footer class="site-footer" id="footer">
+  <div class="footer-main footer-premium">
+    <section class="footer-section footer-brand" aria-labelledby="footer-social-title">
+      <img src="assets/logo.png?v=png2" alt="Atacarejo dos Móveis">
+      <h2 id="footer-social-title">Siga-nos</h2>
+      <div class="social-links" aria-label="Redes sociais">
+        <a class="social-icon social-instagram" data-footer-instagram href="https://www.instagram.com/menorprecomoveis" target="_blank" rel="noopener noreferrer" aria-label="Instagram do Atacarejo dos Móveis"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" class="social-dot"/></svg></a>
+        <a class="social-icon social-facebook" href="https://www.facebook.com/menorprecomoveis" target="_blank" rel="noopener noreferrer" aria-label="Facebook do Atacarejo dos Móveis"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.2 8H17V4.2c-.5-.1-2.1-.2-4-.2-3.9 0-6.6 2.4-6.6 6.8V14H2v4.3h4.4V29h5.4V18.3h4.5L17 14h-5.2v-2.8C11.8 9.9 12.2 8 14.2 8Z" transform="translate(2 -4) scale(.9)"/></svg></a>
+        <button class="social-icon social-youtube" type="button" data-youtube-placeholder aria-label="YouTube do Atacarejo dos Móveis — canal em breve"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.6 7.2a2.8 2.8 0 0 0-2-2C17.8 4.7 12 4.7 12 4.7s-5.8 0-7.6.5a2.8 2.8 0 0 0-2 2A29 29 0 0 0 2 12a29 29 0 0 0 .4 4.8 2.8 2.8 0 0 0 2 2c1.8.5 7.6.5 7.6.5s5.8 0 7.6-.5a2.8 2.8 0 0 0 2-2A29 29 0 0 0 22 12a29 29 0 0 0-.4-4.8Z"/><path d="m10 15.2 5-3.2-5-3.2v6.4Z" class="youtube-play"/></svg></button>
+      </div>
+    </section>
+    <section class="footer-section footer-links" aria-labelledby="footer-institutional-title">
+      <h2 id="footer-institutional-title">Institucional</h2>
+      <nav aria-label="Links institucionais"><a href="#sobre-nos" data-footer-info="about">Sobre nós</a><a href="#nossa-loja" data-footer-info="store">Nossa loja</a><a href="#politica-de-privacidade" data-footer-info="privacy">Política de privacidade</a><a href="#termos-de-uso" data-footer-info="terms">Termos de uso</a></nav>
+    </section>
+    <section class="footer-section footer-links" aria-labelledby="footer-service-title">
+      <h2 id="footer-service-title">Atendimento</h2>
+      <nav aria-label="Links de atendimento"><a href="#central-de-ajuda" data-footer-info="help">Central de ajuda</a><a href="#trocas-e-devolucoes" data-footer-info="returns">Trocas e devoluções</a><a href="#entrega-e-prazos" data-footer-info="delivery">Entrega e prazos</a><a href="https://wa.me/5575991151721" target="_blank" rel="noopener noreferrer">Fale conosco</a></nav>
+    </section>
+    <section class="footer-section footer-store" aria-labelledby="footer-location-title">
+      <div class="footer-title-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s7-6.4 7-13a7 7 0 1 0-14 0c0 6.6 7 13 7 13Z"/><circle cx="12" cy="9" r="2.5"/></svg><h2 id="footer-location-title">Localização</h2></div>
+      <address>Praça Ricardo Borges, 75<br>(Próximo a Igreja Velha)<br>Centro<br>Ribeira do Pombal - BA<br>CEP 48400-000</address>
+      <a class="maps-button" href="https://www.google.com/maps/search/?api=1&amp;query=Pra%C3%A7a+Ricardo+Borges%2C+75%2C+Centro%2C+Ribeira+do+Pombal+-+BA%2C+48400-000" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s7-6.4 7-13a7 7 0 1 0-14 0c0 6.6 7 13 7 13Z"/><circle cx="12" cy="9" r="2.5"/></svg><span>Ver no Google Maps</span><b aria-hidden="true">→</b></a>
+      <div class="footer-contact">
+        <div class="footer-title-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 11.6a8.5 8.5 0 0 1-12.6 7.5L3 20.5l1.4-4.7A8.5 8.5 0 1 1 20.5 11.6Z"/><path d="M8.2 7.5c.3-.5.6-.5 1-.5h.5c.2 0 .4.1.5.4l.8 2c.1.3.1.5-.1.7l-.6.8c-.2.2-.2.4-.1.6.6 1.2 1.6 2.2 2.8 2.8.2.1.4.1.6-.1l.8-1c.2-.2.4-.3.7-.2l2 .9c.3.1.4.3.4.5 0 .4-.2 1.3-.7 1.8-.5.6-1.5.9-2.4.7-1.3-.2-3.1-.9-5-2.6-1.5-1.4-2.5-3.2-2.8-4.5-.3-1.1 0-1.8.4-2.3Z"/></svg><h2>Contatos</h2></div>
+        <a class="whatsapp-button" href="https://wa.me/5575991151721" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 11.6a8.5 8.5 0 0 1-12.6 7.5L3 20.5l1.4-4.7A8.5 8.5 0 1 1 20.5 11.6Z"/><path d="M8.2 7.5c.3-.5.6-.5 1-.5h.5c.2 0 .4.1.5.4l.8 2c.1.3.1.5-.1.7l-.6.8c-.2.2-.2.4-.1.6.6 1.2 1.6 2.2 2.8 2.8.2.1.4.1.6-.1l.8-1c.2-.2.4-.3.7-.2l2 .9c.3.1.4.3.4.5 0 .4-.2 1.3-.7 1.8-.5.6-1.5.9-2.4.7-1.3-.2-3.1-.9-5-2.6-1.5-1.4-2.5-3.2-2.8-4.5-.3-1.1 0-1.8.4-2.3Z"/></svg><span><small>Falar no WhatsApp</small><strong>(75) 99115-1721</strong></span><b aria-hidden="true">→</b></a>
+      </div>
+    </section>
+    <section class="footer-section footer-payment" aria-labelledby="footer-payment-title">
+      <h2 id="footer-payment-title">Formas de pagamento</h2>
+      <div class="payment-panel">
+        <div class="payment-grid" aria-label="Formas de pagamento aceitas">
+          <div class="payment-card" aria-label="Visa"><span class="payment-visa">VISA</span></div>
+          <div class="payment-card" aria-label="Elo"><span class="payment-elo"><i></i>elo</span></div>
+          <div class="payment-card" aria-label="Pix"><span class="payment-pix"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="m16 3 6 6a4 4 0 0 0 5 0l2 2-6 6a4 4 0 0 1-5 0l-2-2-2 2a4 4 0 0 1-5 0l-6-6 2-2a4 4 0 0 0 5 0l6-6Zm0 26-6-6a4 4 0 0 0-5 0l-2-2 6-6a4 4 0 0 1 5 0l2 2 2-2a4 4 0 0 1 5 0l6 6-2 2a4 4 0 0 0-5 0l-6 6Z"/></svg>pix</span></div>
+        </div>
+        <div class="secure-strip"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg><span><strong>Compra segura e facilitada</strong><small>Seus dados protegidos</small></span></div>
+      </div>
+    </section>
+  </div>
+  <div class="footer-bottom"><span class="footer-copyright">© 2026 Atacarejo dos Móveis. Todos os direitos reservados.</span><span class="footer-tagline">Móveis para todos os momentos <b aria-hidden="true">♥</b></span></div>
+</footer>
+<nav class="mobile-nav" aria-label="Navegação móvel"><button type="button" onclick="scrollToTop()" aria-label="Voltar ao início">⌂<small>Início</small></button><button type="button" onclick="document.querySelector('#categorias').scrollIntoView({behavior:'smooth'})" aria-label="Ir para categorias">☷<small>Categorias</small></button><button type="button" onclick="showOffers()" aria-label="Ver ofertas">♨<small>Ofertas</small></button><button type="button" onclick="openCart()" aria-label="Abrir sacola">🛒<small>Sacola</small><b id="mobileBadge">0</b></button><button type="button" onclick="openAccount()" aria-label="Abrir minha conta">♙<small>Conta</small></button></nav>
+<div id="toast" role="status" aria-live="polite"></div><div id="drawer" class="drawer" role="dialog" aria-modal="true" aria-hidden="true" aria-label="Painel da loja"><div class="drawer-card" role="document"><button class="close" type="button" onclick="closeDrawer()" aria-label="Fechar painel">×</button><div id="drawerContent"></div></div></div>
+<script src="assets/supabase-2.116.0.js"></script>
+<script src="app.js?v=category-visibility-1"></script>
+<script src="hero-carousel.js?v=hero-slider-1"></script>
+<script src="storefront-cms.js?v=banner-library-1"></script>
+</body></html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
