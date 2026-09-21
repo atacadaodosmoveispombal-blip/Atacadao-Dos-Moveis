@@ -576,3 +576,12 @@ dialog[open] .form-grid{height:auto;min-height:0;max-height:none;overflow:auto;o
 .quick-preview-banner.campaign-special_week{background:linear-gradient(120deg,#052f78,#0a5ab8)}.quick-preview-banner.campaign-special_week .quick-campaign-seal{background:#ffda18;border-color:#ffda18}
 .quick-preview-banner.campaign-mattresses{background:linear-gradient(120deg,#f7f8f5,#eaf2fb);color:#153a70}.quick-preview-banner.campaign-mattresses .quick-banner-copy{color:#153a70}.quick-preview-banner.campaign-mattresses .quick-banner-copy p{color:#5d718d}.quick-preview-banner.campaign-mattresses .quick-campaign-seal{background:#fff;border-color:#d7e1ec;color:#173a70}
 @media(max-width:520px){.quick-phrase-grid{grid-template-columns:minmax(0,1fr)}.quick-phrase-grid button{min-height:78px}}
+
+/* Shared category icons in the administration workspace. */
+.category-thumb-placeholder .category-icon{width:32px;height:32px;color:var(--blue)}
+.category-site-card-footer{display:flex;align-items:center;gap:10px}
+#categoryPreviewIcon{display:inline-flex;align-items:center;justify-content:center;flex:none;color:var(--blue)}
+#categoryPreviewIcon .category-icon{width:28px;height:28px}
+.category-editor-fields label:has(select[name="icon_key"]) small{display:block;margin-top:5px;color:var(--muted);font-size:.72rem}
+.data-table td:first-child>.category-icon{width:28px;height:28px;margin-right:8px;color:var(--blue)}
+@media(max-width:620px){#categoryPreviewIcon .category-icon{width:26px;height:26px}}

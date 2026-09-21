@@ -403,7 +403,7 @@
     categories: { table: 'categories', singular: 'Subcategoria', plural: 'subcategorias', bucket: 'categories', fields: [
       ['environment_id', 'Ambiente', 'relation', true, 'environments'], ['name', 'Nome', 'text', true], ['slug', 'URL amigável', 'slug', true], ['description', 'Descrição', 'textarea'], ['search_keywords', 'Palavras relacionadas para busca', 'text'], ['image_url', 'Imagem', 'file'], ['sort_order', 'Ordem', 'number'], ['active', 'Ativa', 'checkbox'], ['show_on_homepage', 'Mostrar na página inicial', 'checkbox'], ['show_in_menu', 'Mostrar no menu de ambientes', 'checkbox'] ] },
     environments: { table: 'environments', singular: 'Ambiente', plural: 'ambientes', bucket: 'environments', fields: [
-      ['name', 'Nome', 'text', true], ['slug', 'URL amigável', 'slug', true], ['description', 'Descrição', 'textarea'], ['image_url', 'Imagem', 'file'], ['sort_order', 'Ordem', 'number'], ['active', 'Ativo', 'checkbox'] ] },
+      ['name', 'Nome', 'text', true], ['slug', 'URL amigável', 'slug', true], ['description', 'Descrição', 'textarea'], ['icon_key', 'Ícone do ambiente', 'select', false, [['', 'Automático pelo nome'], ...CategoryIcons.keys.map(key => [key, key.replaceAll('-', ' ')])]], ['image_url', 'Imagem', 'file'], ['sort_order', 'Ordem', 'number'], ['active', 'Ativo', 'checkbox'] ] },
     brands: { table: 'brands', singular: 'Marca', plural: 'marcas', bucket: 'brands', fields: [
       ['name', 'Nome', 'text', true], ['slug', 'URL amigável', 'slug', true], ['logo_url', 'Logotipo', 'file'], ['active', 'Ativa', 'checkbox'] ] },
     promotions: { table: 'promotions', singular: 'Promoção', plural: 'promoções', bucket: 'banners', fields: [
@@ -477,6 +477,12 @@
     $('#categoryPreviewName').textContent = name;
     $('#categoryPreviewDescription').textContent = description;
     $('#categoryAddressText').textContent = `/categoria/${slug}`;
+    const iconSelect = $('[name="icon_key"]');
+    const environmentName = $('[name="environment_id"]')?.selectedOptions[0]?.textContent || '';
+    const iconKey = iconSelect?.value || CategoryIcons.keyFor(name, environmentName);
+    const iconPreview = $('#categoryPreviewIcon');
+    if (iconPreview) iconPreview.innerHTML = CategoryIcons.icon(iconKey, { size: 28 });
+    if (iconSelect && !iconSelect.value) iconSelect.options[0].textContent = 'Automático: ' + iconKey.replaceAll('-', ' ');
     const status = $('#dialogEyebrow');
     status.classList.toggle('is-draft', !active);
     status.classList.toggle('is-live', active);
@@ -520,7 +526,7 @@
     $('#editorFields').innerHTML = `<div class="category-editor-layout">
       <section class="category-editor-section category-info-section">
         <header><span>1</span><div><h3>Informações da categoria</h3><p>Conte aos clientes o que eles encontram nesta seção.</p></div></header>
-        <div class="category-editor-fields"><label>Ambiente<select name="environment_id" required><option value="">Selecione</option>${environments.map(environment => `<option value="${environment.id}" ${String(environment.id) === String(selectedEnvironmentId) ? 'selected' : ''}>${esc(environment.name)}</option>`).join('')}</select></label><label>Nome da subcategoria<input name="name" type="text" required value="${esc(record?.name || '')}" placeholder="Ex.: Sofá"></label><label>Descrição<textarea name="description" placeholder="Apresente a subcategoria em poucas palavras.">${esc(record?.description || '')}</textarea></label><label>Palavras relacionadas para busca<input name="search_keywords" type="text" value="${esc(record?.search_keywords || '')}" placeholder="Ex.: sofá retrátil, estofado, 3 lugares"></label></div>
+        <div class="category-editor-fields"><label>Ambiente<select name="environment_id" required><option value="">Selecione</option>${environments.map(environment => `<option value="${environment.id}" ${String(environment.id) === String(selectedEnvironmentId) ? 'selected' : ''}>${esc(environment.name)}</option>`).join('')}</select></label><label>Nome da subcategoria<input name="name" type="text" required value="${esc(record?.name || '')}" placeholder="Ex.: Sofá"></label><label>Descrição<textarea name="description" placeholder="Apresente a subcategoria em poucas palavras.">${esc(record?.description || '')}</textarea></label><label>Palavras relacionadas para busca<input name="search_keywords" type="text" value="${esc(record?.search_keywords || '')}" placeholder="Ex.: sofá retrátil, estofado, 3 lugares"></label><label>Ícone da subcategoria<select name="icon_key"><option value="">Automático pelo nome</option>${CategoryIcons.keys.map(key => `<option value="${key}" ${record?.icon_key === key ? 'selected' : ''}>${esc(key.replaceAll('-', ' '))}</option>`).join('')}</select><small>O ícone é sugerido automaticamente; altere aqui se precisar.</small></label></div>
         <div class="category-address"><span>Endereço da página</span><code id="categoryAddressText">/categoria/${esc(record?.slug || 'categoria')}</code><button id="editCategorySlug" type="button">Editar endereço</button></div>
         <label class="category-slug-editor" id="categorySlugEditor" hidden>Final do endereço<input name="slug" type="text" required value="${esc(record?.slug || '')}" placeholder="sala"><small>Use letras, números e hífens.</small></label>
       </section>
@@ -530,7 +536,7 @@
       </section>
       <aside class="category-live-preview">
         <div class="category-preview-heading"><span>PRÉVIA NO SITE</span><b>Atualização em tempo real</b></div>
-        <div class="category-site-card"><div class="category-site-image">${imageUrl ? `<img data-category-live-image src="${esc(imageUrl)}" alt="">` : '<img data-category-live-image alt="" hidden>'}<div data-category-image-placeholder ${imageUrl ? 'hidden' : ''}>Sua imagem aparecerá aqui</div></div><div class="category-site-card-footer"><div><strong id="categoryPreviewName">${esc(record?.name || 'Nome da categoria')}</strong><small id="categoryPreviewDescription">${esc(record?.description || 'Uma descrição curta ajuda o cliente a entender o que encontrará aqui.')}</small></div><i aria-hidden="true">→</i></div></div>
+        <div class="category-site-card"><div class="category-site-image">${imageUrl ? `<img data-category-live-image src="${esc(imageUrl)}" alt="">` : '<img data-category-live-image alt="" hidden>'}<div data-category-image-placeholder ${imageUrl ? 'hidden' : ''}>Sua imagem aparecerá aqui</div></div><div class="category-site-card-footer"><span id="categoryPreviewIcon" aria-hidden="true">${CategoryIcons.icon(record?.icon_key||record?.name||'sofa',{size:28})}</span><div><strong id="categoryPreviewName">${esc(record?.name || 'Nome da categoria')}</strong><small id="categoryPreviewDescription">${esc(record?.description || 'Uma descrição curta ajuda o cliente a entender o que encontrará aqui.')}</small></div><i aria-hidden="true">→</i></div></div>
         <p>Esta é uma representação fiel do card usado na loja. O enquadramento pode variar levemente conforme a tela.</p>
       </aside>
       <section class="category-editor-section category-position-section">
@@ -555,6 +561,9 @@
       $('#dialogTitle').textContent = record ? `Editar categoria — ${nameInput.value.trim() || record.name}` : (nameInput.value.trim() ? `Nova categoria — ${nameInput.value.trim()}` : 'Nova categoria');
     });
     $('[name="description"]').addEventListener('input', syncCategoryPreview);
+    $('[name="environment_id"]').addEventListener('change', syncCategoryPreview);
+    $('[name="icon_key"]').addEventListener('change', syncCategoryPreview);
+    syncCategoryPreview();
     $('[name="active"]').addEventListener('change', syncCategoryPreview);
     $('#editCategorySlug').onclick = () => { editorState.slugManual = true; $('#categorySlugEditor').hidden = false; slugInput.focus(); };
     slugInput.addEventListener('input', () => { editorState.slugManual = true; slugInput.value = slugify(slugInput.value); syncCategoryPreview(); });
@@ -1615,6 +1624,7 @@
     let completed = false;
     try {
       const values = formValues(config.fields, form);
+      if (view === 'environments' && !values.icon_key) values.icon_key = CategoryIcons.keyFor(values.name);
       if (view === 'sections') {
         try { values.content = values.content_text ? JSON.parse(values.content_text) : {}; }
         catch { throw new Error('O conteúdo JSON da seção não é válido.'); }
@@ -1650,7 +1660,7 @@
         const { error: rollbackError } = await db.from(config.table).delete().eq('id', createdRecordId);
         if (!rollbackError) await Promise.all(uploadedFiles.map(saved => db.storage.from(saved.bucket).remove([saved.path])));
       } else if (!persisted) await Promise.all(uploadedFiles.map(saved => db.storage.from(saved.bucket).remove([saved.path])));
-      toast(explain(error));
+      toast(view === 'environments' && /icon_key/i.test(error.message || '') ? 'Execute a migration 20260925_category_icon_keys.sql no Supabase antes de salvar os ícones.' : explain(error));
     }
     finally { button.disabled = false; button.textContent = 'Salvar alterações'; }
   }
@@ -1700,6 +1710,7 @@
         slug: slugify(form.elements.slug.value || form.elements.name.value),
         description: form.elements.description.value.trim() || null,
         search_keywords: form.elements.search_keywords.value.trim() || null,
+        icon_key: form.elements.icon_key.value || CategoryIcons.keyFor(form.elements.name.value, form.elements.environment_id.selectedOptions[0]?.textContent),
         active: saveMode === 'draft' ? false : form.elements.active.checked,
         show_on_homepage: form.elements.show_on_homepage.checked,
         show_in_menu: form.elements.show_in_menu.checked
@@ -1711,6 +1722,7 @@
         ? await db.from('categories').update(values).eq('id', record.id).select().single()
         : await db.from('categories').insert(values).select().single();
       if (result.error) {
+        if (result.error.code === '42703' && /icon_key/i.test(result.error.message || '')) throw new Error('Execute a migration 20260925_category_icon_keys.sql no Supabase antes de salvar os ícones.');
         if (result.error.code === '42703' || /show_on_homepage|show_in_menu/i.test(result.error.message || '')) throw new Error('Execute a migration 20260920_category_visibility_options.sql no Supabase antes de salvar.');
         throw result.error;
       }
@@ -1754,7 +1766,7 @@
     });
     return `<tr data-category-id="${row.id}" data-environment-id="${esc(row.environment_id || '')}" data-name="${esc(row.name.toLowerCase())}" data-active="${row.active}" data-order="${Number(row.sort_order || 0)}">
       <td class="category-drag-cell"><span class="category-drag" draggable="${canWrite()}" title="Arraste para reordenar" aria-label="Reordenar ${esc(row.name)}">⠿</span></td>
-      <td><div class="category-identity">${row.image_url ? `<img class="thumb" src="${esc(row.image_url)}" alt="">` : '<span class="category-thumb-placeholder" aria-hidden="true">▦</span>'}<span><b>${esc(row.name)}</b><small>${countLabel}</small></span></div></td>
+      <td><div class="category-identity"><span class="category-thumb-placeholder" aria-hidden="true">${CategoryIcons.icon(row.icon_key||row.name,{environment:row.environments?.name,size:32})}</span><span><b>${esc(row.name)}</b><small>${countLabel}</small></span></div></td>
       <td><span class="product-category-chip">${esc(row.environments?.name || 'Sem ambiente')}</span></td>
       <td class="category-slug">${esc(row.slug)}</td>
       <td>${Number(row.sort_order || 0)}</td>
@@ -1804,7 +1816,7 @@
     $$('[data-category-duplicate]').forEach(button => button.onclick = () => runAction(button, async () => {
       if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
       const record = rowFor(button.dataset.categoryDuplicate);
-      const copy = { environment_id: record.environment_id, name: `${record.name} — cópia`, slug: `${record.slug}-copia-${Date.now().toString().slice(-6)}`, description: record.description, search_keywords: record.search_keywords, image_url: record.image_url, sort_order: Number(record.sort_order || 0) + 1, active: false, show_on_homepage: record.show_on_homepage !== false, show_in_menu: record.show_in_menu !== false };
+      const copy = { environment_id: record.environment_id, name: `${record.name} — cópia`, slug: `${record.slug}-copia-${Date.now().toString().slice(-6)}`, description: record.description, search_keywords: record.search_keywords, icon_key: record.icon_key||CategoryIcons.keyFor(record.name, record.environments?.name), image_url: record.image_url, sort_order: Number(record.sort_order || 0) + 1, active: false, show_on_homepage: record.show_on_homepage !== false, show_in_menu: record.show_in_menu !== false };
       const { error } = await db.from('categories').insert(copy);
       if (error) return toast(explain(error), 'error');
       notifyStorefront('categories'); toast('Subcategoria duplicada como inativa.'); render('categories');
@@ -2175,7 +2187,7 @@
       primary: { label: 'Editar', icon: 'edit', attributes: { 'data-edit': row.id } },
       actions
     });
-    return `<tr><td>${imageKey && row[imageKey] ? `<img class="thumb" src="${esc(row[imageKey])}" alt=""> ` : ''}<b>${esc(title)}</b></td><td>${esc(identity)}</td><td>${esc(timing)}</td><td><span class="badge ${row.active ? '' : 'off'}">${row.active ? 'Ativo' : 'Inativo'}</span></td><td class="action-cell">${menu}</td></tr>`;
+    return `<tr><td>${config.table === 'environments' ? CategoryIcons.icon(row.icon_key||row.name,{size:28}) : imageKey && row[imageKey] ? `<img class="thumb" src="${esc(row[imageKey])}" alt=""> ` : ''}<b>${esc(title)}</b></td><td>${esc(identity)}</td><td>${esc(timing)}</td><td><span class="badge ${row.active ? '' : 'off'}">${row.active ? 'Ativo' : 'Inativo'}</span></td><td class="action-cell">${menu}</td></tr>`;
   }
   function bindSearch() {
     $('#searchList')?.addEventListener('input', event => $$('tbody tr').forEach(row => { row.hidden = !row.textContent.toLowerCase().includes(event.target.value.toLowerCase()); }));

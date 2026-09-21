@@ -10,6 +10,7 @@ const publicFiles = [
   'styles.css',
   'admin.css',
   'app.js',
+  'category-icons.js',
   'admin-app.js',
   'hero-carousel.js',
   'storefront-cms.js',

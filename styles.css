@@ -775,3 +775,37 @@ button{touch-action:manipulation}
 @media(prefers-reduced-motion:reduce){
  .environment-mega-menu,.environment-nav-items>button:after,.environment-mega-links button span{transition:none}
 }
+
+/* One shared, color-inheriting icon treatment across category surfaces. */
+.category-icon{display:inline-block;flex:none;vertical-align:middle;fill:none!important;stroke:currentColor!important;stroke-width:2.8!important;stroke-linecap:round;stroke-linejoin:round}
+.environment-nav-items>button{display:inline-flex;align-items:center;gap:7px;transition:color .18s ease,background-color .18s ease}
+.environment-nav-items>button .category-icon{width:22px;height:22px}
+.environment-nav-items>button:hover{color:var(--blue)}
+.environment-mega-intro>.category-icon{width:36px;height:36px;padding:0;border-radius:0;background:none;stroke:currentColor;color:var(--blue)}
+.environment-mega-links button{justify-content:flex-start;gap:10px;transition:color .18s ease,background-color .18s ease}
+.environment-mega-links button .category-icon{width:26px;height:26px;color:var(--blue)}
+.environment-mega-links button .category-label{flex:1;min-width:0;opacity:1;transform:none;color:inherit;transition:none}
+.environment-mega-links button .category-arrow-glyph{margin-left:auto}
+.environment-mega-links button:hover .category-icon,.environment-mega-links button:focus-visible .category-icon{color:#bd9100}
+.environment-mobile-tabs>button .category-icon{width:26px;height:26px}
+.environment-mobile-subcategories button{justify-content:flex-start;gap:10px;transition:color .18s ease}
+.environment-mobile-subcategories button .category-icon{width:24px;height:24px;color:var(--blue)}
+.environment-mobile-subcategories button .category-label{flex:1;min-width:0}
+.environment-mobile-subcategories button .category-arrow-glyph{margin-left:auto}
+.environment-mobile-subcategories button:hover,.drawer-environment-list details button:hover{color:var(--blue)}
+.drawer-environment-list details button{justify-content:flex-start;align-items:center;gap:9px;transition:color .18s ease}
+.drawer-environment-list details button .category-icon{width:24px;height:24px}
+.drawer-environment-list details button .category-label{flex:1;min-width:0}
+.drawer-environment-list details button .category-arrow-glyph{margin-left:auto}
+.drawer-environment-list summary .category-icon{width:26px;height:26px}
+.section#categorias .category b{justify-content:flex-start;gap:8px}
+.section#categorias .category b .category-icon{width:32px;height:32px}
+.section#categorias .category b:after{margin-left:auto}
+.filter-pills .pill{display:inline-flex;align-items:center;gap:7px;transition:color .18s ease,background-color .18s ease,border-color .18s ease}
+.filter-pills .pill .category-icon{width:22px;height:22px}
+.official-product-category,.detail-badge{display:inline-flex;align-items:center;gap:6px}
+.official-product-category .category-icon{width:18px;height:18px}
+.detail-badge .category-icon{width:20px;height:20px}
+@media(max-width:900px){.environment-mobile-subcategories button{min-height:48px}}
+@media(max-width:620px){.section#categorias .category b .category-icon{width:28px;height:28px}.filter-pills.show .pill .category-icon{width:22px;height:22px}}
+@media(prefers-reduced-motion:reduce){.environment-nav-items>button,.environment-mega-links button,.environment-mobile-subcategories button,.drawer-environment-list details button,.filter-pills .pill{transition:none}}

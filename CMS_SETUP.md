@@ -34,7 +34,14 @@ Para ativar a estrutura de apresentação do e-commerce, aplique:
 
 Ela cria configurações de venda online, pedidos, snapshots dos itens, reservas de estoque, histórico e registro idempotente de webhooks. A venda online, PIX e cartão permanecem desativados até a escolha e configuração segura de um gateway oficial. A migration não cria cobranças, não contém credenciais e não permite que o administrador marque pagamentos como aprovados.
 
-Depois de aplicar a migration, execute:
+Para ativar a navegação por ambientes e a escolha de ícones no painel, aplique em ordem:
+
+`supabase/migrations/20260924_environment_subcategory_navigation.sql`
+`supabase/migrations/20260925_category_icon_keys.sql`
+
+A segunda migration adiciona `icon_key` a ambientes e subcategorias e preenche os ícones conhecidos. Sem ela, o site continua usando os ícones automáticos pelo nome, mas o painel não pode salvar uma escolha manual.
+
+Depois de aplicar as migrations, execute:
 
 ```powershell
 npm run verify:cms

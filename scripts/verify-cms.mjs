@@ -47,8 +47,9 @@ await verifyQuery(
 );
 await verifyQuery(
   'schema de categorias administrativas',
-  'categories?select=id,show_on_homepage,show_in_menu&limit=1'
+  'categories?select=id,show_on_homepage,show_in_menu,icon_key&limit=1'
 );
+await verifyQuery('schema de ícones dos ambientes', 'environments?select=id,icon_key&limit=1');
 const banners = await verifyQuery(
   'schema de campanhas e banners',
   'banners?select=id,active,draft,paused,sort_order,content_mode,category_id,promotion_id&order=sort_order'

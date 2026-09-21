@@ -301,7 +301,7 @@
     const installments = Number(row.max_installments);
     return {
       id: stableProductId(row.id), dbId: row.id, n: row.name, cat: row.categories?.name || 'Móveis',
-      environment: row.environments?.name || '', subcategory: row.categories?.name || '', brand: row.brands?.name || '', keywords: row.categories?.search_keywords || '',
+      environment: row.environments?.name || '', subcategory: row.categories?.name || '', categoryIconKey: row.categories?.icon_key || '', brand: row.brands?.name || '', keywords: row.categories?.search_keywords || '',
       price: sellingPrice, old: sellingPrice < regularPrice ? regularPrice : null, discount,
       img: orderedImages[0]?.image_url || row.og_image_url || imageFallback,
       images: orderedImages.slice(1).map(image => image.image_url), best: row.best_seller ? 1 : 0,
@@ -317,9 +317,11 @@
     };
   }
   async function loadStorefrontCategories() {
-    const extended = await cms.from('categories').select('id,name,slug,description,image_url,sort_order,show_on_homepage,show_in_menu,environment_id,search_keywords,active').eq('active', true).order('sort_order');
+    const extended = await cms.from('categories').select('id,name,slug,description,image_url,icon_key,sort_order,show_on_homepage,show_in_menu,environment_id,search_keywords,active').eq('active', true).order('sort_order');
     if (!extended.error) return extended;
-    if (extended.error.code !== '42703' && !/show_on_homepage|show_in_menu|environment_id|search_keywords/i.test(extended.error.message || '')) return extended;
+    if (extended.error.code !== '42703' && !/show_on_homepage|show_in_menu|environment_id|search_keywords|icon_key/i.test(extended.error.message || '')) return extended;
+    const withoutIcons = await cms.from('categories').select('id,name,slug,description,image_url,sort_order,show_on_homepage,show_in_menu,environment_id,search_keywords,active').eq('active', true).order('sort_order');
+    if (!withoutIcons.error) return withoutIcons;
     const legacy = await cms.from('categories').select('id,name,slug,description,image_url,sort_order,show_on_homepage,show_in_menu,active').eq('active', true).order('sort_order');
     if (legacy.error && (legacy.error.code === '42703' || /show_on_homepage|show_in_menu/i.test(legacy.error.message || ''))) {
       const minimal = await cms.from('categories').select('id,name,slug,description,image_url,sort_order,active').eq('active', true).order('sort_order');
@@ -330,13 +332,17 @@
     return legacy;
   }
   async function loadStorefrontProducts() {
+    const withIcons = await cms.from('products').select('*,categories(name,search_keywords,icon_key),environments(name),brands(name),product_images(image_url,is_cover,sort_order)').eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
+    if (!withIcons.error) return withIcons;
+    if (withIcons.error.code !== '42703' && !/search_keywords|icon_key/i.test(withIcons.error.message || '')) return withIcons;
     const modern = await cms.from('products').select('*,categories(name,search_keywords),environments(name),brands(name),product_images(image_url,is_cover,sort_order)').eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
     if (!modern.error) return modern;
     if (modern.error.code !== '42703' && !/search_keywords/i.test(modern.error.message || '')) return modern;
     return cms.from('products').select('*,categories(name),environments(name),brands(name),product_images(image_url,is_cover,sort_order)').eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
   }
   async function loadStorefrontEnvironments() {
-    return cms.from('environments').select('id,name,slug,description,image_url,sort_order,active').eq('active', true).order('sort_order');
+    const withIcons = await cms.from('environments').select('id,name,slug,description,image_url,icon_key,sort_order,active').eq('active', true).order('sort_order');
+    return withIcons.error?.code === '42703' ? cms.from('environments').select('id,name,slug,description,image_url,sort_order,active').eq('active', true).order('sort_order') : withIcons;
   }
   async function loadOnlineSalesSettings() {
     const result = await cms.from('online_sales_settings').select('*').eq('id', true).maybeSingle();
