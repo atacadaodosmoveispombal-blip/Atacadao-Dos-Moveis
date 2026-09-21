@@ -488,14 +488,13 @@ dialog .product-benefit-settings>header{display:flex;align-items:flex-start;gap:
 .product-benefit-settings h3{margin:0;color:#0a397a;font-size:1rem}
 .product-benefit-settings header p{margin:4px 0 0;color:#607793;font-size:.7rem;line-height:1.4}
 .product-benefit-options{display:grid;gap:9px}
-.product-benefit-option{position:relative;display:grid;grid-template-columns:44px minmax(0,1fr) 24px;align-items:center;gap:11px;min-height:66px;padding:10px 12px;border:1px solid #d2dfed;border-radius:10px;background:#fff;cursor:pointer;box-shadow:0 3px 10px rgba(7,45,95,.035);transition:border-color .18s,background .18s,box-shadow .18s,transform .18s}
+.product-benefit-option{position:relative;display:grid;grid-template-columns:minmax(112px,145px) minmax(0,1fr) 24px;align-items:center;gap:11px;min-height:76px;padding:8px 12px 8px 8px;border:1px solid #d2dfed;border-radius:10px;background:#fff;cursor:pointer;box-shadow:0 3px 10px rgba(7,45,95,.035);transition:border-color .18s,background .18s,box-shadow .18s,transform .18s}
 .product-benefit-option:hover{border-color:#9bbce0;box-shadow:0 6px 15px rgba(7,69,145,.09);transform:translateY(-1px)}
 .product-benefit-option:has(input:checked){border-color:#4386d2;background:#f7fbff;box-shadow:0 0 0 2px rgba(7,88,189,.08)}
 .product-benefit-option:has(input:focus-visible){outline:3px solid rgba(7,88,189,.2);outline-offset:2px}
 .product-benefit-option>input{position:absolute;width:1px;height:1px;min-height:0;margin:0;opacity:0}
-.product-benefit-option-icon{display:grid;width:44px;height:44px;place-items:center;border-radius:10px;background:#073f8f;color:#fff}
-.product-benefit-option-icon.is-assembly{background:#ffdc1a;color:#073b82}
-.product-benefit-option-icon svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.product-benefit-option-art{display:grid;min-width:0;place-items:center;overflow:hidden;border-radius:8px;background:linear-gradient(135deg,#edf3f9,#e4edf6)}
+.product-benefit-option-art img{display:block;width:100%;height:auto}
 .product-benefit-option>span:nth-of-type(2){min-width:0}
 .product-benefit-option b,.product-benefit-option small{display:block}
 .product-benefit-option b{color:#153d71;font-size:.76rem}.product-benefit-option small{margin-top:3px;color:#72859d;font-size:.59rem}
@@ -509,8 +508,7 @@ dialog .product-benefit-settings>header{display:flex;align-items:flex-start;gap:
 .product-benefit-preview-photo>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .product-benefit-photo-placeholder{display:grid;width:54px;height:54px;place-items:center;border-radius:14px;background:rgba(255,255,255,.8);color:#7390b3}.product-benefit-photo-placeholder svg{width:29px;height:29px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .product-benefit-preview-badges{position:absolute;z-index:2;left:9px;right:9px;bottom:9px;display:flex;align-items:flex-end;justify-content:space-between;gap:6px}.product-benefit-preview-badges[hidden]{display:none}
-.product-benefit-preview-badge{display:flex;min-width:0;max-width:53%;min-height:39px;padding:6px 8px;align-items:center;gap:6px;border-radius:8px;background:#073f8f;color:#fff;box-shadow:0 5px 12px rgba(3,34,80,.24);font-size:.54rem;font-weight:900;line-height:1.06;text-transform:uppercase}
-.product-benefit-preview-badge svg{flex:0 0 22px;width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.product-benefit-preview-badge b,.product-benefit-preview-badge small{display:block}.product-benefit-preview-badge small{margin-top:2px;color:inherit;font-size:.46rem}.product-benefit-preview-badge.is-assembly{background:#ffdc1a;color:#073b82}.product-benefit-preview-badge:only-child{max-width:74%}.product-benefit-preview-badge.is-assembly:only-child{margin-left:auto}
+.product-benefit-preview-badge{display:block;min-width:0;max-width:50%}.product-benefit-preview-badge img{display:block;width:100%;height:auto;filter:drop-shadow(0 4px 7px rgba(3,29,69,.18))}.product-benefit-preview-badge:only-child{max-width:72%}.product-benefit-preview-badge.is-assembly:only-child{margin-left:auto}
 .product-benefit-live-preview>strong,.product-benefit-live-preview>small{display:block}.product-benefit-live-preview>strong{margin-top:9px;color:#12386e;font-size:.72rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.product-benefit-live-preview>small{margin-top:2px;color:#7589a2;font-size:.58rem}
 @media(max-width:760px){.product-editor-dialog{width:100%;max-width:none}.product-benefit-editor{grid-template-columns:minmax(0,1fr)}.product-benefit-live-preview{max-width:430px;width:100%;justify-self:center}}
-@media(max-width:430px){.product-benefit-editor{padding:12px}.product-benefit-option{grid-template-columns:40px minmax(0,1fr) 22px;padding:9px}.product-benefit-option-icon{width:40px;height:40px}.product-benefit-preview-badge{padding:5px 6px;font-size:.49rem}.product-benefit-preview-badge svg{flex-basis:19px;width:19px;height:19px}}
+@media(max-width:430px){.product-benefit-editor{padding:12px}.product-benefit-option{grid-template-columns:minmax(92px,112px) minmax(0,1fr) 22px;padding:7px 9px 7px 7px;gap:8px}.product-benefit-option b{font-size:.69rem}.product-benefit-option small{font-size:.54rem}}

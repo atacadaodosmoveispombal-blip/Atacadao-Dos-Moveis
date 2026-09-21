@@ -1914,8 +1914,8 @@
   ];
   function productBenefitBadgesMarkup(freeShipping, freeAssembly) {
     return [
-      freeShipping ? `<span class="product-benefit-preview-badge is-shipping">${actionIcon('truck')}<b>Frete grátis<small>para a cidade</small></b></span>` : '',
-      freeAssembly ? `<span class="product-benefit-preview-badge is-assembly">${actionIcon('tools')}<b>Armação<small>gratuita</small></b></span>` : ''
+      freeShipping ? '<span class="product-benefit-preview-badge is-shipping"><img src="assets/seal-free-shipping.png" alt="Frete grátis para a cidade"></span>' : '',
+      freeAssembly ? '<span class="product-benefit-preview-badge is-assembly"><img src="assets/seal-free-assembly.png" alt="Armação gratuita"></span>' : ''
     ].join('');
   }
   function productBenefitsEditorHtml(record = {}) {
@@ -1926,8 +1926,8 @@
       <div class="product-benefit-settings">
         <header><span class="product-benefit-heading-icon" aria-hidden="true">${actionIcon('tools')}</span><div><h3 id="productBenefitTitle">Benefícios e Selos</h3><p>Marque os benefícios deste produto. O sistema aplica o visual automaticamente.</p></div></header>
         <div class="product-benefit-options">
-          <label class="product-benefit-option"><input name="free_city_shipping" type="checkbox" ${shipping ? 'checked' : ''}><span class="product-benefit-option-icon is-shipping" aria-hidden="true">${actionIcon('truck')}</span><span><b>Frete grátis para a cidade</b><small>Selo azul sobre a foto do produto</small></span><i aria-hidden="true"></i></label>
-          <label class="product-benefit-option"><input name="free_assembly" type="checkbox" ${assembly ? 'checked' : ''}><span class="product-benefit-option-icon is-assembly" aria-hidden="true">${actionIcon('tools')}</span><span><b>Armação gratuita</b><small>Selo amarelo sobre a foto do produto</small></span><i aria-hidden="true"></i></label>
+          <label class="product-benefit-option"><input name="free_city_shipping" type="checkbox" ${shipping ? 'checked' : ''}><span class="product-benefit-option-art" aria-hidden="true"><img src="assets/seal-free-shipping.png" alt=""></span><span><b>Frete grátis para a cidade</b><small>Usar este selo no produto</small></span><i aria-hidden="true"></i></label>
+          <label class="product-benefit-option"><input name="free_assembly" type="checkbox" ${assembly ? 'checked' : ''}><span class="product-benefit-option-art" aria-hidden="true"><img src="assets/seal-free-assembly.png" alt=""></span><span><b>Armação gratuita</b><small>Usar este selo no produto</small></span><i aria-hidden="true"></i></label>
         </div>
         <p class="product-benefit-note">Não é necessário escrever textos, escolher cores ou enviar imagens.</p>
       </div>

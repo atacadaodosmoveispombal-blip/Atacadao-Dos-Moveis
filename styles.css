@@ -629,10 +629,10 @@ button{touch-action:manipulation}
 .official-product-heart{position:absolute;z-index:3;top:12px;right:12px;display:grid;width:44px;height:44px;min-height:44px;padding:0;place-items:center;border:1px solid rgba(213,223,235,.9);border-radius:50%;background:rgba(255,255,255,.95);color:#0a429a;box-shadow:0 5px 16px rgba(5,35,77,.13);transition:color .18s,background .18s,transform .18s}
 .official-product-heart svg{width:24px;height:24px}
 .official-product-heart:hover,.official-product-heart.active{background:#fff;color:#d32039}.official-product-heart.active svg{fill:currentColor}
-.photo-benefits{position:absolute;z-index:2;left:12px;right:12px;bottom:12px;display:flex;align-items:flex-end;justify-content:space-between;gap:8px;pointer-events:none}
-.photo-benefit{display:flex;min-height:44px;max-width:52%;padding:7px 9px;align-items:center;gap:7px;border-radius:10px;background:#063f8e;color:#fff;box-shadow:0 7px 18px rgba(3,32,78,.24);font-size:.67rem;font-weight:850;line-height:1.08;text-transform:uppercase}
-.photo-benefit svg{flex:0 0 25px;width:25px;height:25px}.photo-benefit b,.photo-benefit small{display:block}.photo-benefit small{margin-top:2px;font-size:.55rem;color:#fff}.photo-benefit.is-assembly{background:#ffdb18;color:#073980}.photo-benefit.is-assembly svg{color:#073980}
-.photo-benefit:only-child{max-width:min(74%,230px)}.photo-benefit.is-assembly:only-child{margin-left:auto}.photo-benefit.is-assembly small{color:#073980}
+.photo-benefits{position:absolute;z-index:2;left:7px;right:7px;bottom:1px;display:flex;align-items:flex-end;justify-content:space-between;gap:3px;pointer-events:none}
+.photo-benefit{display:block;min-width:0;max-width:50%}
+.photo-benefit>img{display:block;width:100%;height:auto;filter:drop-shadow(0 5px 8px rgba(3,29,69,.18))}
+.photo-benefit:only-child{max-width:min(72%,250px)}.photo-benefit.is-assembly:only-child{margin-left:auto}
 .official-product-body{display:flex;min-width:0;flex:1;flex-direction:column;padding:18px 19px 19px}
 .official-product-body .official-product-category{display:block;margin:0 0 6px;color:#607591;font-size:.75rem;font-weight:600}
 .official-product-body h3{min-height:2.5em;margin:0 0 7px;color:#0c336e;font-size:1.05rem;font-weight:850;line-height:1.25;overflow-wrap:anywhere}
@@ -650,5 +650,5 @@ button{touch-action:manipulation}
 .cart-whatsapp-checkout{margin-top:5px}.detail-commerce-actions{display:grid;width:100%;gap:10px;margin:13px 0 2px}.detail-whatsapp{min-height:72px}.detail-add-bag{min-height:48px}
 @media(max-width:1000px){.product-grid,.catalogue .product-grid,.office-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}}
 @media(max-width:620px){.product-grid,.catalogue .product-grid,.office-grid{grid-template-columns:minmax(0,1fr);gap:16px}.official-product-card.catalog-card.product-card{border-radius:14px}.official-product-photo{aspect-ratio:1.32}.official-product-body{padding:17px}.official-product-body h3{min-height:0;font-size:1.05rem}.official-product-description{min-height:0;font-size:.8rem}.official-product-price>strong{font-size:1.9rem}.official-product-benefits b{font-size:.68rem}.product-whatsapp{min-height:72px;padding-inline:15px}.product-whatsapp b{font-size:.86rem}.product-whatsapp small{font-size:.68rem}}
-@media(max-width:360px){.photo-benefits{left:8px;right:8px;bottom:8px}.photo-benefit{padding:6px 7px;font-size:.58rem}.photo-benefit svg{flex-basis:22px;width:22px;height:22px}.official-product-benefits>span{padding-inline:5px;gap:4px}.official-product-benefits b{font-size:.6rem}.product-whatsapp{grid-template-columns:31px minmax(0,1fr) 16px;padding-inline:11px;gap:8px}.product-whatsapp>svg:first-child{width:31px;height:31px}.product-whatsapp b{font-size:.75rem}}
+@media(max-width:360px){.photo-benefits{left:5px;right:5px;bottom:0;gap:2px}.official-product-benefits>span{padding-inline:5px;gap:4px}.official-product-benefits b{font-size:.6rem}.product-whatsapp{grid-template-columns:31px minmax(0,1fr) 16px;padding-inline:11px;gap:8px}.product-whatsapp>svg:first-child{width:31px;height:31px}.product-whatsapp b{font-size:.75rem}}
 @media(prefers-reduced-motion:reduce){.official-product-card,.official-product-photo>img,.official-product-heart,.product-whatsapp,.product-add-bag,.cart-whatsapp-checkout{transition:none!important}}
