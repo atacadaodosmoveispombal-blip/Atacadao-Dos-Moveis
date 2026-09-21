@@ -632,6 +632,7 @@ button{touch-action:manipulation}
 .photo-benefits{position:absolute;z-index:2;left:12px;right:12px;bottom:12px;display:flex;align-items:flex-end;justify-content:space-between;gap:8px;pointer-events:none}
 .photo-benefit{display:flex;min-height:44px;max-width:52%;padding:7px 9px;align-items:center;gap:7px;border-radius:10px;background:#063f8e;color:#fff;box-shadow:0 7px 18px rgba(3,32,78,.24);font-size:.67rem;font-weight:850;line-height:1.08;text-transform:uppercase}
 .photo-benefit svg{flex:0 0 25px;width:25px;height:25px}.photo-benefit b,.photo-benefit small{display:block}.photo-benefit small{margin-top:2px;font-size:.55rem;color:#fff}.photo-benefit.is-assembly{background:#ffdb18;color:#073980}.photo-benefit.is-assembly svg{color:#073980}
+.photo-benefit:only-child{max-width:min(74%,230px)}.photo-benefit.is-assembly:only-child{margin-left:auto}.photo-benefit.is-assembly small{color:#073980}
 .official-product-body{display:flex;min-width:0;flex:1;flex-direction:column;padding:18px 19px 19px}
 .official-product-body .official-product-category{display:block;margin:0 0 6px;color:#607591;font-size:.75rem;font-weight:600}
 .official-product-body h3{min-height:2.5em;margin:0 0 7px;color:#0c336e;font-size:1.05rem;font-weight:850;line-height:1.25;overflow-wrap:anywhere}

@@ -63,6 +63,8 @@
       check: '<path d="m5 12 4 4L19 6"/>',
       close: '<path d="m6 6 12 12M18 6 6 18"/>',
       info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10h.01"/>',
+      truck: '<path d="M3 6h11v10H3zM14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',
+      tools: '<path d="m14.5 6.5 3-3a4 4 0 0 1-5 5l-7 7a2 2 0 1 1-3-3l7-7a4 4 0 0 1 5-5l-3 3 3 3Z"/><path d="m14 14 6 6"/>',
       filter: '<path d="M4 5h16l-6.5 7.2V19l-3 1v-7.8L4 5Z"/>',
       list: '<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="5" cy="6" r="1"/><circle cx="5" cy="12" r="1"/><circle cx="5" cy="18" r="1"/>',
       grid: '<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/>'
@@ -429,7 +431,7 @@
     return `<div class="field"><label for="f-${key}">${esc(label)}</label><input id="f-${key}" name="${key}" type="${type === 'slug' ? 'text' : type}" value="${esc(formatted)}" ${required ? 'required' : ''} ${type === 'number' ? 'step="any"' : ''}></div>`;
   }
   function resetEditorChrome() {
-    $('#editorDialog').classList.remove('category-editor-dialog', 'banner-editor-dialog', 'quick-campaign-dialog');
+    $('#editorDialog').classList.remove('category-editor-dialog', 'banner-editor-dialog', 'quick-campaign-dialog', 'product-editor-dialog');
     $('#editorForm>header').classList.remove('quick-library-header');
     $('#editorForm>header .quick-library-heading-subtitle')?.remove();
     $('#editorForm>header .quick-library-heading-search')?.remove();
@@ -1903,24 +1905,95 @@
     ['section', 'Informações principais'], ['name', 'Nome do produto', 'text', true], ['slug', 'URL amigável', 'slug', true], ['sku', 'SKU / código', 'text', true], ['short_description', 'Descrição curta', 'textarea'], ['description', 'Descrição completa', 'textarea'],
     ['category_id', 'Categoria', 'relation', false, 'categories'], ['environment_id', 'Ambiente', 'relation', false, 'environments'], ['brand_id', 'Marca', 'relation', false, 'brands'],
     ['section', 'Preço e parcelamento'], ['price', 'Preço normal', 'number', true], ['promotional_price', 'Preço promocional', 'number'], ['installment_enabled', 'Permitir parcelamento', 'checkbox'], ['max_installments', 'Máximo de parcelas', 'number'],
-    ['section', 'Venda e benefícios do card'], ['whatsapp_enabled', 'Permitir compra pelo WhatsApp', 'checkbox'], ['cart_enabled', 'Permitir adicionar à sacola', 'checkbox'], ['free_city_shipping', 'Frete grátis para a cidade', 'checkbox'], ['free_assembly', 'Armação gratuita', 'checkbox'], ['is_campaign', 'Produto em campanha', 'checkbox'],
+    ['section', 'Venda no site'], ['whatsapp_enabled', 'Permitir compra pelo WhatsApp', 'checkbox'], ['cart_enabled', 'Permitir adicionar à sacola', 'checkbox'], ['is_campaign', 'Produto em campanha', 'checkbox'],
+    ['benefits', 'Benefícios e Selos'], ['free_city_shipping', 'Frete grátis para a cidade', 'checkbox'], ['free_assembly', 'Armação gratuita', 'checkbox'],
     ['section', 'Estoque'], ['stock_quantity', 'Quantidade', 'number', true], ['low_stock_threshold', 'Estoque mínimo', 'number', true],
     ['section', 'Características'], ['dimensions_text', 'Medidas', 'text'], ['material', 'Material', 'text'], ['color', 'Cores', 'text'], ['warranty', 'Garantia', 'text'],
     ['section', 'Exibição'], ['featured', 'Destaque', 'checkbox'], ['new_arrival', 'Lançamento', 'checkbox'], ['best_seller', 'Mais vendido', 'checkbox'], ['on_sale', 'Em oferta', 'checkbox'], ['active', 'Publicado', 'checkbox'], ['sort_order', 'Ordem', 'number'],
     ['section', 'SEO e imagens'], ['meta_title', 'Título SEO', 'text'], ['meta_description', 'Descrição SEO', 'textarea'], ['og_image_url', 'Imagem de compartilhamento', 'file'], ['gallery', 'Fotos do produto — até 10', 'multifile']
   ];
+  function productBenefitBadgesMarkup(freeShipping, freeAssembly) {
+    return [
+      freeShipping ? `<span class="product-benefit-preview-badge is-shipping">${actionIcon('truck')}<b>Frete grátis<small>para a cidade</small></b></span>` : '',
+      freeAssembly ? `<span class="product-benefit-preview-badge is-assembly">${actionIcon('tools')}<b>Armação<small>gratuita</small></b></span>` : ''
+    ].join('');
+  }
+  function productBenefitsEditorHtml(record = {}) {
+    const image = productCover(record) || record.og_image_url || '';
+    const shipping = Boolean(record.free_city_shipping);
+    const assembly = Boolean(record.free_assembly);
+    return `<section class="product-benefit-editor" aria-labelledby="productBenefitTitle">
+      <div class="product-benefit-settings">
+        <header><span class="product-benefit-heading-icon" aria-hidden="true">${actionIcon('tools')}</span><div><h3 id="productBenefitTitle">Benefícios e Selos</h3><p>Marque os benefícios deste produto. O sistema aplica o visual automaticamente.</p></div></header>
+        <div class="product-benefit-options">
+          <label class="product-benefit-option"><input name="free_city_shipping" type="checkbox" ${shipping ? 'checked' : ''}><span class="product-benefit-option-icon is-shipping" aria-hidden="true">${actionIcon('truck')}</span><span><b>Frete grátis para a cidade</b><small>Selo azul sobre a foto do produto</small></span><i aria-hidden="true"></i></label>
+          <label class="product-benefit-option"><input name="free_assembly" type="checkbox" ${assembly ? 'checked' : ''}><span class="product-benefit-option-icon is-assembly" aria-hidden="true">${actionIcon('tools')}</span><span><b>Armação gratuita</b><small>Selo amarelo sobre a foto do produto</small></span><i aria-hidden="true"></i></label>
+        </div>
+        <p class="product-benefit-note">Não é necessário escrever textos, escolher cores ou enviar imagens.</p>
+      </div>
+      <aside class="product-benefit-live-preview" aria-label="Prévia dos selos no card">
+        <div class="product-benefit-preview-title"><span>PRÉ-VISUALIZAÇÃO</span><b>Atualização instantânea</b></div>
+        <div class="product-benefit-preview-photo ${image ? 'has-image' : ''}" id="productBenefitPreviewPhoto">
+          ${image ? `<img id="productBenefitPreviewImage" src="${esc(image)}" alt="Prévia da foto do produto">` : `<span class="product-benefit-photo-placeholder" id="productBenefitPhotoPlaceholder" aria-hidden="true">${actionIcon('grid')}</span>`}
+          <div class="product-benefit-preview-badges" id="productBenefitPreviewBadges" ${shipping || assembly ? '' : 'hidden'}>${productBenefitBadgesMarkup(shipping, assembly)}</div>
+        </div>
+        <strong id="productBenefitPreviewName">${esc(record.name || 'Nome do produto')}</strong>
+        <small id="productBenefitPreviewStatus">${shipping || assembly ? `${Number(shipping) + Number(assembly)} selo${shipping && assembly ? 's' : ''} selecionado${shipping && assembly ? 's' : ''}` : 'Nenhum selo selecionado'}</small>
+      </aside>
+    </section>`;
+  }
+  function syncProductBenefitPreview() {
+    const shipping = Boolean($('[name="free_city_shipping"]')?.checked);
+    const assembly = Boolean($('[name="free_assembly"]')?.checked);
+    const badges = $('#productBenefitPreviewBadges');
+    if (!badges) return;
+    badges.innerHTML = productBenefitBadgesMarkup(shipping, assembly);
+    badges.hidden = !shipping && !assembly;
+    const count = Number(shipping) + Number(assembly);
+    const status = $('#productBenefitPreviewStatus');
+    if (status) status.textContent = count ? `${count} selo${count === 1 ? '' : 's'} selecionado${count === 1 ? '' : 's'}` : 'Nenhum selo selecionado';
+  }
+  function setProductBenefitPreviewImage(file) {
+    if (!file) return;
+    if (editorState?.previewObjectUrl) URL.revokeObjectURL(editorState.previewObjectUrl);
+    editorState.previewObjectUrl = URL.createObjectURL(file);
+    const photo = $('#productBenefitPreviewPhoto');
+    if (!photo) return;
+    let image = $('#productBenefitPreviewImage');
+    if (!image) {
+      $('#productBenefitPhotoPlaceholder')?.remove();
+      image = document.createElement('img');
+      image.id = 'productBenefitPreviewImage';
+      image.alt = 'Prévia da foto do produto';
+      photo.prepend(image);
+    }
+    image.src = editorState.previewObjectUrl;
+    photo.classList.add('has-image');
+  }
   async function productEditor(record = null) {
     if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.');
     resetEditorChrome();
     const commerceDefaults = { whatsapp_enabled: true, cart_enabled: true, free_city_shipping: false, free_assembly: false, is_campaign: false };
     const editRecord = record ? { ...commerceDefaults, ...record, dimensions_text: record.dimensions?.description || '' } : { ...commerceDefaults };
     editorState = { view: 'products', record: editRecord };
+    $('#editorDialog').classList.add('product-editor-dialog');
     $('#dialogEyebrow').textContent = 'CATÁLOGO';
     $('#dialogTitle').textContent = record ? 'Editar produto' : 'Novo produto';
     const html = [];
-    for (const field of productFields) html.push(field[0] === 'section' ? `<h3 class="form-section">${esc(field[1])}</h3>` : await fieldHtml(field, editRecord || {}));
+    for (const field of productFields) {
+      if (field[0] === 'section') html.push(`<h3 class="form-section">${esc(field[1])}</h3>`);
+      else if (field[0] === 'benefits') html.push(productBenefitsEditorHtml(editRecord));
+      else if (!['free_city_shipping', 'free_assembly'].includes(field[0])) html.push(await fieldHtml(field, editRecord || {}));
+    }
     $('#editorFields').innerHTML = html.join('');
-    if (!record) $('[name="name"]').addEventListener('input', () => { $('[name="slug"]').value = slugify($('[name="name"]').value); });
+    $('[name="name"]')?.addEventListener('input', event => {
+      if (!record) $('[name="slug"]').value = slugify(event.target.value);
+      const previewName = $('#productBenefitPreviewName');
+      if (previewName) previewName.textContent = event.target.value.trim() || 'Nome do produto';
+    });
+    $$('[name="free_city_shipping"], [name="free_assembly"]').forEach(input => input.addEventListener('change', syncProductBenefitPreview));
+    $('[name="gallery"]')?.addEventListener('change', event => setProductBenefitPreviewImage(event.target.files?.[0]));
+    $('[name="og_image_url"]')?.addEventListener('change', event => { if (!$('[name="gallery"]')?.files?.length) setProductBenefitPreviewImage(event.target.files?.[0]); });
     if (record) await loadGallery(record.id, 'product_images', 'product_id');
     $('#editorDialog').showModal();
   }
@@ -1931,7 +2004,7 @@
     button.disabled = true;
     button.textContent = 'Salvando…';
     try {
-      const values = formValues(productFields.filter(field => field[0] !== 'section'), event.currentTarget);
+      const values = formValues(productFields.filter(field => !['section', 'benefits'].includes(field[0])), event.currentTarget);
       values.dimensions = values.dimensions_text ? { description: values.dimensions_text } : {};
       delete values.dimensions_text;
       const ogFile = event.currentTarget.elements.og_image_url?.files?.[0];
@@ -2379,7 +2452,8 @@
     ActionMenu,
     bindActionMenus,
     confirmAction,
-    toast
+    toast,
+    syncProductBenefitPreview
   });
 
   $('#loginForm').addEventListener('submit', login);
