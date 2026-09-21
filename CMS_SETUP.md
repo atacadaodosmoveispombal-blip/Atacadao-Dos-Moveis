@@ -4,7 +4,7 @@ O site público e o painel administrativo usam as mesmas tabelas do projeto Supa
 
 ## Ativar o conteúdo atual no Supabase
 
-O banco remoto já possui as tabelas e as políticas, mas ainda precisa receber o conteúdo atual da loja. Aplique, na ordem, as migrações que ainda não estiverem no projeto. A carga idempotente do catálogo atual está em:
+O banco remoto usa as tabelas e políticas versionadas em `supabase/migrations`. A carga idempotente do catálogo atual está em:
 
 `supabase/migrations/20260919_seed_current_storefront.sql`
 
@@ -16,13 +16,31 @@ Para ativar o componente oficial de produtos, aplique também:
 
 Essa migração adiciona as permissões individuais de WhatsApp/sacola, os benefícios sobre a fotografia e os textos globais configuráveis do WhatsApp. Ela também é idempotente.
 
+Para concluir campanhas, promoções, buckets de imagem e Realtime, aplique:
+
+`supabase/migrations/20260921_finalize_admin_storefront_integration.sql`
+
+Essa migration preserva os registros existentes e pode ser executada novamente com segurança. As migrations são aplicadas manualmente no SQL Editor do Supabase pelo responsável pelo projeto.
+
+Para concluir o editor completo de produtos e permitir que o código/SKU seja realmente opcional, aplique:
+
+`supabase/migrations/20260922_complete_product_editor.sql`
+
+Ela apenas converte SKUs vazios em `NULL` e remove a obrigatoriedade da coluna, preservando a restrição de unicidade para os códigos preenchidos.
+
+Para ativar a estrutura de apresentação do e-commerce, aplique:
+
+`supabase/migrations/20260923_ecommerce_foundation.sql`
+
+Ela cria configurações de venda online, pedidos, snapshots dos itens, reservas de estoque, histórico e registro idempotente de webhooks. A venda online, PIX e cartão permanecem desativados até a escolha e configuração segura de um gateway oficial. A migration não cria cobranças, não contém credenciais e não permite que o administrador marque pagamentos como aprovados.
+
 Depois de aplicar a migration, execute:
 
 ```powershell
 npm run verify:cms
 ```
 
-O verificador faz apenas leituras públicas e confirma a presença mínima de produtos, categorias, ambientes, banners, seções da home e configurações da loja.
+O verificador faz apenas leituras públicas e confirma a presença mínima de produtos, categorias, ambientes, banners, seções da home e configurações da loja. Ele também valida as colunas administrativas de produtos, categorias, campanhas e promoções.
 
 ## Validação funcional recomendada
 
@@ -33,6 +51,9 @@ O verificador faz apenas leituras públicas e confirma a presença mínima de pr
 5. Desativar e reativar o produto.
 6. Criar ou editar banner, inspiração, promoção e cupom.
 7. Abrir a página pública e confirmar as mudanças sem recarregar manualmente.
-8. Excluir os registros de teste.
+8. Alterar o preço e confirmar a atualização no site.
+9. Desativar o produto e confirmar que ele desaparece do catálogo.
+10. Excluir os registros de teste somente depois de remover seus vínculos.
+11. Abrir **Pedidos** e **Vendas online** no ADM para validar a estrutura do checkout.
 
 As operações administrativas continuam protegidas pelas políticas RLS existentes. Se um usuário autenticado não puder gravar, revise o papel/perfil administrativo desse usuário no projeto antes de alterar as políticas.

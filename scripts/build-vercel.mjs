@@ -12,7 +12,11 @@ const publicFiles = [
   'app.js',
   'admin-app.js',
   'hero-carousel.js',
-  'storefront-cms.js'
+  'storefront-cms.js',
+  'manifest.webmanifest',
+  'service-worker.js',
+  'pwa.js',
+  'offline.html'
 ];
 
 rmSync(output, { recursive: true, force: true });

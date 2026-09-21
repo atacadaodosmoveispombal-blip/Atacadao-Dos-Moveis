@@ -4,7 +4,17 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Atacarejo dos Móveis — móveis para todos os momentos</title>
 <meta name="description" content="Móveis para todos os momentos com preço baixo, entrega rápida e atendimento pelo WhatsApp.">
-<link rel="icon" href="assets/logo.png?v=png2"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="styles.css?v=benefit-seals-size-1">
+<meta name="theme-color" content="#023497">
+<meta name="application-name" content="Atacarejo dos Móveis">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Atacarejo">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/assets/pwa-icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="styles.css?v=pwa-1">
 </head>
 <body>
 <div class="topbar"><div>🚚 Mais conforto, da nossa loja para sua casa</div><div>▣ </div><div></div><div>⌕ Cuidar da sua casa começa aqui</div><div class="instagram">Siga @menorprecomoveis ↗</div></div>
@@ -66,14 +76,15 @@
       </div>
     </section>
   </div>
-  <div class="footer-bottom"><span class="footer-copyright">© 2026 Atacarejo dos Móveis. Todos os direitos reservados.</span><span class="footer-tagline">Móveis para todos os momentos <b aria-hidden="true">♥</b></span></div>
+  <div class="footer-bottom"><span class="footer-copyright">© 2026 Atacarejo dos Móveis. Todos os direitos reservados.</span><button id="installApp" class="install-app" type="button" hidden>▣ Instalar Atacarejo</button><span class="footer-tagline">Móveis para todos os momentos <b aria-hidden="true">♥</b></span></div>
 </footer>
 <nav class="mobile-nav" aria-label="Navegação móvel"><button type="button" onclick="scrollToTop()" aria-label="Voltar ao início">⌂<small>Início</small></button><button type="button" onclick="document.querySelector('#categorias').scrollIntoView({behavior:'smooth'})" aria-label="Ir para categorias">☷<small>Categorias</small></button><button type="button" onclick="showOffers()" aria-label="Ver ofertas">♨<small>Ofertas</small></button><button type="button" onclick="openCart()" aria-label="Abrir sacola">🛒<small>Sacola</small><b id="mobileBadge">0</b></button><button type="button" onclick="openAccount()" aria-label="Abrir minha conta">♙<small>Conta</small></button></nav>
 <div id="toast" role="status" aria-live="polite"></div><div id="drawer" class="drawer" role="dialog" aria-modal="true" aria-hidden="true" aria-label="Painel da loja"><div class="drawer-card" role="document"><button class="close" type="button" onclick="closeDrawer()" aria-label="Fechar painel">×</button><div id="drawerContent"></div></div></div>
 <script src="assets/supabase-2.116.0.js"></script>
-<script src="app.js?v=product-benefits-2"></script>
-<script src="hero-carousel.js?v=hero-slider-1"></script>
-<script src="storefront-cms.js?v=product-card-1"></script>
+<script src="app.js?v=ecommerce-structure-1"></script>
+<script src="hero-carousel.js?v=cms-banners-1"></script>
+<script src="storefront-cms.js?v=ecommerce-structure-1"></script>
+<script src="pwa.js?v=pwa-1"></script>
 </body></html>
 
 

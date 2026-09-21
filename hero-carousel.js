@@ -8,11 +8,13 @@
   const dots = [...root.querySelectorAll('.hero-dots button')];
   const previous = root.querySelector('.hero-prev');
   const next = root.querySelector('.hero-next');
+  const dotGroup = root.querySelector('.hero-dots');
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const mobile = window.matchMedia('(max-width: 767px)');
   let active = 0;
   let timer = 0;
   let pointerStart = null;
+  let cmsMode = false;
 
   function preload(index) {
     const image = slides[index]?.querySelector('img');
@@ -20,6 +22,7 @@
   }
 
   function show(index, userInitiated = false) {
+    if (cmsMode) index = 0;
     active = (index + slides.length) % slides.length;
     slides.forEach((slide, slideIndex) => {
       const selected = slideIndex === active;
@@ -43,7 +46,7 @@
 
   function start() {
     stop();
-    if (reducedMotion.matches || document.hidden) return;
+    if (cmsMode || reducedMotion.matches || document.hidden) return;
     timer = window.setInterval(() => show(active + 1), 6500);
   }
 
@@ -77,6 +80,15 @@
 
   window.atacarejoHero = {
     show,
+    setCmsMode(enabled) {
+      cmsMode = Boolean(enabled);
+      slides.forEach((slide, index) => { slide.hidden = cmsMode && index > 0; });
+      if (previous) previous.hidden = cmsMode;
+      if (next) next.hidden = cmsMode;
+      if (dotGroup) dotGroup.hidden = cmsMode;
+      show(0);
+      start();
+    },
     setPrimaryImage(desktopUrl, mobileUrl = desktopUrl) {
       const image = slides[0]?.querySelector('img');
       if (!image || !desktopUrl) return;

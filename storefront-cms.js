@@ -5,10 +5,13 @@
   const key = 'sb_publishable__J4jaeMvdcVL9EguRpCApw_nV2ymCUP';
   if (!window.supabase?.createClient) return;
   const cms = window.supabase.createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  window.atacarejoDb = cms;
   const imageFallback = 'assets/logo.png';
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+  const storefrontBrl = value => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   let deepLinkOpened = false;
   let bootTimer;
+  let bootRevision = 0;
 
   function campaignMeta(banner, prefix) {
     const entry = (banner?.display_locations || []).find(item => String(item).startsWith(`${prefix}:`));
@@ -19,7 +22,10 @@
     catch { return ''; }
   }
   function applyCampaignLook(element, banner) {
-    if (!element || !banner) return;
+    if (!element) return;
+    ['campaignPreset','campaignStyle','campaignTheme','campaignLayout'].forEach(key => { delete element.dataset[key]; });
+    element.classList.remove('campaign-countdown');
+    if (!banner) return;
     const preset = campaignMeta(banner, 'preset');
     const style = campaignMeta(banner, 'style');
     const theme = campaignMeta(banner, 'theme');
@@ -35,25 +41,66 @@
     const images = [...(product?.product_images || [])].sort((a, b) => Number(Boolean(b.is_cover)) - Number(Boolean(a.is_cover)) || Number(a.sort_order || 0) - Number(b.sort_order || 0));
     return images[0]?.image_url || '';
   }
-  function campaignVisualProducts(banner, productRows, promotions) {
+  function campaignVisualProductRows(banner, productRows, promotions) {
     const promotion = promotions.find(item => item.id === banner?.promotion_id);
     const linked = new Set((promotion?.promotion_products || []).map(item => String(item.product_id)));
     let rows = productRows.filter(item => linked.has(String(item.id)));
     if (!rows.length && banner?.category_id) rows = productRows.filter(item => String(item.category_id) === String(banner.category_id));
-    if (!rows.length) rows = productRows;
-    return rows.map(storefrontProductImage).filter(Boolean).filter((url, index, list) => list.indexOf(url) === index).slice(0, 3);
+    return rows.filter(item => storefrontProductImage(item));
+  }
+  function campaignVisualProducts(banner, productRows, promotions) {
+    const selected = campaignVisualProductRows(banner, productRows, promotions);
+    const focusCategory = banner?.category_id || selected[0]?.category_id;
+    const related = focusCategory ? productRows.filter(item => String(item.category_id) === String(focusCategory)) : productRows;
+    return [...selected, ...related].map(storefrontProductImage).filter(Boolean).filter((url, index, list) => list.indexOf(url) === index).slice(0, 4);
+  }
+  function campaignCountdown(endAt) {
+    if (!endAt) return 'POR POUCO TEMPO';
+    const remaining = Math.max(0, new Date(endAt).getTime() - Date.now());
+    const days = Math.floor(remaining / 86400000);
+    const hours = Math.floor((remaining % 86400000) / 3600000);
+    const minutes = Math.floor((remaining % 3600000) / 60000);
+    return days ? `${days}D ${String(hours).padStart(2, '0')}H ${String(minutes).padStart(2, '0')}M` : `${String(hours).padStart(2, '0')} : ${String(minutes).padStart(2, '0')}`;
   }
   function renderCampaignDecor(container, banner, productRows, promotions) {
-    container?.querySelectorAll(':scope > .cms-banner-catalog,:scope > .cms-campaign-badge').forEach(item => item.remove());
+    container?.querySelectorAll(':scope > .cms-banner-catalog,:scope > .cms-campaign-badge,:scope > .cms-campaign-offer,:scope > .cms-campaign-price,:scope > .cms-banner-second,:scope > .cms-campaign-logo,:scope > .cms-banner-countdown,:scope > .cms-banner-benefits').forEach(item => item.remove());
     if (!container || !banner) return;
     const preset = campaignMeta(banner, 'preset');
     const layout = campaignMeta(banner, 'layout');
-    const badge = ({ month: 'OFERTAS DO MÊS', liquidation: 'ATÉ 50% OFF', flash: '⚡ ÚLTIMAS HORAS', weekend: 'SEX • SÁB • DOM', stock_clearance: 'ÚLTIMAS UNIDADES', black_friday: 'ATÉ 70% OFF' })[preset];
+    const identities = {
+      month: { badge: 'OFERTAS DO MÊS', offer: 'PREÇO BAIXO' },
+      super_offer: { badge: 'SUPER OFERTA', offer: 'IMPERDÍVEL' },
+      special_week: { badge: 'SEMANA ESPECIAL', offer: '7 DIAS DE OFERTAS' },
+      liquidation: { badge: 'ATÉ 50% OFF', offer: '50% OFF' },
+      flash: { badge: '⚡ ÚLTIMAS HORAS', offer: '40% OFF' },
+      weekend: { badge: 'SEX • SÁB • DOM', offer: 'POR POUCOS DIAS' },
+      stock_clearance: { badge: 'ÚLTIMAS UNIDADES', offer: '60% OFF' },
+      black_friday: { badge: 'BLACK DE VERDADE', offer: 'ATÉ 70% OFF' },
+      product_spotlight: { badge: 'PRODUTO EM DESTAQUE', offer: 'OFERTA ESPECIAL' }
+    };
+    const identity = identities[preset] || {};
+    const productRowsForCampaign = campaignVisualProductRows(banner, productRows, promotions);
+    const discountPercent = productRowsForCampaign.reduce((highest, product) => { const regular = Number(product.price || 0); const offer = Number(product.promotional_price ?? regular); return regular > 0 && offer >= 0 && offer < regular ? Math.max(highest, Math.round((1 - offer / regular) * 100)) : highest; }, 0);
+    const actualDiscount = discountPercent ? `ATÉ ${discountPercent}% OFF` : 'PREÇO ESPECIAL';
+    const badge = /\d+% OFF/i.test(identity.badge || '') ? actualDiscount : identity.badge;
     if (badge) container.insertAdjacentHTML('beforeend', `<span class="cms-campaign-badge">${escapeHtml(badge)}</span>`);
-    if (layout !== 'catalog-offer') return;
     const images = campaignVisualProducts(banner, productRows, promotions);
-    if (images.length < 2) return;
-    container.insertAdjacentHTML('beforeend', `<div class="cms-banner-catalog">${images.map((url, index) => `<span><img src="${escapeHtml(url)}" alt="" loading="lazy"><i>${index === 0 ? 'DESTAQUE' : index === 1 ? 'OFERTA' : 'IMPERDÍVEL'}</i></span>`).join('')}</div>`);
+    const branded = ['month','super_offer','special_week','liquidation','flash','weekend','stock_clearance','complete'].includes(preset);
+    if (branded) container.insertAdjacentHTML('beforeend', '<img class="cms-campaign-logo" src="assets/logo.png" alt="" loading="lazy">');
+    if (layout === 'dual-scene' && images[1]) container.insertAdjacentHTML('beforeend', `<div class="cms-banner-second"><img src="${escapeHtml(images[1])}" alt="" loading="lazy"></div>`);
+    if (layout === 'catalog-offer' && images.length >= 2) {
+      const labels = preset === 'complete' ? ['SALA','QUARTO','COZINHA','ESCRITÓRIO'] : preset === 'weekend' ? ['MESA DE JANTAR','SOFÁ RETRÁTIL','OFERTA ESPECIAL'] : ['DESTAQUE','OFERTA','IMPERDÍVEL','ESCOLHA'];
+      container.insertAdjacentHTML('beforeend', `<div class="cms-banner-catalog">${images.map((url, index) => `<span><img src="${escapeHtml(url)}" alt="" loading="lazy"><i>${escapeHtml(labels[index] || 'OFERTA')}</i></span>`).join('')}</div>`);
+    }
+    const focus = productRowsForCampaign[0];
+    const regularPrice = Number(focus?.price || 0);
+    const sellingPrice = focus ? campaignPrice(focus, campaignPromotionFor(focus, promotions)) : 0;
+    const showOffer = Boolean(identity.offer) || ['product-cutout','centered-product','discount-impact','price-stage'].includes(layout);
+    if (showOffer) container.insertAdjacentHTML('beforeend', `<span class="cms-campaign-offer"><small>${sellingPrice && layout === 'price-stage' ? 'A PARTIR DE' : 'CONDIÇÃO ESPECIAL'}</small><b>${escapeHtml(sellingPrice && layout === 'price-stage' ? storefrontBrl(sellingPrice) : /\d+% OFF/i.test(identity.offer || '') ? actualDiscount : identity.offer || 'OFERTA ESPECIAL')}</b></span>`);
+    if (layout === 'price-stage' && sellingPrice) container.insertAdjacentHTML('beforeend', `<span class="cms-campaign-price"><small>A PARTIR DE</small><b>${escapeHtml(storefrontBrl(sellingPrice))}</b>${regularPrice > sellingPrice ? `<del>${escapeHtml(storefrontBrl(regularPrice))}</del>` : ''}</span>`);
+    if (campaignMeta(banner, 'countdown') === 'true') container.insertAdjacentHTML('beforeend', `<span class="cms-banner-countdown"><small>TERMINA EM</small><b>${escapeHtml(campaignCountdown(banner.end_at))}</b></span>`);
+    const benefits = preset === 'weekend' ? [['QUALIDADE','QUE SUA CASA MERECE'],['PARCELE','EM ATÉ 12X'],['TUDO PARA','SUA CASA']] : preset === 'stock_clearance' ? [['ESTOQUE','LIMITADO'],['ENTREGA','RÁPIDA'],['COMPRA','SEGURA']] : [];
+    if (benefits.length) container.insertAdjacentHTML('beforeend', `<div class="cms-banner-benefits">${benefits.map(([title, subtitle]) => `<span><b>${title}</b><small>${subtitle}</small></span>`).join('')}</div>`);
   }
 
   function sessionKey() {
@@ -98,16 +145,21 @@
       if (footer) footer.textContent = settings.footer_text;
     }
     if (settings.whatsapp) {
-      const number = String(settings.whatsapp).replace(/\D/g, '');
-      const whatsappUrl = `https://wa.me/${number}?text=${encodeURIComponent(settings.whatsapp_message || 'Olá! Gostaria de conhecer os produtos.')}`;
-      document.querySelectorAll('[data-store-whatsapp]').forEach(link => { link.href = whatsappUrl; });
       const phone = document.querySelector('.whatsapp-button strong');
       if (phone) phone.textContent = settings.phone || settings.whatsapp;
     }
   }
   function applyHero(banner, productRows = [], promotions = []) {
-    if (!banner) return;
     const hero = document.querySelector('.hero');
+    if (!hero) return;
+    hero.dataset.cmsHasBanner = String(Boolean(banner));
+    if (!banner) {
+      window.atacarejoHero?.setCmsMode(false);
+      applyCampaignLook(hero, null);
+      renderCampaignDecor(hero, null, productRows, promotions);
+      return;
+    }
+    window.atacarejoHero?.setCmsMode(true);
     const title = hero?.querySelector('h1');
     const subtitle = hero?.querySelector('.hero-copy>p:not(.eyebrow)');
     const button = hero?.querySelector('.hero-copy .btn');
@@ -133,11 +185,14 @@
     }
   }
   function applySecondaryBanners(banners, productRows = [], promotions = []) {
+    const strip = document.querySelector('.banner-strip');
     const slots = [...document.querySelectorAll('.banner-strip .promo')];
     const secondary = banners.filter(item => item.position !== 'home_hero');
+    if (strip) strip.dataset.cmsHasBanner = String(Boolean(secondary.length));
     slots.forEach((slot, index) => {
       const banner = secondary[index];
-      if (!banner) return;
+      slot.hidden = !banner;
+      if (!banner) { applyCampaignLook(slot, null); slot.style.removeProperty('background-image'); renderCampaignDecor(slot, null, productRows, promotions); return; }
       applyCampaignLook(slot, banner);
       renderCampaignDecor(slot, banner, productRows, promotions);
       const title = slot.querySelector('strong');
@@ -213,7 +268,8 @@
     sections.forEach(section => {
       const element = map[section.section_key];
       if (!element) return;
-      element.hidden = !section.active;
+      const needsBanner = ['hero', 'promo_banners'].includes(section.section_key);
+      element.hidden = !section.active || (needsBanner && element.dataset.cmsHasBanner !== 'true');
       const title = element.querySelector('h2');
       const subtitle = element.querySelector('.section-head>div>p:not(.eyebrow):last-child');
       if (title && section.title && !placeholderTitles.has(section.title)) title.textContent = section.title;
@@ -222,6 +278,10 @@
     });
     const main = document.querySelector('main');
     if (!main) return;
+    ['hero','promo_banners'].forEach(key => {
+      const element = map[key];
+      if (element && element.dataset.cmsHasBanner !== 'true') element.hidden = true;
+    });
     const defaults = { hero: 10, environments: 20, office: 25, featured_products: 30, promotions: 40, promo_banners: 45, best_sellers: 50, benefits: 55, ambient: 60, inspirations: 70 };
     const configured = new Map(sections.map(section => [section.section_key, Number(section.sort_order)]));
     Object.entries(map).filter(([, element]) => element).sort(([a], [b]) => (configured.get(a) ?? defaults[a] ?? 999) - (configured.get(b) ?? defaults[b] ?? 999)).forEach(([, element]) => main.append(element));
@@ -233,17 +293,23 @@
   }
   function mapProduct(row, index, campaignPromotions = []) {
     const orderedImages = [...(row.product_images || [])].sort((a, b) => Number(b.is_cover) - Number(a.is_cover) || a.sort_order - b.sort_order);
-    const sellingPrice = campaignPromotions.length ? campaignPrice(row, campaignPromotions) : Number(row.promotional_price ?? row.price);
-    const regularPrice = Number(row.price);
-    const discount = sellingPrice < regularPrice ? Math.round((1 - sellingPrice / regularPrice) * 100) : 0;
+    const regularCandidate = Number(row.price);
+    const regularPrice = Number.isFinite(regularCandidate) && regularCandidate > 0 ? regularCandidate : null;
+    const sellingCandidate = campaignPromotions.length ? campaignPrice(row, campaignPromotions) : Number(row.promotional_price ?? row.price);
+    const sellingPrice = regularPrice && Number.isFinite(sellingCandidate) && sellingCandidate > 0 && sellingCandidate <= regularPrice ? sellingCandidate : regularPrice;
+    const discount = regularPrice && sellingPrice < regularPrice ? Math.round((1 - sellingPrice / regularPrice) * 100) : 0;
+    const installments = Number(row.max_installments);
     return {
       id: stableProductId(row.id), dbId: row.id, n: row.name, cat: row.categories?.name || row.environments?.name || 'Móveis',
       price: sellingPrice, old: sellingPrice < regularPrice ? regularPrice : null, discount,
       img: orderedImages[0]?.image_url || row.og_image_url || imageFallback,
       images: orderedImages.slice(1).map(image => image.image_url), best: row.best_seller ? 1 : 0,
       badge: campaignPromotions.length && sellingPrice < regularPrice ? 'Campanha' : row.new_arrival ? 'Novidade' : row.on_sale ? 'Oferta' : row.featured ? 'Destaque' : '',
-      description: row.short_description || row.description || '', installmentCount: row.installment_enabled ? row.max_installments : null,
-      installmentValue: row.installment_enabled ? sellingPrice / row.max_installments : null, sku: row.sku,
+      description: row.short_description || row.description || '', fullDescription: row.description || row.short_description || '',
+      specifications: row.specifications && typeof row.specifications === 'object' ? row.specifications : {},
+      dimensions: row.dimensions?.description || '', material: row.material || '', color: row.color || '', warranty: row.warranty || '',
+      installmentCount: row.installment_enabled && Number.isInteger(installments) && installments > 0 && sellingPrice ? installments : null,
+      installmentValue: row.installment_enabled && Number.isInteger(installments) && installments > 0 && sellingPrice ? sellingPrice / installments : null, sku: row.sku || '',
       stock: row.stock_quantity, campaign: Boolean(row.is_campaign || campaignPromotions.length),
       whatsappEnabled: row.whatsapp_enabled !== false, cartEnabled: row.cart_enabled !== false,
       freeCityShipping: Boolean(row.free_city_shipping), freeAssembly: Boolean(row.free_assembly)
@@ -257,26 +323,34 @@
     if (legacy.data) legacy.data = legacy.data.map(item => ({ ...item, show_on_homepage: true, show_in_menu: true }));
     return legacy;
   }
+  async function loadOnlineSalesSettings() {
+    const result = await cms.from('online_sales_settings').select('*').eq('id', true).maybeSingle();
+    if (result.error && (['42P01', 'PGRST205'].includes(result.error.code) || /online_sales_settings|schema cache/i.test(result.error.message || ''))) return { data: null, error: null };
+    return result;
+  }
   async function boot() {
+    const revision = ++bootRevision;
     const now = new Date().toISOString();
-    const [productResult, categoryResult, environmentResult, bannerResult, promotionResult, sectionResult, settingResult, inspirationResult] = await Promise.all([
+    const [productResult, categoryResult, bannerResult, promotionResult, sectionResult, settingResult, inspirationResult, onlineSalesResult] = await Promise.all([
       cms.from('products').select('*,categories(name),environments(name),product_images(image_url,is_cover,sort_order)').eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false }),
       loadStorefrontCategories(),
-      cms.from('environments').select('name,image_url,sort_order').eq('active', true).order('sort_order'),
-      cms.from('banners').select('*').eq('active', true).or(`start_at.is.null,start_at.lte.${now}`).or(`end_at.is.null,end_at.gt.${now}`).order('sort_order'),
+      cms.from('banners').select('*').eq('active', true).eq('draft', false).eq('paused', false).or(`start_at.is.null,start_at.lte.${now}`).or(`end_at.is.null,end_at.gt.${now}`).order('sort_order'),
       cms.from('promotions').select('*,promotion_products(product_id)').eq('active', true).or(`start_at.is.null,start_at.lte.${now}`).or(`end_at.is.null,end_at.gt.${now}`),
       cms.from('site_sections').select('*').order('sort_order'),
       cms.from('store_settings').select('*').eq('id', true).maybeSingle(),
-      cms.from('inspirations').select('*,environments(name),inspiration_images(image_url,sort_order)').eq('active', true).order('sort_order')
+      cms.from('inspirations').select('*,environments(name),inspiration_images(image_url,sort_order)').eq('active', true).order('sort_order'),
+      loadOnlineSalesSettings()
     ]);
-    const failed = [productResult, categoryResult, environmentResult, bannerResult, promotionResult, sectionResult, settingResult, inspirationResult].find(result => result.error);
+    const failed = [productResult, categoryResult, bannerResult, promotionResult, sectionResult, settingResult, inspirationResult, onlineSalesResult].find(result => result.error);
     if (failed) throw failed.error;
+    if (revision !== bootRevision) return;
     applySettings(settingResult.data);
+    window.applyOnlineSalesSettings?.(onlineSalesResult.data || {});
     applyHero((bannerResult.data || []).find(item => item.position === 'home_hero'), productResult.data || [], promotionResult.data || []);
     applySecondaryBanners(bannerResult.data || [], productResult.data || [], promotionResult.data || []);
     renderInspirations(inspirationResult.data || []);
-    if (categoryResult.data?.length) {
-      const categories = categoryResult.data;
+    {
+      const categories = categoryResult.data || [];
       cats.splice(0, cats.length, ...categories.map(item => [item.name, item.image_url || imageFallback]));
       const homepageCategories = categories.filter(item => item.show_on_homepage !== false);
       environmentCats.splice(0, environmentCats.length, ...homepageCategories.map(item => ({ label: item.name, category: item.name, img: item.image_url || imageFallback })));
@@ -285,18 +359,15 @@
         renderCategoryMenu();
       }
       renderCats();
-    } else if (environmentResult.data?.length) {
-      environmentCats.splice(0, environmentCats.length, ...environmentResult.data.map(item => ({ label: item.name, category: item.name, img: item.image_url || imageFallback })));
-      renderCats();
     }
     const campaignPromotions = promotionResult.data || [];
-    if (productResult.data?.length) {
-      products.splice(0, products.length, ...productResult.data.map((row, index) => mapProduct(row, index, campaignPromotionFor(row, campaignPromotions))));
-      cart = cart.filter(item => products.some(product => product.id === item.id));
-      favs = favs.filter(id => products.some(product => product.id === id));
-      save();
-      render();
-    }
+    products.splice(0, products.length, ...(productResult.data || []).map((row, index) => mapProduct(row, index, campaignPromotionFor(row, campaignPromotions))));
+    // Mantém o item na sacola para que alterações de estoque/preço sejam
+    // apresentadas ao cliente, em vez de removê-lo silenciosamente.
+    cart = cart.filter(item => products.some(product => product.id === item.id));
+    favs = favs.filter(id => products.some(product => product.id === id));
+    save();
+    render();
     applySections(sectionResult.data || []);
     renderCampaignSections(bannerResult.data || [], productResult.data || [], campaignPromotions);
     const requestedParams = new URLSearchParams(location.search);
@@ -332,7 +403,7 @@
   sync?.addEventListener('message', scheduleBoot);
   window.addEventListener('storage', event => { if (event.key === 'atacarejo-cms-sync') scheduleBoot(); });
   const realtime = cms.channel('storefront-cms');
-  ['products','product_images','categories','environments','banners','promotions','promotion_products','site_sections','store_settings','inspirations','inspiration_images'].forEach(table => {
+  ['products','product_images','categories','environments','banners','promotions','promotion_products','site_sections','store_settings','online_sales_settings','inspirations','inspiration_images'].forEach(table => {
     realtime.on('postgres_changes', { event: '*', schema: 'public', table }, scheduleBoot);
   });
   realtime.subscribe();

@@ -11,6 +11,7 @@
     dashboard: 'Visão geral', products: 'Produtos', categories: 'Categorias', environments: 'Ambientes',
     brands: 'Marcas', stock: 'Estoque', promotions: 'Promoções', coupons: 'Cupons', banners: 'Campanhas e Banners',
     sections: 'Página inicial', inspirations: 'Inspirações', leads: 'Leads / Orçamentos', store: 'Loja e WhatsApp',
+    orders: 'Pedidos', 'online-sales': 'Vendas online',
     seo: 'SEO', users: 'Usuários ADM', settings: 'Configurações', audit: 'Auditoria'
   };
   const viewMeta = {
@@ -27,6 +28,8 @@
     inspirations: ['◎', 'Publique ambientes e ideias para os clientes.'],
     leads: ['✉', 'Acompanhe contatos e solicitações de orçamento.'],
     store: ['⌖', 'Atualize os dados da loja e do WhatsApp.'],
+    orders: ['▧', 'Acompanhe pagamentos, separação, retirada e entrega dos pedidos.'],
+    'online-sales': ['⚙', 'Prepare entrega, pagamento e regras comerciais do checkout.'],
     seo: ['⌕', 'Defina os dados padrão para buscadores e compartilhamento.'],
     users: ['♙', 'Gerencie os usuários e níveis de acesso do ADM.'],
     settings: ['⚙', 'Atualize a identidade e as configurações gerais.'],
@@ -49,6 +52,8 @@
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
   const brl = value => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const dateTime = value => value ? new Date(value).toLocaleString('pt-BR') : '—';
+  const ORDER_STATUS_LABELS = { received: 'Pedido recebido', awaiting_payment: 'Aguardando pagamento', payment_approved: 'Pagamento aprovado', preparing: 'Preparando', ready_for_pickup: 'Pronto para retirada', out_for_delivery: 'Saiu para entrega', completed: 'Concluído', cancelled: 'Cancelado', refunded: 'Reembolsado' };
+  const PAYMENT_STATUS_LABELS = { pending: 'Aguardando pagamento', approved: 'Aprovado', declined: 'Recusado', cancelled: 'Cancelado', refunded: 'Reembolsado' };
   const slugify = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   const actionIcon = name => {
     const paths = {
@@ -67,7 +72,9 @@
       tools: '<path d="m14.5 6.5 3-3a4 4 0 0 1-5 5l-7 7a2 2 0 1 1-3-3l7-7a4 4 0 0 1 5-5l-3 3 3 3Z"/><path d="m14 14 6 6"/>',
       filter: '<path d="M4 5h16l-6.5 7.2V19l-3 1v-7.8L4 5Z"/>',
       list: '<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="5" cy="6" r="1"/><circle cx="5" cy="12" r="1"/><circle cx="5" cy="18" r="1"/>',
-      grid: '<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/>'
+      grid: '<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/>',
+      up: '<path d="m6 14 6-6 6 6"/><path d="M12 8v11"/>',
+      down: '<path d="m6 10 6 6 6-6"/><path d="M12 5v11"/>'
     };
     return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || ''}</svg>`;
   };
@@ -400,7 +407,12 @@
     brands: { table: 'brands', singular: 'Marca', plural: 'marcas', bucket: 'brands', fields: [
       ['name', 'Nome', 'text', true], ['slug', 'URL amigável', 'slug', true], ['logo_url', 'Logotipo', 'file'], ['active', 'Ativa', 'checkbox'] ] },
     promotions: { table: 'promotions', singular: 'Promoção', plural: 'promoções', bucket: 'banners', fields: [
-      ['title', 'Título', 'text', true], ['description', 'Descrição', 'textarea'], ['label', 'Selo da oferta', 'text'], ['start_at', 'Início', 'datetime-local'], ['end_at', 'Término', 'datetime-local'], ['banner_url', 'Imagem', 'file'], ['active', 'Ativa', 'checkbox'] ] },
+      ['title', 'Título', 'text', true], ['description', 'Descrição', 'textarea'], ['label', 'Selo da oferta', 'text'],
+      ['promotion_type', 'Tipo de desconto', 'select', true, [['display_only', 'Somente exibição'], ['percentage', 'Percentual'], ['fixed', 'Valor fixo']]],
+      ['discount_value', 'Valor do desconto', 'number'], ['category_id', 'Categoria vinculada', 'relation', false, 'categories'],
+      ['selection_mode', 'Seleção de produtos', 'select', true, [['manual', 'Produtos selecionados'], ['all_category', 'Todos da categoria']]],
+      ['auto_include_category', 'Incluir automaticamente os produtos da categoria', 'checkbox'],
+      ['start_at', 'Início', 'datetime-local'], ['end_at', 'Término', 'datetime-local'], ['banner_url', 'Imagem', 'file'], ['active', 'Ativa', 'checkbox'] ] },
     coupons: { table: 'coupons', singular: 'Cupom', plural: 'cupons', fields: [
       ['code', 'Código', 'text', true], ['description', 'Descrição', 'textarea'], ['discount_type', 'Tipo', 'select', true, [['percent', 'Percentual'], ['fixed', 'Valor fixo']]], ['discount_value', 'Desconto', 'number', true], ['minimum_order', 'Pedido mínimo', 'number'], ['max_uses', 'Limite de usos', 'number'], ['start_at', 'Início', 'datetime-local'], ['end_at', 'Término', 'datetime-local'], ['active', 'Ativo', 'checkbox'] ] },
     banners: { table: 'banners', singular: 'Banner', plural: 'banners', bucket: 'banners', fields: [
@@ -423,7 +435,7 @@
     if (type === 'select') return `<div class="field"><label for="f-${key}">${esc(label)}</label><select id="f-${key}" name="${key}">${choices.map(([v, text]) => `<option value="${v}" ${value === v ? 'selected' : ''}>${esc(text)}</option>`).join('')}</select></div>`;
     if (type === 'relation') {
       const rows = await options(choices);
-      return `<div class="field"><label for="f-${key}">${esc(label)}</label><select id="f-${key}" name="${key}"><option value="">Nenhum</option>${rows.map(row => `<option value="${row.id}" ${value === row.id ? 'selected' : ''}>${esc(row.name)}</option>`).join('')}</select></div>`;
+      return `<div class="field"><label for="f-${key}">${esc(label)}</label><select id="f-${key}" name="${key}" ${required ? 'required' : ''}><option value="">${required ? 'Selecione' : 'Nenhum'}</option>${rows.map(row => `<option value="${row.id}" ${value === row.id ? 'selected' : ''}>${esc(row.name)}</option>`).join('')}</select></div>`;
     }
     if (type === 'file') return `<div class="field"><label for="f-${key}">${esc(label)}</label><input id="f-${key}" name="${key}" type="file" accept="image/*">${value ? `<img class="image-preview" src="${esc(value)}" alt="Imagem atual">` : ''}</div>`;
     if (type === 'multifile') return `<div class="field full"><label for="f-${key}">${esc(label)}</label><input id="f-${key}" name="${key}" type="file" accept="image/*" multiple></div><div id="existingGallery" class="multi-images"></div>`;
@@ -440,6 +452,9 @@
     $('#saveDraftCategory').hidden = true;
     $('#viewBannerSite').hidden = true;
     $('#saveEditor').textContent = 'Salvar alterações';
+    $('#productUnsavedStatus')?.remove();
+    $('#editorForm').oninput = null;
+    $('#editorForm').onchange = null;
   }
   function categoryPreviewImage(url) {
     const images = $$('[data-category-live-image]');
@@ -484,7 +499,7 @@
     const imageUrl = record?.image_url || '';
     const productThumbs = products.map(product => {
       const image = [...(product.product_images || [])].sort((a, b) => Number(b.is_cover) - Number(a.is_cover) || Number(a.sort_order) - Number(b.sort_order))[0]?.image_url;
-      return `<li>${image ? `<img src="${esc(image)}" alt="">` : '<span aria-hidden="true">▦</span>'}<div><b>${esc(product.name)}</b><small>${esc(product.sku)}</small></div></li>`;
+      return `<li>${image ? `<img src="${esc(image)}" alt="">` : '<span aria-hidden="true">▦</span>'}<div><b>${esc(product.name)}</b><small>${product.sku ? esc(product.sku) : 'SKU não informado'}</small></div></li>`;
     }).join('');
     editorState = { view: 'categories', config: configs.categories, record, saveMode: 'publish', removeImage: false, slugManual: Boolean(record), previewObjectUrl: null };
     $('#editorDialog').classList.add('category-editor-dialog');
@@ -560,22 +575,24 @@
     $('#viewCategoryProducts')?.addEventListener('click', () => { productViewState.category = record.name; $('#editorDialog').close(); render('products'); });
     $('#addCategoryProduct')?.addEventListener('click', async () => { $('#editorDialog').close(); await productEditor(); $('[name="category_id"]').value = record.id; });
     $('#deleteCategoryFromEditor')?.addEventListener('click', event => runAction(event.currentTarget, async () => {
-      if (!await confirmAction({ title: 'Excluir esta categoria?', message: `“${record.name}” será excluída e os produtos vinculados ficarão sem categoria. Esta ação não poderá ser desfeita.`, confirmLabel: 'Excluir', tone: 'danger' })) return;
-      const { error } = await db.from('categories').delete().eq('id', record.id);
-      if (error) return toast(explain(error), 'error');
-      notifyStorefront('categories'); $('#editorDialog').close(); toast('Categoria excluída com sucesso.'); render('categories');
+      if (!await deleteCategorySafely(record)) return;
+      $('#editorDialog').close();
+      render('categories');
     }));
     syncCategoryPreview();
     $('#editorDialog').showModal();
   }
   const QUICK_CAMPAIGN_PRESETS = {
     month: { icon: '🎉', label: 'Promoção do mês', group: 'promotions', imageIndex: 0, campaignType: 'promotion', titles: ['Renove Sua Casa', 'O Mês Inteiro com Ofertas', 'Condições Especiais do Mês', 'Ofertas para Renovar Sua Casa', 'Seu Mês com Preço Baixo'], subtitles: ['com qualidade e economia', 'Ofertas escolhidas para você', 'Aproveite nossas condições do mês', 'Móveis e eletros com condições especiais'], ctas: ['Ver ofertas', 'Conferir ofertas', 'Aproveitar', 'Comprar agora'], rule: 'promotional', visual: 'offer', theme: 'brand', duration: 'month' },
+    super_offer: { icon: '🚀', label: 'Super Oferta', group: 'promotions', imageIndex: 0, campaignType: 'promotion', titles: ['Super Oferta Atacarejo', 'Preço de Verdade é Aqui', 'A Oferta que Faltava', 'Renove Pagando Menos', 'Super Condição para sua Casa'], subtitles: ['Produtos selecionados com condições imperdíveis', 'Economia para transformar sua casa hoje', 'Escolhas especiais com preço de atacarejo'], ctas: ['Quero aproveitar', 'Ver super ofertas', 'Conferir agora'], rule: 'promotional', visual: 'offer', theme: 'yellow', duration: '7days' },
+    special_week: { icon: '🗓️', label: 'Semana especial', group: 'promotions', imageIndex: 10, campaignType: 'promotion', titles: ['Semana Especial Atacarejo', 'Uma Semana para Renovar', 'Sete Dias de Oportunidades', 'Semana da Casa Nova', 'Condições Especiais da Semana'], subtitles: ['Ofertas selecionadas durante toda a semana', 'Cada ambiente com uma oportunidade diferente', 'Aproveite antes do fim da semana'], ctas: ['Ver a seleção', 'Aproveitar a semana', 'Conferir ofertas'], rule: 'promotional', visual: 'duo', theme: 'brand', duration: '7days' },
     complete: { icon: '🏠', label: 'Casa completa', group: 'rooms', imageIndex: 5, campaignType: 'custom', titles: ['Sua Casa Completa', 'Transforme Cada Ambiente', 'Sua Casa Merece Mais', 'Tudo que Seu Lar Precisa', 'Renove sua Casa com Estilo'], subtitles: ['Sala, quarto, cozinha e muito mais', 'Móveis para todos os momentos', 'Conforto e qualidade para sua casa', 'Encontre tudo em um só lugar'], ctas: ['Explorar ambientes', 'Ver produtos', 'Conhecer coleção', 'Comprar agora'], rule: 'all', visual: 'classic', theme: 'premium', duration: '15days' },
     living: { icon: '🛋️', label: 'Sala', group: 'rooms', imageIndex: 1, campaignType: 'category', category: /^sala$/i, titles: ['Sua Sala Mais Aconchegante', 'Renove sua Sala', 'Conforto para Receber Bem', 'Sala Completa do Seu Jeito', 'Estilo que Abraça'], subtitles: ['Sofás, racks, painéis e poltronas para você', 'Conforto e design para todos os momentos', 'Escolhas especiais para o coração da casa'], ctas: ['Ver sala', 'Explorar produtos', 'Renovar agora'], rule: 'all', visual: 'classic', theme: 'brand', duration: '15days' },
     bedrooms: { icon: '🛏️', label: 'Quarto', group: 'rooms', imageIndex: 2, campaignType: 'category', category: /quarto|colch/i, titles: ['Quartos com Estilo', 'Seu Quarto Renovado', 'Conforto para Descansar', 'Um Quarto para Sonhar', 'Seu Refúgio Mais Bonito'], subtitles: ['Camas, guarda-roupas e cômodas para transformar', 'Seu descanso merece o melhor', 'Conforto e organização no mesmo ambiente'], ctas: ['Ver quartos', 'Conhecer produtos', 'Renovar agora'], rule: 'all', visual: 'elegant', theme: 'premium', duration: '15days' },
+    mattresses: { icon: '☁️', label: 'Colchões', group: 'rooms', imageIndex: 2, campaignType: 'category', category: /colch[aã]o|cama box/i, product: /colch[aã]o|cama box/i, titles: ['Seu Melhor Descanso Começa Aqui', 'Noites Melhores, Dias Mais Leves', 'Conforto para Dormir Bem', 'Escolha o Colchão Ideal', 'Seu Sono Merece Mais'], subtitles: ['Colchões e camas para todos os jeitos de descansar', 'Conforto e suporte para uma noite completa', 'Encontre a medida e o conforto ideais'], ctas: ['Ver colchões', 'Escolher meu colchão', 'Conhecer opções'], rule: 'all', visual: 'minimal', theme: 'clean', duration: '15days' },
     kitchen: { icon: '🍳', label: 'Cozinha', group: 'rooms', imageIndex: 3, campaignType: 'category', category: /cozinha|jantar/i, titles: ['Uma Cozinha para Viver Melhor', 'Cozinha Prática e Bonita', 'Seu Sabor, Seu Espaço', 'Renove o Coração da Casa', 'Tudo para sua Cozinha'], subtitles: ['Armários, mesas e soluções para o dia a dia', 'Organização e estilo para todos os momentos', 'Escolhas que deixam sua rotina mais gostosa'], ctas: ['Ver cozinha', 'Explorar produtos', 'Conhecer coleção'], rule: 'all', visual: 'elegant', theme: 'clean', duration: '15days' },
     appliances: { icon: '🔌', label: 'Eletrodomésticos', group: 'products', imageIndex: 4, campaignType: 'category', category: /eletro/i, titles: ['Tecnologia para sua Casa', 'Eletros que Facilitam sua Vida', 'Sua Casa Mais Completa', 'Praticidade Todo Dia', 'Eletros em Destaque'], subtitles: ['Geladeiras, fogões, lavadoras e muito mais', 'Tecnologia, economia e praticidade', 'Escolhas inteligentes para sua rotina'], ctas: ['Ver eletros', 'Conferir produtos', 'Comprar agora'], rule: 'all', visual: 'product', theme: 'brand', duration: '15days' },
-    liquidation: { icon: '💥', label: 'Liquidação', group: 'promotions', imageIndex: 6, campaignType: 'clearance', titles: ['Liquidação', 'Preços Despencaram', 'Descontos de Verdade', 'É Hora de Economizar', 'Liquida Atacarejo'], subtitles: ['Até 50% OFF em produtos selecionados', 'Aproveite enquanto durarem os estoques', 'Sua casa renovada pagando menos'], ctas: ['Aproveitar agora', 'Ver descontos', 'Comprar'], rule: 'promotional', visual: 'clearance', theme: 'yellow', duration: '7days' },
+    liquidation: { icon: '💥', label: 'Liquidação', group: 'promotions', imageIndex: 6, campaignType: 'clearance', titles: ['Liquidação', 'Preços Despencaram', 'Descontos de Verdade', 'É Hora de Economizar', 'Liquida Atacarejo'], subtitles: ['Preços especiais em produtos selecionados', 'Aproveite enquanto durarem os estoques', 'Sua casa renovada pagando menos'], ctas: ['Aproveitar agora', 'Ver descontos', 'Comprar'], rule: 'promotional', visual: 'clearance', theme: 'yellow', duration: '7days' },
     news: { icon: '✨', label: 'Novidades', group: 'products', imageIndex: 7, campaignType: 'new_arrivals', titles: ['Novidades na Loja', 'Acabou de Chegar', 'Novos Jeitos de Renovar', 'Lançamentos para sua Casa', 'Conheça o que Há de Novo'], subtitles: ['Conheça os últimos lançamentos', 'Novidades escolhidas para sua casa', 'Design novo para transformar ambientes'], ctas: ['Ver novidades', 'Conhecer produtos', 'Conferir'], rule: 'new', visual: 'minimal', theme: 'clean', duration: '15days' },
     best: { icon: '⭐', label: 'Mais vendidos', group: 'products', imageIndex: 8, campaignType: 'best_sellers', titles: ['Os Mais Vendidos', 'Favoritos dos Clientes', 'Sucesso na Sua Casa', 'Escolhas que Todo Mundo Ama', 'Campeões de Venda'], subtitles: ['Os produtos que todo mundo está escolhendo', 'Seleção campeã de vendas', 'Escolhas aprovadas pelos nossos clientes'], ctas: ['Ver mais vendidos', 'Conferir', 'Comprar agora'], rule: 'best', visual: 'classic', theme: 'brand', duration: 'always' },
     flash: { icon: '⚡', label: 'Oferta relâmpago', group: 'promotions', imageIndex: 9, campaignType: 'promotion', titles: ['Oferta Relâmpago', 'Só por Pouco Tempo', 'Corre que Está Acabando', 'Preço Baixo Agora', 'Últimas Horas'], subtitles: ['Por tempo limitado', 'Preços que você não pode perder', 'Aproveite antes que termine'], ctas: ['Aproveitar agora', 'Ver ofertas', 'Comprar agora'], rule: 'promotional', visual: 'offer', theme: 'yellow', duration: 'today', countdown: true },
@@ -611,9 +628,12 @@
   ];
   const QUICK_VARIATION_MAP = {
     month: ['split-right','full-overlay','product-cutout','floating-card','catalog-offer'],
+    super_offer: ['discount-impact','price-stage','centered-product','catalog-offer','full-overlay'],
+    special_week: ['dual-scene','environment-carousel','catalog-offer','split-right','floating-card'],
     complete: ['catalog-offer','dual-scene','full-overlay','floating-card','environment-carousel'],
     living: ['split-right','product-cutout','full-overlay','floating-card','catalog-offer'],
     bedrooms: ['split-left','full-overlay','floating-card','premium-minimal','catalog-offer'],
+    mattresses: ['premium-minimal','floating-card','centered-product','split-left','full-overlay'],
     kitchen: ['floating-card','split-right','full-overlay','dual-scene','catalog-offer'],
     appliances: ['product-cutout','centered-product','price-stage','catalog-offer','full-overlay'],
     liquidation: ['discount-impact','price-stage','product-cutout','catalog-offer','full-overlay'],
@@ -638,9 +658,12 @@
   };
   const QUICK_TEMPLATE_IMAGES = {
     month: 'https://images.unsplash.com/photo-1618220179428-22790b461013?auto=format&fit=crop&w=1600&q=82',
+    super_offer: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=1600&q=82',
+    special_week: 'https://images.unsplash.com/photo-1618220048045-10a6dbdf83e0c?auto=format&fit=crop&w=1600&q=82',
     complete: 'assets/editorial-room-clean.png?v=caption-removed-1',
     living: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=1600&q=82',
     bedrooms: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1600&q=82',
+    mattresses: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1600&q=82',
     kitchen: 'https://images.unsplash.com/photo-1556911220-bff31c812dba?auto=format&fit=crop&w=1600&q=82',
     appliances: 'https://images.unsplash.com/photo-1626806819282-2c1dc01a5e0c?auto=format&fit=crop&w=1600&q=82',
     liquidation: 'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=1600&q=82',
@@ -707,7 +730,7 @@
     if (key === 'always') return { startAt: null, endAt: null };
     if (key === 'today') end.setHours(23, 59, 59, 999);
     if (key === 'tomorrow') { end.setDate(end.getDate() + 1); end.setHours(23, 59, 59, 999); }
-    if (key === 'weekend') { const days = (7 - end.getDay()) % 7 || 7; end.setDate(end.getDate() + days); end.setHours(23, 59, 59, 999); }
+    if (key === 'weekend') { const days = (7 - end.getDay()) % 7; end.setDate(end.getDate() + days); end.setHours(23, 59, 59, 999); }
     if (key === '3days') end.setDate(end.getDate() + 3);
     if (key === '7days') end.setDate(end.getDate() + 7);
     if (key === '15days') end.setDate(end.getDate() + 15);
@@ -717,10 +740,17 @@
   function quickCategoryForPreset(state) {
     const preset = QUICK_CAMPAIGN_PRESETS[state.presetKey];
     if (state.categoryId) return state.categories.find(item => String(item.id) === String(state.categoryId)) || null;
+    if (state.productRule === 'promotion') return null;
     return preset.category ? state.categories.find(item => preset.category.test(item.name)) || null : null;
   }
   function quickEligibleProducts(state) {
     const preset = QUICK_CAMPAIGN_PRESETS[state.presetKey];
+    if (state.productRule === 'promotion') {
+      const selected = state.promotions.find(item => String(item.id) === String(state.selectedPromotionId));
+      if (!selected) return [];
+      const linked = new Set((selected.promotion_products || []).map(item => String(item.product_id)));
+      return state.products.filter(item => item.active !== false && (linked.has(String(item.id)) || (selected.auto_include_category && selected.category_id && String(item.category_id) === String(selected.category_id))));
+    }
     const category = quickCategoryForPreset(state);
     const base = state.products.filter(item => item.active !== false && (!category || String(item.category_id) === String(category.id)) && (!preset.product || preset.product.test(item.name)));
     if (state.productRule === 'single') return base.filter(item => String(item.id) === String(state.focusProductId)).slice(0, 1);
@@ -739,6 +769,9 @@
     const category = quickCategoryForPreset(state);
     const productPatterns = {
       month: /sof[aá]|poltrona|mesa|rack|painel/i,
+      super_offer: /sof[aá]|poltrona|mesa|rack|painel|cama/i,
+      special_week: /sof[aá]|mesa|cama|arm[aá]rio|poltrona/i,
+      mattresses: /colch[aã]o|cama box/i,
       liquidation: /sof[aá]|guarda-roupa|mesa|cama|arm[aá]rio/i,
       flash: /painel|rack|smart tv|televis|tv|sof[aá]/i,
       weekend: /sof[aá]|poltrona|mesa|rack|painel/i,
@@ -785,11 +818,13 @@
     const campaignOffset = ({ month: 0, liquidation: 1, flash: 0, weekend: 0, stock_clearance: 1, black_friday: 0 })[state.presetKey];
     const imageOffset = campaignOffset == null ? Number(preset.imageIndex || 0) : campaignOffset;
     const fallbackProduct = candidates[(imageOffset + variationIndex) % Math.max(1, candidates.length)] || state.products.filter(productCover)[(imageOffset + variationIndex) % Math.max(1, state.products.filter(productCover).length)];
-    const productForward = ['month','appliances','liquidation','best','flash','weekend','stock_clearance','installment','back_school','black_friday','product_spotlight'].includes(state.presetKey);
+    const productForward = ['month','super_offer','special_week','mattresses','appliances','liquidation','best','flash','weekend','stock_clearance','installment','back_school','black_friday','product_spotlight'].includes(state.presetKey);
     const useCampaignProduct = productForward && !['manual','single'].includes(state.productRule) && fallbackProduct;
     const productImage = useCampaignProduct ? productCover(fallbackProduct) : products[0] ? productCover(products[0]) : fallbackProduct ? productCover(fallbackProduct) : '';
     if (state.imageMode === 'category') return category?.image_url || productImage || '';
     if (state.imageMode === 'library' || state.imageMode === 'selected' || state.imageMode === 'upload') return state.selectedImage || productImage || category?.image_url || '';
+    if (state.productRule === 'promotion' && products[0] && productCover(products[0])) return productCover(products[0]);
+    if (state.categoryId && (category?.image_url || productImage)) return category?.image_url || productImage;
     if (state.productRule === 'single' && productImage) return productImage;
     return productForward ? productImage || QUICK_TEMPLATE_IMAGES[state.presetKey] || category?.image_url || '' : QUICK_TEMPLATE_IMAGES[state.presetKey] || productImage || category?.image_url || state.record?.image_desktop_url || '';
   }
@@ -800,10 +835,19 @@
   }
   function quickDurationLabel(value) { return QUICK_DURATIONS.find(item => item[0] === value)?.[1] || value; }
   function quickPositionLabel(value) { return ({ auto: 'O sistema decide', home_hero: 'Destaque principal', home_middle: 'Meio da página', home_bottom: 'Área de ofertas', category: 'Categoria', recommended: 'Todos os locais recomendados' })[value] || value; }
+  function quickCountdownText(state) {
+    const end = state.publishMode === 'schedule' ? new Date(state.scheduleEnd || '') : new Date(quickDurationRange(state.duration).endAt || '');
+    if (!Number.isFinite(end.getTime())) return 'POR POUCO TEMPO';
+    const remaining = Math.max(0, end.getTime() - Date.now());
+    const days = Math.floor(remaining / 86400000);
+    const hours = Math.floor((remaining % 86400000) / 3600000);
+    const minutes = Math.floor((remaining % 3600000) / 60000);
+    return days ? `${days}D ${String(hours).padStart(2, '0')}H ${String(minutes).padStart(2, '0')}M` : `${String(hours).padStart(2, '0')} : ${String(minutes).padStart(2, '0')}`;
+  }
 
   function quickPreviewState(state, presetKey, layout) {
     const preset = QUICK_CAMPAIGN_PRESETS[presetKey];
-    return { ...state, presetKey, layout: layout.id, visual: layout.visual, theme: layout.theme, title: preset.titles[0], subtitle: preset.subtitles[0], cta: preset.ctas[0], productRule: preset.rule, categoryId: '', imageMode: 'auto', selectedImage: '' };
+    return { ...state, presetKey, layout: layout.id, visual: layout.visual, theme: layout.theme, title: preset.titles[0], subtitle: preset.subtitles[0], cta: preset.ctas[0], productRule: preset.rule, categoryId: '', imageMode: 'auto', selectedImage: '', duration: preset.duration, publishMode: 'now', countdown: Boolean(preset.countdown) };
   }
   function quickThumbUrl(url) { return String(url || '').replace(/([?&])w=\d+/i, '$1w=640').replace(/([?&])q=\d+/i, '$1q=72'); }
   function quickBannerMarkup(state, image, compact = false) {
@@ -811,12 +855,15 @@
     const layout = quickLayoutForState(state);
     const products = quickEligibleProducts(state);
     const campaignProducts = quickCampaignCandidates(state);
-    const focus = products[0] || campaignProducts[0] || state.products.find(item => productCover(item));
+    const focus = products[0] || null;
     const regularPrice = focus ? Number(focus.price || 0) : 0;
     const price = focus ? Number(focus.promotional_price ?? focus.price ?? 0) : 0;
     const priceText = price ? brl(price) : '';
+    const discountPercent = products.reduce((highest, product) => { const regular = Number(product.price || 0); const offer = Number(product.promotional_price ?? regular); return regular > 0 && offer >= 0 && offer < regular ? Math.max(highest, Math.round((1 - offer / regular) * 100)) : highest; }, 0);
     const campaignIdentity = ({
       month: { kicker: 'PROMOÇÃO DO MÊS', offer: 'PREÇO BAIXO', seal: 'MÊS INTEIRO' },
+      super_offer: { kicker: 'SUPER OFERTA', offerLabel: 'CONDIÇÃO ESPECIAL', offer: 'IMPERDÍVEL', seal: 'PREÇO DE ATACAREJO' },
+      special_week: { kicker: 'SEMANA ESPECIAL', offer: '7 DIAS DE OFERTAS', seal: 'UMA OPORTUNIDADE POR AMBIENTE' },
       liquidation: { kicker: 'MÓVEIS COM ATÉ', offerLabel: 'MÓVEIS COM ATÉ', offer: '50% OFF', seal: 'QUALIDADE COM PREÇOS IMPERDÍVEIS' },
       flash: { kicker: '⚡ POR TEMPO LIMITADO', offerLabel: 'DESCONTOS DE ATÉ', offer: '40% OFF', seal: 'APROVEITE ANTES QUE ACABE!' },
       weekend: { kicker: 'CONDIÇÕES ESPECIAIS', offerLabel: 'SOMENTE', offer: 'POR POUCOS DIAS', seal: 'SEXTA • SÁBADO • DOMINGO' },
@@ -828,7 +875,7 @@
       product_spotlight: { kicker: 'PRODUTO EM DESTAQUE', offer: priceText || 'OFERTA ESPECIAL', seal: 'DESTAQUE DA SEMANA' }
     })[state.presetKey] || { kicker: preset.label.toUpperCase(), offer: preset.group === 'products' ? 'MAIS DESEJADO' : 'PARA SUA CASA', seal: preset.group === 'dates' ? 'EDIÇÃO ESPECIAL' : 'ESCOLHA COMPLETA' };
     const offerLabel = state.productRule === 'single' && priceText ? 'A PARTIR DE' : campaignIdentity.offerLabel || campaignIdentity.kicker;
-    const offerValue = state.productRule === 'single' && priceText ? priceText : campaignIdentity.offer;
+    const offerValue = state.productRule === 'single' && priceText ? priceText : /\d+% OFF/i.test(campaignIdentity.offer || '') ? discountPercent ? `ATÉ ${discountPercent}% OFF` : 'PREÇO ESPECIAL' : campaignIdentity.offer;
     const imageUrls = [image, ...campaignProducts.map(productCover)].filter(Boolean).filter((url, index, list) => list.indexOf(url) === index);
     const second = imageUrls[1] || imageUrls[0] || '';
     const catalogImages = imageUrls.slice(0, state.presetKey === 'complete' ? 4 : 3);
@@ -837,12 +884,12 @@
       : state.presetKey === 'weekend'
         ? ['MESA DE JANTAR', 'SOFÁ RETRÁTIL', 'OFERTA ESPECIAL']
         : ['DESTAQUE', 'OFERTA', 'IMPERDÍVEL'];
-    const brandedCampaign = ['month','liquidation','flash','weekend','stock_clearance','complete'].includes(state.presetKey);
+    const brandedCampaign = ['month','super_offer','special_week','liquidation','flash','weekend','stock_clearance','complete'].includes(state.presetKey);
     const benefitRows = ({
       weekend: [['▣','QUALIDADE','QUE SUA CASA MERECE'],['▤','PARCELE','EM ATÉ 12X'],['⌂','TUDO PARA','SUA CASA']],
       stock_clearance: [['▣','ESTOQUE','LIMITADO'],['▤','ENTREGA','RÁPIDA'],['✓','COMPRA','SEGURA']]
     })[state.presetKey] || [];
-    const alwaysShowOffer = ['month','liquidation','flash','weekend','stock_clearance','black_friday'].includes(state.presetKey);
+    const alwaysShowOffer = ['month','super_offer','special_week','liquidation','flash','weekend','stock_clearance','black_friday'].includes(state.presetKey);
     const showOffer = alwaysShowOffer || ['product-cutout','centered-product','discount-impact','price-stage'].includes(layout.id);
     const showPrice = layout.id === 'price-stage' && priceText;
     return `<div class="quick-preview-banner campaign-${esc(state.presetKey)} layout-${esc(layout.id)} theme-${esc(state.theme || layout.theme)} ${image ? 'has-image' : ''} ${compact ? 'is-compact' : ''}">
@@ -854,7 +901,7 @@
       <div class="quick-campaign-seal">${esc(campaignIdentity.seal)}</div>
       ${showOffer ? `<div class="quick-banner-offer"><small>${esc(offerLabel)}</small><b>${esc(offerValue)}</b></div>` : ''}
       ${showPrice ? `<div class="quick-banner-price"><small>A PARTIR DE</small><b>${esc(priceText)}</b>${regularPrice > price ? `<del>${esc(brl(regularPrice))}</del>` : ''}</div>` : ''}
-      ${preset.countdown ? '<div class="quick-banner-countdown"><span>TERMINA EM</span><b>08 : 42 : 16</b></div>' : ''}
+      ${state.countdown ? `<div class="quick-banner-countdown"><span>TERMINA EM</span><b>${esc(quickCountdownText(state))}</b></div>` : ''}
       ${benefitRows.length ? `<div class="quick-banner-benefits">${benefitRows.map(([icon, title, subtitle]) => `<span><i>${icon}</i><b>${title}</b><small>${subtitle}</small></span>`).join('')}</div>` : ''}
     </div>`;
   }
@@ -869,7 +916,7 @@
       const favorites = quickStoredList(QUICK_FAVORITES_KEY);
       const recent = quickStoredList(QUICK_RECENTS_KEY);
       const query = String(state.librarySearch || '').trim().toLowerCase();
-      const featuredOrder = ['month','liquidation','flash','weekend','stock_clearance','complete'];
+      const featuredOrder = ['month','super_offer','liquidation','flash','special_week','weekend','stock_clearance','complete','mattresses'];
       const entries = Object.entries(QUICK_CAMPAIGN_PRESETS).filter(([key, item]) => {
         const tabMatch = state.libraryTab === 'favorites' ? favorites.includes(key) : state.libraryTab === 'recent' ? recent.includes(key) : true;
         const groupMatch = state.libraryGroup === 'all' || item.group === state.libraryGroup;
@@ -893,14 +940,14 @@
       $$('[data-library-group]').forEach(button => button.onclick = () => { state.libraryTab = 'all'; state.libraryGroup = button.dataset.libraryGroup; renderQuickCampaignWizard(); });
       $('#quickLibrarySearch').oninput = event => { const value = event.target.value; state.librarySearch = value; window.clearTimeout(state.searchTimer); state.searchTimer = window.setTimeout(() => { renderQuickCampaignWizard(); const input = $('#quickLibrarySearch'); input?.focus(); input?.setSelectionRange(value.length, value.length); }, 180); };
       $$('[data-quick-favorite]').forEach(button => button.onclick = () => { const key = button.dataset.quickFavorite; const values = quickStoredList(QUICK_FAVORITES_KEY); quickSaveList(QUICK_FAVORITES_KEY, values.includes(key) ? values.filter(item => item !== key) : [...values, key]); renderQuickCampaignWizard(); });
-      $$('[data-quick-template]').forEach(button => button.onclick = () => { const key = button.dataset.quickTemplate; const preset = QUICK_CAMPAIGN_PRESETS[key]; Object.assign(state, { step: 'variations', presetKey: key, title: preset.titles[0], subtitle: preset.subtitles[0], cta: preset.ctas[0], productRule: preset.rule, duration: preset.duration, position: 'auto', imageMode: 'auto', categoryId: '', selectedImage: '' }); quickRememberTemplate(key); renderQuickCampaignWizard(); });
+      $$('[data-quick-template]').forEach(button => button.onclick = () => { const key = button.dataset.quickTemplate; const preset = QUICK_CAMPAIGN_PRESETS[key]; const layout = quickVariationsForPreset(key)[0]; Object.assign(state, { step: 'variations', presetKey: key, layout: layout.id, visual: layout.visual, theme: layout.theme, title: preset.titles[0], subtitle: preset.subtitles[0], cta: preset.ctas[0], productRule: preset.rule, duration: preset.duration, position: 'auto', imageMode: 'auto', categoryId: '', selectedImage: '', countdown: Boolean(preset.countdown) }); quickRememberTemplate(key); renderQuickCampaignWizard(); });
       return;
     }
     if (state.step === 'fast-goal') {
-      const fastKeys = ['month','living','bedrooms','kitchen','appliances','complete','liquidation','news'];
+      const fastKeys = ['month','super_offer','living','bedrooms','mattresses','kitchen','complete','liquidation'];
       $('#dialogEyebrow').textContent = '⚡ MODO SUPER RÁPIDO'; $('#dialogTitle').textContent = 'O que você quer divulgar?';
       $('#editorFields').innerHTML = `<div class="quick-fast-screen"><p>Escolha uma opção. Textos, imagem, produtos e duração serão preenchidos automaticamente.</p><div>${fastKeys.map(key => `<button type="button" data-fast-goal="${key}"><span>${QUICK_CAMPAIGN_PRESETS[key].icon}</span><b>${esc(QUICK_CAMPAIGN_PRESETS[key].label)}</b></button>`).join('')}</div><button id="fastBack" type="button" class="secondary">← Voltar para modelos prontos</button></div>`;
-      $$('[data-fast-goal]').forEach(button => button.onclick = () => { const key = button.dataset.fastGoal; const preset = QUICK_CAMPAIGN_PRESETS[key]; const layout = quickVariationsForPreset(key, 4)[0]; Object.assign(state, { step: 'fast-variations', presetKey: key, layout: layout.id, visual: layout.visual, theme: layout.theme, title: preset.titles[0], subtitle: preset.subtitles[0], cta: preset.ctas[0], productRule: preset.rule, duration: preset.duration, position: 'auto', imageMode: 'auto', categoryId: '', selectedImage: '' }); quickRememberTemplate(key); renderQuickCampaignWizard(); });
+      $$('[data-fast-goal]').forEach(button => button.onclick = () => { const key = button.dataset.fastGoal; const preset = QUICK_CAMPAIGN_PRESETS[key]; const layout = quickVariationsForPreset(key, 4)[0]; Object.assign(state, { step: 'fast-variations', presetKey: key, layout: layout.id, visual: layout.visual, theme: layout.theme, title: preset.titles[0], subtitle: preset.subtitles[0], cta: preset.ctas[0], productRule: preset.rule, duration: preset.duration, position: 'auto', imageMode: 'auto', categoryId: '', selectedImage: '', countdown: Boolean(preset.countdown) }); quickRememberTemplate(key); renderQuickCampaignWizard(); });
       $('#fastBack').onclick = () => { state.step = 'templates'; renderQuickCampaignWizard(); };
       return;
     }
@@ -924,6 +971,7 @@
     const titles = [state.record?.title, ...preset.titles].filter((item, index, list) => item && list.indexOf(item) === index);
     const subtitles = [state.record?.subtitle, ...preset.subtitles].filter((item, index, list) => item && list.indexOf(item) === index);
     const ctas = [state.record?.button_text, ...preset.ctas].filter((item, index, list) => item && list.indexOf(item) === index);
+    const phraseSuggestions = titles.slice(0, 4).map((title, index) => ({ title, subtitle: subtitles[index % subtitles.length], cta: ctas[index % ctas.length] }));
     const matchingProducts = state.products.filter(item => (!category || String(item.category_id) === String(category.id)) && (!preset.product || preset.product.test(item.name)));
     const libraryCategories = [['all','Todas'], ...state.categories.map(item => [String(item.id), item.name])];
     const libraryProducts = state.products.filter(item => productCover(item) && (state.imageLibraryFilter === 'all' || String(item.category_id) === String(state.imageLibraryFilter))).slice(0, 30);
@@ -931,14 +979,17 @@
     $('#dialogEyebrow').textContent = state.record ? '✦ EDIÇÃO RÁPIDA' : 'PASSO 3 DE 4';
     $('#dialogTitle').textContent = state.record ? `Editar — ${state.record.title}` : `${preset.label} · ${layout.name}`;
     $('#editorFields').innerHTML = `<div class="quick-ready-screen"><section class="quick-preview-panel"><div class="quick-preview-toolbar"><b>PRÉVIA DO BANNER</b><div><button class="${state.previewDevice === 'desktop' ? 'is-active' : ''}" type="button" data-quick-device="desktop">🖥 Desktop</button><button class="${state.previewDevice === 'tablet' ? 'is-active' : ''}" type="button" data-quick-device="tablet">Tablet</button><button class="${state.previewDevice === 'mobile' ? 'is-active' : ''}" type="button" data-quick-device="mobile">📱 Mobile</button></div></div><div class="quick-preview-canvas ${esc(state.previewDevice || 'desktop')}">${quickBannerMarkup(state, image)}</div><dl class="quick-summary"><div><dt>Modelo</dt><dd>${esc(preset.label)}</dd></div><div><dt>Variação</dt><dd>${esc(layout.name)}</dd></div><div><dt>Produtos</dt><dd>${products.length} produto${products.length === 1 ? '' : 's'}</dd></div><div><dt>Local</dt><dd>${esc(quickPositionLabel(position))}</dd></div></dl></section>
-      <section class="quick-options-panel"><div class="quick-option-block"><header><span>1</span><div><b>Texto pronto</b><small>Escolha uma opção ou personalize somente se quiser</small></div></header><label>Título<select id="quickTitle">${titles.map(text => `<option ${state.title === text ? 'selected' : ''}>${esc(text)}</option>`).join('')}</select></label><label>Subtítulo<select id="quickSubtitle">${subtitles.map(text => `<option ${state.subtitle === text ? 'selected' : ''}>${esc(text)}</option>`).join('')}</select></label><label>Botão<select id="quickCta">${ctas.map(text => `<option ${state.cta === text ? 'selected' : ''}>${esc(text)}</option>`).join('')}</select></label><details class="quick-custom-copy"><summary>Texto personalizado</summary><label>Título<input id="quickCustomTitle" value="${esc(state.title)}"></label><label>Subtítulo<textarea id="quickCustomSubtitle">${esc(state.subtitle)}</textarea></label></details></div>
-      <div class="quick-option-block"><header><span>2</span><div><b>Produto da loja</b><small>Nome, preço, foto, categoria e link vêm do banco</small></div></header><select id="quickProductRule"><option value="${preset.rule}" ${state.productRule === preset.rule ? 'selected' : ''}>✨ Seleção automática recomendada</option><option value="single" ${state.productRule === 'single' ? 'selected' : ''}>Usar um produto da loja</option><option value="all" ${state.productRule === 'all' ? 'selected' : ''}>Todos da categoria</option><option value="promotional" ${state.productRule === 'promotional' ? 'selected' : ''}>Somente em promoção</option><option value="available" ${state.productRule === 'available' ? 'selected' : ''}>Somente disponíveis</option><option value="manual" ${state.productRule === 'manual' ? 'selected' : ''}>Escolher vários produtos</option></select>${state.productRule === 'single' ? `<label>Produto<select id="quickFocusProduct"><option value="">Escolha um produto</option>${matchingProducts.map(item => `<option value="${item.id}" ${String(state.focusProductId) === String(item.id) ? 'selected' : ''}>${esc(item.name)} · ${esc(brl(item.promotional_price ?? item.price))}</option>`).join('')}</select></label>` : ''}${state.productRule === 'manual' ? `<div class="quick-manual-products">${matchingProducts.map(item => `<label><input type="checkbox" value="${item.id}" ${state.manualProducts.has(String(item.id)) ? 'checked' : ''}><span>${productCover(item) ? `<img src="${esc(productCover(item))}" alt="" loading="lazy">` : '<i>▦</i>'}<b>${esc(item.name)}</b><small>Estoque ${Number(item.stock_quantity || 0)}</small></span></label>`).join('')}</div>` : ''}</div>
+      <section class="quick-options-panel"><div class="quick-option-block"><header><span>1</span><div><b>Frases prontas</b><small>Clique em uma sugestão. Título, subtítulo e botão são preenchidos juntos.</small></div></header><div class="quick-phrase-grid">${phraseSuggestions.map((phrase, index) => `<button type="button" data-quick-phrase="${index}" class="${state.title === phrase.title && state.subtitle === phrase.subtitle ? 'is-active' : ''}"><b>${esc(phrase.title)}</b><small>${esc(phrase.subtitle)}</small><em>${esc(phrase.cta)} →</em></button>`).join('')}</div><label>Texto do botão<select id="quickCta">${ctas.map(text => `<option ${state.cta === text ? 'selected' : ''}>${esc(text)}</option>`).join('')}</select></label><details class="quick-custom-copy"><summary>Editar texto manualmente (opcional)</summary><label>Título<input id="quickCustomTitle" value="${esc(state.title)}"></label><label>Subtítulo<textarea id="quickCustomSubtitle">${esc(state.subtitle)}</textarea></label></details></div>
+      <div class="quick-option-block"><header><span>2</span><div><b>Produto, categoria ou promoção</b><small>Nome, preço, foto e link vêm do banco da loja</small></div></header><label>Categoria<select id="quickCategory"><option value="" ${!state.categoryId ? 'selected' : ''}>✨ Categoria sugerida pelo modelo</option>${state.categories.map(item => `<option value="${item.id}" ${String(state.categoryId) === String(item.id) ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}</select></label><label>O que divulgar?<select id="quickProductRule"><option value="${preset.rule}" ${state.productRule === preset.rule ? 'selected' : ''}>✨ Seleção automática recomendada</option><option value="single" ${state.productRule === 'single' ? 'selected' : ''}>Um produto da loja</option><option value="all" ${state.productRule === 'all' ? 'selected' : ''}>Todos da categoria</option><option value="promotional" ${state.productRule === 'promotional' ? 'selected' : ''}>Produtos com preço promocional</option><option value="promotion" ${state.productRule === 'promotion' ? 'selected' : ''}>Uma promoção já cadastrada</option><option value="available" ${state.productRule === 'available' ? 'selected' : ''}>Somente disponíveis</option><option value="manual" ${state.productRule === 'manual' ? 'selected' : ''}>Escolher vários produtos</option></select></label>${state.productRule === 'promotion' ? `<label>Promoção<select id="quickPromotion"><option value="">Escolha uma promoção</option>${state.promotions.map(item => `<option value="${item.id}" ${String(state.selectedPromotionId) === String(item.id) ? 'selected' : ''}>${esc(item.title)}</option>`).join('')}</select></label>` : ''}${state.productRule === 'single' ? `<label>Produto<select id="quickFocusProduct"><option value="">Escolha um produto</option>${matchingProducts.map(item => `<option value="${item.id}" ${String(state.focusProductId) === String(item.id) ? 'selected' : ''}>${esc(item.name)} · ${esc(brl(item.promotional_price ?? item.price))}</option>`).join('')}</select></label>` : ''}${state.productRule === 'manual' ? `<div class="quick-manual-products">${matchingProducts.map(item => `<label><input type="checkbox" value="${item.id}" ${state.manualProducts.has(String(item.id)) ? 'checked' : ''}><span>${productCover(item) ? `<img src="${esc(productCover(item))}" alt="" loading="lazy">` : '<i>▦</i>'}<b>${esc(item.name)}</b><small>Estoque ${Number(item.stock_quantity || 0)}</small></span></label>`).join('')}</div>` : ''}</div>
       <div class="quick-option-block"><header><span>3</span><div><b>Imagem</b><small>Cada modelo já recebe uma foto diferente e coerente</small></div></header><div class="quick-image-mode"><label><input type="radio" name="quickImageMode" value="auto" ${state.imageMode === 'auto' ? 'checked' : ''}><span>✨ Usar imagem sugerida</span></label><label><input type="radio" name="quickImageMode" value="library" ${['library','selected'].includes(state.imageMode) ? 'checked' : ''}><span>Escolher da biblioteca</span></label><label><input type="radio" name="quickImageMode" value="upload" ${state.imageMode === 'upload' ? 'checked' : ''}><span>Enviar minha imagem</span></label></div>${['library','selected'].includes(state.imageMode) ? `<div class="quick-image-library"><nav>${libraryCategories.map(([id, name]) => `<button type="button" data-image-category="${esc(id)}" class="${String(state.imageLibraryFilter) === id ? 'is-active' : ''}">${esc(name)}</button>`).join('')}</nav><div>${libraryProducts.map(item => `<button type="button" data-quick-image="${esc(productCover(item))}" class="${state.selectedImage === productCover(item) ? 'is-active' : ''}"><img src="${esc(quickThumbUrl(productCover(item)))}" alt="${esc(item.name)}" loading="lazy"><span>${esc(item.name)}</span></button>`).join('')}</div></div>` : ''}${state.imageMode === 'upload' ? '<label class="quick-upload">Imagem do banner<input id="quickImageUpload" type="file" accept="image/jpeg,image/png,image/webp"></label>' : ''}</div>
       <div class="quick-option-block"><header><span>4</span><div><b>Publicação</b><small>Publique agora ou agende com término automático</small></div></header><div class="quick-publish-mode"><label><input type="radio" name="quickPublishMode" value="now" ${state.publishMode === 'now' ? 'checked' : ''}><span>Publicar agora</span></label><label><input type="radio" name="quickPublishMode" value="schedule" ${state.publishMode === 'schedule' ? 'checked' : ''}><span>Agendar campanha</span></label></div>${state.publishMode === 'schedule' ? `<div class="quick-schedule-grid"><label>Começa<input id="quickStartAt" type="datetime-local" value="${esc(state.scheduleStart || '')}"></label><label>Termina<input id="quickEndAt" type="datetime-local" value="${esc(state.scheduleEnd || '')}"></label><label>Quando terminar<select id="quickEndAction"><option value="previous" ${state.endAction === 'previous' ? 'selected' : ''}>Voltar ao banner anterior</option><option value="next" ${state.endAction === 'next' ? 'selected' : ''}>Ativar outro banner</option><option value="remove" ${state.endAction === 'remove' ? 'selected' : ''}>Remover o banner</option></select></label></div>` : `<label>Duração rápida<select id="quickDuration">${QUICK_DURATIONS.map(([value, label]) => `<option value="${value}" ${state.duration === value ? 'selected' : ''}>${value === preset.duration ? '✨ ' : ''}${label}</option>`).join('')}</select></label>`}<label>Posição<select id="quickPosition"><option value="auto" ${state.position === 'auto' ? 'selected' : ''}>✨ O sistema decide</option><option value="home_hero" ${state.position === 'home_hero' ? 'selected' : ''}>Destaque principal</option><option value="home_middle" ${state.position === 'home_middle' ? 'selected' : ''}>Meio da página</option><option value="home_bottom" ${state.position === 'home_bottom' ? 'selected' : ''}>Área de ofertas</option></select></label>${preset.countdown ? `<label class="quick-countdown-toggle"><input id="quickCountdown" type="checkbox" ${state.countdown ? 'checked' : ''}> Mostrar contador regressivo</label>` : ''}</div>
       <details class="quick-advanced"><summary>Configurações avançadas</summary><div><button id="changeVariation" type="button" class="secondary">Trocar variação visual</button><button id="openFullBannerEditor" type="button" class="secondary">Abrir editor técnico completo</button></div></details></section>
       <footer class="quick-actions"><button id="quickBack" type="button" class="secondary">← Voltar</button><button id="quickSave" type="button" class="secondary">Salvar rascunho</button><button id="quickPublish" type="button">${state.publishMode === 'schedule' ? 'Agendar campanha' : 'Publicar agora'}</button></footer></div>`;
-    ['quickTitle','quickSubtitle','quickCta'].forEach(id => $(`#${id}`)?.addEventListener('change', event => { state[id.replace('quick','').toLowerCase()] = event.target.value; renderQuickCampaignWizard(); }));
+    $$('[data-quick-phrase]').forEach(button => button.onclick = () => { const phrase = phraseSuggestions[Number(button.dataset.quickPhrase)]; if (!phrase) return; Object.assign(state, phrase); renderQuickCampaignWizard(); });
+    $('#quickCta')?.addEventListener('change', event => { state.cta = event.target.value; renderQuickCampaignWizard(); });
     $('#quickProductRule').onchange = event => { state.productRule = event.target.value; if (state.productRule === 'single' && !state.focusProductId) state.focusProductId = matchingProducts[0]?.id || ''; renderQuickCampaignWizard(); };
+    $('#quickCategory').onchange = event => { state.categoryId = event.target.value; state.focusProductId = ''; renderQuickCampaignWizard(); };
+    $('#quickPromotion')?.addEventListener('change', event => { state.selectedPromotionId = event.target.value; const promotion = state.promotions.find(item => String(item.id) === String(state.selectedPromotionId)); if (promotion) { state.title = promotion.title; state.subtitle = promotion.description || preset.subtitles[0]; state.categoryId = promotion.category_id || ''; if (promotion.banner_url) { state.imageMode = 'selected'; state.selectedImage = promotion.banner_url; } } renderQuickCampaignWizard(); });
     $('#quickFocusProduct')?.addEventListener('change', event => { state.focusProductId = event.target.value; const product = state.products.find(item => String(item.id) === String(state.focusProductId)); if (product) { state.selectedImage = productCover(product); state.imageMode = 'library'; if (state.presetKey === 'product_spotlight') { state.title = product.name; state.subtitle = `${brl(product.promotional_price ?? product.price)} · confira todos os detalhes`; } } renderQuickCampaignWizard(); });
     $$('[name="quickImageMode"]').forEach(input => input.onchange = () => { state.imageMode = input.value; renderQuickCampaignWizard(); });
     $$('[data-image-category]').forEach(button => button.onclick = () => { state.imageLibraryFilter = button.dataset.imageCategory; renderQuickCampaignWizard(); });
@@ -949,10 +1000,19 @@
     $('#quickStartAt')?.addEventListener('change', event => { state.scheduleStart = event.target.value; }); $('#quickEndAt')?.addEventListener('change', event => { state.scheduleEnd = event.target.value; }); $('#quickEndAction')?.addEventListener('change', event => { state.endAction = event.target.value; });
     $$('[data-quick-device]').forEach(button => button.onclick = () => { state.previewDevice = button.dataset.quickDevice; renderQuickCampaignWizard(); });
     $$('.quick-manual-products input').forEach(input => input.onchange = () => { input.checked ? state.manualProducts.add(input.value) : state.manualProducts.delete(input.value); renderQuickCampaignWizard(); });
-    $('#quickImageUpload')?.addEventListener('change', event => { state.uploadFile = event.target.files?.[0] || null; if (state.uploadObjectUrl) URL.revokeObjectURL(state.uploadObjectUrl); state.uploadObjectUrl = state.uploadFile ? URL.createObjectURL(state.uploadFile) : ''; state.selectedImage = state.uploadObjectUrl; renderQuickCampaignWizard(); });
+    $('#quickImageUpload')?.addEventListener('change', event => {
+      const file = event.target.files?.[0] || null;
+      if (file && !allowedImageTypes.has(file.type)) { event.target.value = ''; return toast('Formato inválido. Envie uma imagem JPG, PNG ou WebP.'); }
+      if (file && file.size > maxImageBytes) { event.target.value = ''; return toast('A imagem deve ter no máximo 8 MB.'); }
+      state.uploadFile = file;
+      if (state.uploadObjectUrl) URL.revokeObjectURL(state.uploadObjectUrl);
+      state.uploadObjectUrl = state.uploadFile ? URL.createObjectURL(state.uploadFile) : '';
+      state.selectedImage = state.uploadObjectUrl;
+      renderQuickCampaignWizard();
+    });
     $('#quickCustomTitle').oninput = event => { state.title = event.target.value; $('[data-quick-preview-title]').textContent = state.title; };
     $('#quickCustomSubtitle').oninput = event => { state.subtitle = event.target.value; $('[data-quick-preview-subtitle]').textContent = state.subtitle; };
-    $('#quickCountdown')?.addEventListener('change', event => { state.countdown = event.target.checked; });
+    $('#quickCountdown')?.addEventListener('change', event => { state.countdown = event.target.checked; renderQuickCampaignWizard(); });
     $('#changeVariation').onclick = () => { state.step = 'variations'; renderQuickCampaignWizard(); };
     $('#quickBack').onclick = () => { if (state.record) $('#editorDialog').close(); else { state.step = 'variations'; renderQuickCampaignWizard(); } };
     $('#quickSave').onclick = () => saveQuickCampaign(true); $('#quickPublish').onclick = () => saveQuickCampaign(false);
@@ -962,20 +1022,21 @@
   async function openQuickCampaign(record = null, presetKey = '', oneClick = false) {
     if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.');
     resetEditorChrome();
-    const [categoryResult, productResult, bannerResult, selectedResult] = await Promise.all([
+    const [categoryResult, productResult, bannerResult, selectedResult, promotionResult] = await Promise.all([
       db.from('categories').select('id,name,slug,image_url').eq('active', true).order('sort_order'),
       db.from('products').select('id,name,sku,category_id,price,promotional_price,stock_quantity,low_stock_threshold,featured,best_seller,new_arrival,on_sale,active,created_at,product_images(image_url,is_cover,sort_order)').is('deleted_at', null).eq('active', true).order('name'),
       db.from('banners').select('*').order('sort_order'),
-      record?.promotion_id ? db.from('promotion_products').select('product_id').eq('promotion_id', record.promotion_id) : Promise.resolve({ data: [] })
+      record?.promotion_id ? db.from('promotion_products').select('product_id').eq('promotion_id', record.promotion_id) : Promise.resolve({ data: [] }),
+      db.from('promotions').select('id,title,description,banner_url,category_id,auto_include_category,promotion_products(product_id)').eq('active', true).order('created_at', { ascending: false }).limit(100)
     ]);
-    const loadError = categoryResult.error || productResult.error || bannerResult.error || selectedResult.error;
+    const loadError = categoryResult.error || productResult.error || bannerResult.error || selectedResult.error || promotionResult.error;
     if (loadError) return toast(explain(loadError));
     const resolvedPreset = presetKey && QUICK_CAMPAIGN_PRESETS[presetKey] ? presetKey : record ? quickPresetForRecord(record) : 'living';
     const preset = QUICK_CAMPAIGN_PRESETS[resolvedPreset];
     const savedLayout = quickMetaValue(record, 'layout');
     const initialLayout = QUICK_LAYOUTS.find(item => item.id === savedLayout) || quickVariationsForPreset(resolvedPreset)[0];
     const savedProducts = new Set((selectedResult.data || []).map(item => String(item.product_id)));
-    editorState = { view: 'banners', record, quick: { step: record || oneClick ? 'ready' : 'templates', record, presetKey: resolvedPreset, layout: initialLayout.id, title: record?.title || preset.titles[0], subtitle: record?.subtitle || preset.subtitles[0], cta: record?.button_text || preset.ctas[0], productRule: quickMetaValue(record, 'rule') || (savedProducts.size ? 'manual' : preset.rule), visual: quickMetaValue(record, 'style') || initialLayout.visual, theme: quickMetaValue(record, 'theme') || initialLayout.theme, duration: quickMetaValue(record, 'duration') || (record?.start_at || record?.end_at ? 'custom' : preset.duration), position: record?.position || 'auto', imageMode: record ? 'existing' : 'auto', selectedImage: '', manualProducts: savedProducts, focusProductId: [...savedProducts][0] || '', categoryId: record?.category_id || '', categories: categoryResult.data || [], products: productResult.data || [], banners: bannerResult.data || [], uploadFile: null, uploadObjectUrl: '', libraryTab: 'all', libraryGroup: 'all', librarySearch: '', imageLibraryFilter: 'all', previewDevice: 'desktop', publishMode: record?.start_at ? 'schedule' : 'now', scheduleStart: record?.start_at ? new Date(record.start_at).toISOString().slice(0,16) : '', scheduleEnd: record?.end_at ? new Date(record.end_at).toISOString().slice(0,16) : '', endAction: quickMetaValue(record, 'end') || 'previous', countdown: quickMetaValue(record, 'countdown') === 'true', searchTimer: 0 } };
+    editorState = { view: 'banners', record, quick: { step: record || oneClick ? 'ready' : 'templates', record, presetKey: resolvedPreset, layout: initialLayout.id, title: record?.title || preset.titles[0], subtitle: record?.subtitle || preset.subtitles[0], cta: record?.button_text || preset.ctas[0], productRule: quickMetaValue(record, 'rule') || (savedProducts.size ? 'manual' : preset.rule), visual: quickMetaValue(record, 'style') || initialLayout.visual, theme: quickMetaValue(record, 'theme') || initialLayout.theme, duration: quickMetaValue(record, 'duration') || (record?.start_at || record?.end_at ? 'custom' : preset.duration), position: record?.position || 'auto', imageMode: record ? 'existing' : 'auto', selectedImage: '', manualProducts: savedProducts, focusProductId: [...savedProducts][0] || '', selectedPromotionId: '', categoryId: record?.category_id || '', categories: categoryResult.data || [], products: productResult.data || [], promotions: promotionResult.data || [], banners: bannerResult.data || [], uploadFile: null, uploadObjectUrl: '', libraryTab: 'all', libraryGroup: 'all', librarySearch: '', imageLibraryFilter: 'all', previewDevice: 'desktop', publishMode: record?.start_at ? 'schedule' : 'now', scheduleStart: record?.start_at ? new Date(record.start_at).toISOString().slice(0,16) : '', scheduleEnd: record?.end_at ? new Date(record.end_at).toISOString().slice(0,16) : '', endAction: quickMetaValue(record, 'end') || 'previous', countdown: record ? quickMetaValue(record, 'countdown') === 'true' : Boolean(preset.countdown), searchTimer: 0 } };
     $('#editorDialog').classList.add('quick-campaign-dialog');
     $('#editorForm>footer').hidden = true;
     renderQuickCampaignWizard();
@@ -987,6 +1048,8 @@
     if (!state) return;
     const preset = QUICK_CAMPAIGN_PRESETS[state.presetKey];
     const products = quickEligibleProducts(state);
+    if (state.productRule === 'promotion' && !state.selectedPromotionId) return toast('Escolha uma promoção para continuar.');
+    if (!asDraft && !products.length && ['promotion','clearance','category','products','best_sellers','new_arrivals'].includes(preset.campaignType)) return toast('Nenhum produto corresponde à seleção. Escolha outra categoria, produto ou promoção antes de publicar.');
     const category = quickCategoryForPreset(state);
     const position = quickPosition(state) === 'recommended' ? 'home_middle' : quickPosition(state);
     let duration;
@@ -999,15 +1062,18 @@
     const image = quickImage(state, products);
     const actionLabel = state.publishMode === 'schedule' ? `Agendar “${state.title}”?` : `Publicar “${state.title}” agora?`;
     if (!asDraft && !await confirmAction({ title: actionLabel, message: `${state.publishMode === 'schedule' ? `${dateTime(duration.startAt)} → ${dateTime(duration.endAt)} · ` : ''}${products.length} produto(s) · ${quickPositionLabel(position)}`, confirmLabel: state.publishMode === 'schedule' ? 'Agendar' : 'Publicar' })) return;
-    const actionButtons = $$('.quick-actions button'); actionButtons.forEach(button => { button.disabled = true; });
+    const actionButtons = $$('.quick-actions button'); const publishButton = $('#quickPublish'); const previousPublishText = publishButton?.textContent; actionButtons.forEach(button => { button.disabled = true; }); if (publishButton) publishButton.textContent = asDraft ? 'Salvando rascunho…' : state.publishMode === 'schedule' ? 'Agendando…' : 'Publicando…';
     let rollbackPromotionId = null;
+    let uploadedImage = null;
+    let persisted = false;
     try {
       const [bannerSchema, promotionSchema] = await Promise.all([db.from('banners').select('campaign_type,content_mode,display_locations,promotion_id').limit(1), db.from('promotions').select('promotion_type,category_id,selection_mode').limit(1)]);
       const extendedSchema = !bannerSchema.error && !promotionSchema.error;
       let imageUrl = image;
-      if (state.imageMode === 'upload' && state.uploadFile) imageUrl = (await upload('banners', state.uploadFile, state.record?.id || 'rapidas')).url;
+      if (state.imageMode === 'upload' && state.uploadFile) { uploadedImage = await upload('banners', state.uploadFile, state.record?.id || 'rapidas'); imageUrl = uploadedImage.url; }
       let promotionId = extendedSchema ? state.record?.promotion_id || null : null;
-      const promotionValues = { title: state.title, description: state.subtitle, start_at: duration.startAt, end_at: duration.endAt, active: !asDraft, banner_url: imageUrl || null, promotion_type: 'display_only', discount_value: null, category_id: category?.id || null, selection_mode: state.productRule === 'system' ? 'all_category' : 'manual', auto_include_category: state.productRule === 'system' };
+      const automaticCategory = state.productRule === 'all' && Boolean(category?.id);
+      const promotionValues = { title: state.title, description: state.subtitle, start_at: duration.startAt, end_at: duration.endAt, active: !asDraft, banner_url: imageUrl || null, promotion_type: 'display_only', discount_value: null, category_id: category?.id || null, selection_mode: automaticCategory ? 'all_category' : 'manual', auto_include_category: automaticCategory };
       if (extendedSchema && (products.length || ['promotion','clearance','category','best_sellers','new_arrivals'].includes(preset.campaignType))) {
         const promotionSave = promotionId ? await db.from('promotions').update(promotionValues).eq('id', promotionId).select().single() : await db.from('promotions').insert(promotionValues).select().single();
         if (promotionSave.error) throw promotionSave.error;
@@ -1018,18 +1084,29 @@
       }
       const realLocations = position === 'home_hero' ? ['home_hero'] : position === 'home_bottom' ? ['home_bottom','offers'] : ['home_middle'];
       const productDestination = state.productRule === 'single' && state.focusProductId ? `?product=${encodeURIComponent(state.focusProductId)}` : '';
+      const promotionDestination = state.productRule === 'promotion' && promotionId ? `?promotion=${encodeURIComponent(promotionId)}#ofertas` : '';
       const categoryDestination = category?.slug ? `?category=${encodeURIComponent(category.slug)}#catalogo` : '';
-      const destination = productDestination || categoryDestination || '#catalogo';
-      const marker = new URLSearchParams({ campaign_template: state.presetKey, campaign_layout: state.layout, campaign_style: state.visual, campaign_theme: state.theme, campaign_image: state.imageMode, campaign_rule: state.productRule, campaign_duration: state.publishMode === 'schedule' ? 'custom' : state.duration, campaign_end: state.endAction, campaign_countdown: String(Boolean(state.countdown)) }).toString();
+      const destination = productDestination || promotionDestination || categoryDestination || '#catalogo';
+      const savedRule = state.productRule === 'promotion' ? 'manual' : state.productRule;
+      const marker = new URLSearchParams({ campaign_template: state.presetKey, campaign_layout: state.layout, campaign_style: state.visual, campaign_theme: state.theme, campaign_image: state.imageMode, campaign_rule: savedRule, campaign_duration: state.publishMode === 'schedule' ? 'custom' : state.duration, campaign_end: state.endAction, campaign_countdown: String(Boolean(state.countdown)) }).toString();
       const hashIndex = destination.indexOf('#'); const destinationBase = hashIndex >= 0 ? destination.slice(0, hashIndex) : destination; const destinationHash = hashIndex >= 0 ? destination.slice(hashIndex) : '';
       const buttonUrl = `${destinationBase}${destinationBase.includes('?') ? '&' : '?'}${marker}${destinationHash}`;
       const values = { title: state.title.trim(), subtitle: state.subtitle.trim() || null, image_desktop_url: imageUrl || state.record?.image_desktop_url || null, image_mobile_url: imageUrl || state.record?.image_mobile_url || null, button_text: state.cta || null, button_url: buttonUrl, position, sort_order: state.record?.sort_order || Math.max(0, ...state.banners.map(item => Number(item.sort_order || 0))) + 10, active: !asDraft, start_at: duration.startAt, end_at: duration.endAt };
-      if (extendedSchema) Object.assign(values, { campaign_type: preset.campaignType, content_mode: products.length ? 'banner_products' : 'banner', category_id: category?.id || null, promotion_id: promotionId, link_type: state.productRule === 'single' ? 'product' : category ? 'category' : 'link', alignment: ['minimal','centered'].includes(state.visual) ? 'center' : state.visual === 'reverse' ? 'right' : 'left', display_locations: [...realLocations, `preset:${state.presetKey}`, `layout:${state.layout}`, `style:${state.visual}`, `theme:${state.theme}`, `image:${state.imageMode}`, `rule:${state.productRule}`, `duration:${state.publishMode === 'schedule' ? 'custom' : state.duration}`, `end:${state.endAction}`, `countdown:${Boolean(state.countdown)}`], draft: asDraft, paused: false, auto_include_category: ['system','all'].includes(state.productRule), deactivate_on_end: state.publishMode === 'schedule' || state.duration !== 'always', keep_products_after_end: true });
+      if (extendedSchema) Object.assign(values, { campaign_type: preset.campaignType, content_mode: products.length ? 'banner_products' : 'banner', category_id: category?.id || null, promotion_id: promotionId, link_type: state.productRule === 'single' ? 'product' : state.productRule === 'promotion' ? 'promotion' : category ? 'category' : 'link', alignment: ['minimal','centered'].includes(state.visual) ? 'center' : state.visual === 'reverse' ? 'right' : 'left', display_locations: [...realLocations, `preset:${state.presetKey}`, `layout:${state.layout}`, `style:${state.visual}`, `theme:${state.theme}`, `image:${state.imageMode}`, `rule:${savedRule}`, `duration:${state.publishMode === 'schedule' ? 'custom' : state.duration}`, `end:${state.endAction}`, `countdown:${Boolean(state.countdown)}`], draft: asDraft, paused: false, auto_include_category: automaticCategory, deactivate_on_end: state.publishMode === 'schedule' || state.duration !== 'always', keep_products_after_end: true });
       const saved = state.record ? await db.from('banners').update(values).eq('id', state.record.id) : await db.from('banners').insert(values);
       if (saved.error) throw saved.error;
+      persisted = true;
+      if (uploadedImage && state.record) {
+        const previousUrls = new Set([state.record.image_desktop_url, state.record.image_mobile_url].filter(url => url && url !== uploadedImage.url));
+        for (const previousUrl of previousUrls) await removeUnusedBannerImage(previousUrl);
+      }
       rollbackPromotionId = null;
       quickRememberTemplate(state.presetKey); notifyStorefront('banners'); $('#editorDialog').close(); toast(asDraft ? 'Campanha salva como rascunho.' : state.publishMode === 'schedule' ? 'Campanha agendada e sincronizada com a loja.' : 'Campanha publicada e sincronizada com a loja.'); render('banners');
-    } catch (error) { if (rollbackPromotionId) await db.from('promotions').delete().eq('id', rollbackPromotionId); toast(explain(error)); actionButtons.forEach(button => { button.disabled = false; }); }
+    } catch (error) {
+      if (uploadedImage && !persisted) await db.storage.from(uploadedImage.bucket).remove([uploadedImage.path]);
+      if (rollbackPromotionId) await db.from('promotions').delete().eq('id', rollbackPromotionId);
+      toast(explain(error)); actionButtons.forEach(button => { button.disabled = false; }); if (publishButton) publishButton.textContent = previousPublishText;
+    }
   }
 
   const bannerPositionLabels = { home_hero: 'Hero principal da Home', home_middle: 'Meio da página', home_bottom: 'Banner promocional' };
@@ -1106,7 +1183,7 @@
     const categoryOptions = categories.map(item => `<option value="${item.id}" ${String(record?.category_id || promotion?.category_id || '') === String(item.id) ? 'selected' : ''}>${esc(item.name)}</option>`).join('');
     const productOptions = products.map(product => {
       const cover = productCover(product);
-      return `<label class="banner-product-option" data-product-category="${esc(product.category_id || '')}" data-product-search="${esc(`${product.name} ${product.sku}`.toLowerCase())}"><input type="checkbox" name="campaign_products" value="${product.id}" ${selectedProducts.has(String(product.id)) ? 'checked' : ''}><span>${cover ? `<img src="${esc(cover)}" alt="">` : '<i>▦</i>'}<span><b>${esc(product.name)}</b><small>${esc(product.sku)} · ${brl(product.promotional_price ?? product.price)}</small></span></span></label>`;
+      return `<label class="banner-product-option" data-product-category="${esc(product.category_id || '')}" data-product-search="${esc(`${product.name} ${product.sku || ''}`.toLowerCase())}"><input type="checkbox" name="campaign_products" value="${product.id}" ${selectedProducts.has(String(product.id)) ? 'checked' : ''}><span>${cover ? `<img src="${esc(cover)}" alt="">` : '<i>▦</i>'}<span><b>${esc(product.name)}</b><small>${product.sku ? esc(product.sku) : 'SKU não informado'} · ${brl(product.promotional_price ?? product.price)}</small></span></span></label>`;
     }).join('');
     editorState = { view: 'banners', config: configs.banners, record, promotion, promotionOptions, saveMode: 'publish', bannerPreviewMode: 'desktop', desktopPreviewUrl: '', mobilePreviewUrl: '', previewObjectUrls: [], products, categories };
     $('#editorDialog').classList.add('banner-editor-dialog');
@@ -1168,7 +1245,7 @@
       const type = linkTypeInput.value;
       const optionGroups = {
         category: categories.map(item => ({ value: `?category=${encodeURIComponent(item.slug)}#catalogo`, label: item.name })),
-        product: products.map(item => ({ value: `?product=${encodeURIComponent(item.id)}`, label: `${item.name} · ${item.sku}` })),
+        product: products.map(item => ({ value: `?product=${encodeURIComponent(item.id)}`, label: item.sku ? `${item.name} · ${item.sku}` : item.name })),
         promotion: promotionOptions.map(item => ({ value: `?promotion=${encodeURIComponent(item.id)}#ofertas`, label: item.title }))
       };
       const choices = optionGroups[type] || [];
@@ -1216,6 +1293,8 @@
     const form = event.currentTarget;
     const button = $('#saveEditor');
     let rollbackPromotionId = null;
+    const uploadedImages = [];
+    let persisted = false;
     button.disabled = true;
     button.textContent = 'Salvando…';
     try {
@@ -1250,7 +1329,11 @@
       };
       for (const key of ['image_desktop_url', 'image_mobile_url']) {
         const file = form.elements[key].files?.[0];
-        if (file) values[key] = (await upload('banners', file, record?.id || 'novos')).url;
+        if (file) {
+          const saved = await upload('banners', file, record?.id || 'novos');
+          uploadedImages.push({ key, ...saved });
+          values[key] = saved.url;
+        }
       }
       const needsPromotion = ['promotion', 'category', 'products', 'new_arrivals', 'best_sellers', 'clearance'].includes(campaignType) || selectedProductIds.length > 0;
       let promotionId = record?.promotion_id || null;
@@ -1278,12 +1361,18 @@
         if (result.error.code === '42703' || /campaign_type|content_mode|promotion_id|display_locations/i.test(result.error.message || '')) throw new Error('Execute a migration 20260920_visual_campaign_manager.sql no Supabase antes de salvar campanhas completas.');
         throw result.error;
       }
+      persisted = true;
+      for (const saved of uploadedImages) {
+        const previousUrl = record?.[saved.key];
+        if (previousUrl && previousUrl !== saved.url) await removeUnusedBannerImage(previousUrl);
+      }
       rollbackPromotionId = null;
       notifyStorefront('banners');
       $('#editorDialog').close();
       toast(saveMode === 'draft' ? 'Campanha salva como rascunho.' : 'Campanha publicada e sincronizada com o site.');
       render('banners');
     } catch (error) {
+      if (!persisted) await Promise.all(uploadedImages.map(saved => db.storage.from(saved.bucket).remove([saved.path])));
       if (rollbackPromotionId) await db.from('promotions').delete().eq('id', rollbackPromotionId);
       if (error?.code === '42703' || /campaign_type|content_mode|promotion_id|promotion_type|display_locations/i.test(error?.message || '')) toast('Execute a migration 20260920_visual_campaign_manager.sql no Supabase antes de salvar campanhas completas.');
       else toast(explain(error));
@@ -1317,7 +1406,7 @@
     if (productResult.error) throw productResult.error;
     if (selectedResult.error) throw selectedResult.error;
     const selected = new Set((selectedResult.data || []).map(item => item.product_id));
-    $('#editorFields').insertAdjacentHTML('beforeend', `<div class="field full"><label for="f-participants">Produtos participantes</label><select id="f-participants" name="participant_products" multiple size="7">${(productResult.data || []).map(item => `<option value="${item.id}" ${selected.has(item.id) ? 'selected' : ''}>${esc(item.name)} · ${esc(item.sku)}</option>`).join('')}</select><small class="helper">Use Ctrl para selecionar mais de um produto.</small></div>`);
+    $('#editorFields').insertAdjacentHTML('beforeend', `<div class="field full"><label for="f-participants">Produtos participantes</label><select id="f-participants" name="participant_products" multiple size="7">${(productResult.data || []).map(item => `<option value="${item.id}" ${selected.has(item.id) ? 'selected' : ''}>${esc(item.name)}${item.sku ? ` · ${esc(item.sku)}` : ''}</option>`).join('')}</select><small class="helper">Use Ctrl para selecionar mais de um produto.</small></div>`);
   }
   async function saveProductLinks(view, recordId, form) {
     if (!['promotions', 'coupons'].includes(view)) return;
@@ -1336,6 +1425,7 @@
     const bucket = productGallery ? 'products' : 'inspirations';
     const { data, error } = await db.from(table).select('*').eq(foreignKey, parentId).order('sort_order');
     if (error) throw error;
+    if (productGallery && editorState?.view === 'products') editorState.existingGalleryCount = (data || []).length;
     const root = $('#existingGallery');
     if (!root) return;
     root.innerHTML = (data || []).map((item, index, rows) => `<figure data-image-id="${item.id}"><img src="${esc(item.image_url)}" alt="Foto ${index + 1}"><figcaption>${productGallery && item.is_cover ? '<b>Imagem principal</b>' : `Foto ${index + 1}`}</figcaption><div class="gallery-actions">${productGallery && !item.is_cover ? `<button type="button" data-image-cover="${item.id}">Principal</button>` : ''}<button type="button" data-image-move="up" ${index === 0 ? 'disabled' : ''} aria-label="Mover foto para a esquerda">←</button><button type="button" data-image-move="down" ${index === rows.length - 1 ? 'disabled' : ''} aria-label="Mover foto para a direita">→</button><button type="button" class="danger" data-image-delete="${item.id}" aria-label="Excluir foto">×</button></div></figure>`).join('');
@@ -1375,12 +1465,72 @@
       notifyStorefront(table); toast('Imagem removida.'); await loadGallery(parentId, table, foreignKey);
     }));
   }
+  const imageUploadRules = {
+    products: { maxDimension: 1800, quality: .84 },
+    categories: { maxDimension: 1400, quality: .84 },
+    banners: { maxDimension: 1920, quality: .86 },
+    environments: { maxDimension: 1400, quality: .84 },
+    inspirations: { maxDimension: 1800, quality: .84 },
+    brands: { maxDimension: 1200, quality: .88 },
+    site: { maxDimension: 1920, quality: .86 }
+  };
+  const allowedImageTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+  const maxImageBytes = 8 * 1024 * 1024;
+  async function optimizeImage(file, bucket) {
+    const rules = imageUploadRules[bucket] || imageUploadRules.site;
+    if (file.type === 'image/svg+xml' && bucket === 'site') return file;
+    if (!allowedImageTypes.has(file.type)) throw new Error('Formato inválido. Envie uma imagem JPG, PNG ou WebP.');
+    if (file.size > maxImageBytes) throw new Error('A imagem deve ter no máximo 8 MB.');
+    let bitmap;
+    try { bitmap = await createImageBitmap(file); }
+    catch { throw new Error('Não foi possível processar esta imagem. Escolha outro arquivo.'); }
+    const largestSide = Math.max(bitmap.width, bitmap.height);
+    const scale = Math.min(1, rules.maxDimension / largestSide);
+    if (scale === 1 && file.size <= 900 * 1024 && file.type === 'image/webp') { bitmap.close?.(); return file; }
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext('2d', { alpha: true });
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close?.();
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', rules.quality));
+    if (!blob) throw new Error('Não foi possível otimizar esta imagem.');
+    const name = `${file.name.replace(/\.[^.]+$/, '') || 'imagem'}.webp`;
+    return new File([blob], name, { type: 'image/webp', lastModified: file.lastModified });
+  }
+  function storageReference(url) {
+    if (!url) return null;
+    try {
+      const parsed = new URL(url, location.href);
+      const marker = '/storage/v1/object/public/';
+      const index = parsed.pathname.indexOf(marker);
+      if (index < 0) return null;
+      const [bucket, ...parts] = parsed.pathname.slice(index + marker.length).split('/');
+      if (!bucket || !parts.length) return null;
+      return { bucket: decodeURIComponent(bucket), path: parts.map(decodeURIComponent).join('/') };
+    } catch { return null; }
+  }
+  async function removeStoredUrl(url, expectedBucket = '') {
+    const reference = storageReference(url);
+    if (!reference || (expectedBucket && reference.bucket !== expectedBucket)) return;
+    const { error } = await db.storage.from(reference.bucket).remove([reference.path]);
+    if (error) console.warn('Não foi possível remover a imagem substituída do Storage.', error);
+  }
+  async function removeUnusedBannerImage(url) {
+    if (!storageReference(url)) return;
+    const [banners, promotions] = await Promise.all([db.from('banners').select('image_desktop_url,image_mobile_url'), db.from('promotions').select('banner_url')]);
+    if (banners.error || promotions.error) return console.warn('Não foi possível verificar referências da imagem; o arquivo foi mantido por segurança.', banners.error || promotions.error);
+    const usedByBanner = (banners.data || []).some(item => item.image_desktop_url === url || item.image_mobile_url === url);
+    const usedByPromotion = (promotions.data || []).some(item => item.banner_url === url);
+    if (!usedByBanner && !usedByPromotion) await removeStoredUrl(url, 'banners');
+  }
   async function upload(bucket, file, folder = '') {
-    const extension = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const optimized = await optimizeImage(file, bucket);
+    const extension = optimized.type === 'image/svg+xml' ? 'svg' : optimized.type === 'image/webp' ? 'webp' : (optimized.name.split('.').pop() || 'jpg').toLowerCase();
     const path = `${folder ? folder + '/' : ''}${crypto.randomUUID()}.${extension}`;
-    const { error } = await db.storage.from(bucket).upload(path, file, { cacheControl: '3600' });
+    const { error } = await db.storage.from(bucket).upload(path, optimized, { cacheControl: '31536000', contentType: optimized.type, upsert: false });
     if (error) throw error;
-    return { url: db.storage.from(bucket).getPublicUrl(path).data.publicUrl, path };
+    return { url: db.storage.from(bucket).getPublicUrl(path).data.publicUrl, path, bucket };
   }
   function formValues(fields, form) {
     const values = {};
@@ -1395,8 +1545,8 @@
     });
     return values;
   }
-  async function saveGallery(parentId, input, view) {
-    const files = [...(input?.files || [])];
+  async function saveGallery(parentId, input, view, options = {}) {
+    const files = options.files ? [...options.files] : [...(input?.files || [])];
     if (!files.length) return;
     const product = view === 'products';
     const table = product ? 'product_images' : 'inspiration_images';
@@ -1405,12 +1555,41 @@
     const { count: total } = await db.from(table).select('id', { count: 'exact', head: true }).eq(foreignKey, parentId);
     const max = product ? 10 : 4;
     if ((total || 0) + files.length > max) throw new Error(`Envie no máximo ${max} fotos.`);
-    for (let index = 0; index < files.length; index++) {
-      const saved = await upload(bucket, files[index], parentId);
-      const row = { [foreignKey]: parentId, image_url: saved.url, storage_path: saved.path, sort_order: (total || 0) + index };
-      if (product) row.is_cover = (total || 0) + index === 0;
-      const { error } = await db.from(table).insert(row);
-      if (error) throw error;
+    const created = [];
+    let previousCoverId = null;
+    if (product && options.coverFile) {
+      const { data: previousCover, error: previousCoverError } = await db.from(table).select('id').eq(foreignKey, parentId).eq('is_cover', true).limit(1).maybeSingle();
+      if (previousCoverError) throw previousCoverError;
+      previousCoverId = previousCover?.id || null;
+    }
+    try {
+      for (let index = 0; index < files.length; index++) {
+        const saved = await upload(bucket, files[index], parentId);
+        const row = { [foreignKey]: parentId, image_url: saved.url, storage_path: saved.path, sort_order: (total || 0) + index };
+        if (product) row.is_cover = !options.coverFile && (total || 0) + index === 0;
+        const { data, error } = await db.from(table).insert(row).select('id').single();
+        if (error) { await db.storage.from(bucket).remove([saved.path]); throw error; }
+        created.push({ id: data.id, path: saved.path, file: files[index] });
+      }
+      if (product && options.coverFile) {
+        const target = created.find(item => item.file === options.coverFile);
+        if (target) {
+          const { error: clearCoverError } = await db.from(table).update({ is_cover: false }).eq(foreignKey, parentId);
+          if (clearCoverError) throw clearCoverError;
+          const { error: newCoverError } = await db.from(table).update({ is_cover: true }).eq('id', target.id);
+          if (newCoverError) {
+            if (previousCoverId) await db.from(table).update({ is_cover: true }).eq('id', previousCoverId);
+            throw newCoverError;
+          }
+        }
+      }
+      return created;
+    } catch (error) {
+      for (const item of created.reverse()) {
+        await db.from(table).delete().eq('id', item.id);
+        await db.storage.from(bucket).remove([item.path]);
+      }
+      throw error;
     }
   }
   async function saveGeneric(event) {
@@ -1421,6 +1600,10 @@
     const button = $('#saveEditor');
     button.disabled = true;
     button.textContent = 'Salvando…';
+    const uploadedFiles = [];
+    let persisted = false;
+    let createdRecordId = null;
+    let completed = false;
     try {
       const values = formValues(config.fields, form);
       if (view === 'sections') {
@@ -1430,19 +1613,36 @@
       }
       for (const [key, , type] of config.fields) {
         const file = type === 'file' ? form.elements[key]?.files?.[0] : null;
-        if (file) values[key] = (await upload(config.bucket, file, view)).url;
+        if (file) {
+          const saved = await upload(config.bucket, file, view);
+          uploadedFiles.push({ key, ...saved });
+          values[key] = saved.url;
+        }
       }
       const result = record
         ? await db.from(config.table).update(values).eq('id', record.id).select().single()
         : await db.from(config.table).insert(values).select().single();
       if (result.error) throw result.error;
+      persisted = true;
+      if (!record) createdRecordId = result.data.id;
+      for (const saved of uploadedFiles) {
+        const previousUrl = record?.[saved.key];
+        if (previousUrl && previousUrl !== saved.url) await removeStoredUrl(previousUrl, config.bucket);
+      }
       await saveProductLinks(view, result.data.id, form);
       if (config.fields.some(field => field[2] === 'multifile')) await saveGallery(result.data.id, form.elements.gallery, view);
+      completed = true;
       $('#editorDialog').close();
       notifyStorefront(config.table);
       toast(`${config.singular} salvo com sucesso.`);
       render(view);
-    } catch (error) { toast(explain(error)); }
+    } catch (error) {
+      if (createdRecordId && !completed) {
+        const { error: rollbackError } = await db.from(config.table).delete().eq('id', createdRecordId);
+        if (!rollbackError) await Promise.all(uploadedFiles.map(saved => db.storage.from(saved.bucket).remove([saved.path])));
+      } else if (!persisted) await Promise.all(uploadedFiles.map(saved => db.storage.from(saved.bucket).remove([saved.path])));
+      toast(explain(error));
+    }
     finally { button.disabled = false; button.textContent = 'Salvar alterações'; }
   }
   async function normalizeCategoryPosition(categoryId, position) {
@@ -1454,6 +1654,22 @@
     const updateError = updates.find(result => result.error)?.error;
     if (updateError) throw updateError;
   }
+  async function deleteCategorySafely(record) {
+    if (!record || !canWrite()) { toast('Seu perfil possui acesso somente para consulta.', 'error'); return false; }
+    const { count: productCount, error: countError } = await db.from('products').select('id', { count: 'exact', head: true }).eq('category_id', record.id);
+    if (countError) { toast(explain(countError), 'error'); return false; }
+    if (productCount) {
+      toast(`A categoria “${record.name}” possui ${productCount} produto${productCount === 1 ? '' : 's'}. Reatribua os produtos antes de excluí-la.`, 'error');
+      return false;
+    }
+    if (!await confirmAction({ title: 'Excluir esta categoria?', message: `“${record.name}” não possui produtos vinculados e será excluída permanentemente.`, confirmLabel: 'Excluir', tone: 'danger' })) return false;
+    const { error } = await db.from('categories').delete().eq('id', record.id);
+    if (error) { toast(explain(error), 'error'); return false; }
+    await removeStoredUrl(record.image_url, 'categories');
+    notifyStorefront('categories');
+    toast('Categoria excluída com sucesso.');
+    return true;
+  }
   async function saveCategory(event) {
     event.preventDefault();
     if (!editorState || !event.currentTarget.reportValidity()) return;
@@ -1463,18 +1679,22 @@
     button.disabled = true;
     draftButton.disabled = true;
     button.textContent = saveMode === 'draft' ? 'Salvando rascunho…' : 'Publicando…';
+    let uploadedImage = null;
+    let persisted = false;
+    let createdCategoryId = null;
+    let completed = false;
     try {
       const form = event.currentTarget;
       const values = {
         name: form.elements.name.value.trim(),
         slug: slugify(form.elements.slug.value || form.elements.name.value),
         description: form.elements.description.value.trim() || null,
-        active: saveMode !== 'draft',
+        active: saveMode === 'draft' ? false : form.elements.active.checked,
         show_on_homepage: form.elements.show_on_homepage.checked,
         show_in_menu: form.elements.show_in_menu.checked
       };
       const file = form.elements.image_url.files?.[0];
-      if (file) values.image_url = (await upload('categories', file, 'categories')).url;
+      if (file) { uploadedImage = await upload('categories', file, 'categories'); values.image_url = uploadedImage.url; }
       else if (editorState.removeImage) values.image_url = null;
       const result = record
         ? await db.from('categories').update(values).eq('id', record.id).select().single()
@@ -1483,12 +1703,22 @@
         if (result.error.code === '42703' || /show_on_homepage|show_in_menu/i.test(result.error.message || '')) throw new Error('Execute a migration 20260920_category_visibility_options.sql no Supabase antes de salvar.');
         throw result.error;
       }
+      persisted = true;
+      if (!record) createdCategoryId = result.data.id;
+      if ((uploadedImage || editorState.removeImage) && record?.image_url && record.image_url !== values.image_url) await removeStoredUrl(record.image_url, 'categories');
       await normalizeCategoryPosition(result.data.id, form.elements.position_index.value);
+      completed = true;
       notifyStorefront('categories');
       $('#editorDialog').close();
       toast(saveMode === 'draft' ? 'Categoria salva como rascunho.' : 'Categoria salva e publicada no site.');
       render('categories');
-    } catch (error) { toast(explain(error)); }
+    } catch (error) {
+      if (createdCategoryId && !completed) {
+        const { error: rollbackError } = await db.from('categories').delete().eq('id', createdCategoryId);
+        if (!rollbackError && uploadedImage) await db.storage.from(uploadedImage.bucket).remove([uploadedImage.path]);
+      } else if (uploadedImage && !persisted) await db.storage.from(uploadedImage.bucket).remove([uploadedImage.path]);
+      toast(explain(error));
+    }
     finally {
       if (editorState) editorState.saveMode = 'publish';
       button.disabled = false;
@@ -1569,11 +1799,7 @@
     }));
     $$('[data-category-delete]').forEach(button => button.onclick = () => runAction(button, async () => {
       const record = rowFor(button.dataset.categoryDelete);
-      if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
-      if (!await confirmAction({ title: 'Excluir esta categoria?', message: `“${record.name}” será excluída e os produtos vinculados ficarão sem categoria. Esta ação não poderá ser desfeita.`, confirmLabel: 'Excluir', tone: 'danger' })) return;
-      const { error } = await db.from('categories').delete().eq('id', record.id);
-      if (error) return toast(explain(error), 'error');
-      notifyStorefront('categories'); toast('Categoria excluída com sucesso.'); render('categories');
+      if (await deleteCategorySafely(record)) render('categories');
     }));
 
     const applyCategoryFilters = () => {
@@ -1646,6 +1872,8 @@
         { label: 'Visualizar', icon: 'view', attributes: { 'data-banner-preview': row.id } },
         { label: 'Editar', icon: 'edit', attributes: { 'data-banner-edit': row.id } },
         { label: 'Duplicar', icon: 'copy', attributes: { 'data-banner-duplicate': row.id } },
+        { label: 'Subir na ordem', icon: 'up', attributes: { 'data-banner-move': 'up', 'data-banner-id': row.id } },
+        { label: 'Descer na ordem', icon: 'down', attributes: { 'data-banner-move': 'down', 'data-banner-id': row.id } },
         { label: row.paused || !row.active ? 'Ativar' : 'Desativar', icon: row.paused || !row.active ? 'play' : 'pause', attributes: { 'data-banner-toggle': row.id } },
         { separator: true },
         { label: 'Excluir', icon: 'trash', danger: true, attributes: { 'data-banner-delete': row.id } }
@@ -1735,13 +1963,21 @@
           const { data: newPromotion, error: promotionError } = await db.from('promotions').insert(promotionCopy).select().single();
           if (promotionError) return toast(explain(promotionError), 'error');
           promotionId = newPromotion.id;
-          const { data: links } = await db.from('promotion_products').select('product_id').eq('promotion_id', source.promotion_id);
-          if (links?.length) await db.from('promotion_products').insert(links.map(item => ({ promotion_id: promotionId, product_id: item.product_id })));
+          const { data: links, error: linkLoadError } = await db.from('promotion_products').select('product_id').eq('promotion_id', source.promotion_id);
+          if (linkLoadError) { await db.from('promotions').delete().eq('id', promotionId); return toast(explain(linkLoadError), 'error'); }
+          if (links?.length) {
+            const { error: linkCopyError } = await db.from('promotion_products').insert(links.map(item => ({ promotion_id: promotionId, product_id: item.product_id })));
+            if (linkCopyError) { await db.from('promotions').delete().eq('id', promotionId); return toast(explain(linkCopyError), 'error'); }
+          }
         }
       }
       const keys = ['subtitle','image_desktop_url','image_mobile_url','button_text','button_url','position','campaign_type','content_mode','category_id','link_type','alignment','display_locations','auto_include_category','deactivate_on_end','keep_products_after_end'];
       const copy = { title: `${source.title} — cópia`, active: false, draft: true, paused: false, start_at: null, end_at: null, sort_order: Number(source.sort_order || 0) + 1, promotion_id: promotionId };
       keys.forEach(key => { if (key in source) copy[key] = source[key]; });
+      if (promotionId && source.promotion_id && copy.button_url) {
+        const oldParam = `promotion=${encodeURIComponent(source.promotion_id)}`;
+        if (copy.button_url.includes(oldParam)) copy.button_url = copy.button_url.replace(oldParam, `promotion=${encodeURIComponent(promotionId)}`);
+      }
       const { error: duplicateError } = await db.from('banners').insert(copy);
       if (duplicateError) { if (promotionId) await db.from('promotions').delete().eq('id', promotionId); return toast(explain(duplicateError), 'error'); }
       notifyStorefront('banners'); toast('Campanha duplicada como rascunho.'); render('banners');
@@ -1756,13 +1992,34 @@
       if (source.promotion_id) await db.from('promotions').update({ active: resume }).eq('id', source.promotion_id);
       notifyStorefront('banners'); toast(resume ? 'Banner ativado.' : 'Banner desativado.'); render('banners');
     }));
+    $$('[data-banner-move]').forEach(button => button.onclick = () => runAction(button, async () => {
+      if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
+      const ordered = [...rows].sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || String(a.created_at || '').localeCompare(String(b.created_at || '')));
+      const index = ordered.findIndex(item => String(item.id) === String(button.dataset.bannerId));
+      const targetIndex = button.dataset.bannerMove === 'up' ? index - 1 : index + 1;
+      if (index < 0 || targetIndex < 0 || targetIndex >= ordered.length) return toast(button.dataset.bannerMove === 'up' ? 'Este banner já é o primeiro.' : 'Este banner já é o último.');
+      const source = ordered[index]; const target = ordered[targetIndex];
+      const results = await Promise.all([db.from('banners').update({ sort_order: target.sort_order }).eq('id', source.id), db.from('banners').update({ sort_order: source.sort_order }).eq('id', target.id)]);
+      const moveError = results.find(result => result.error)?.error;
+      if (moveError) return toast(explain(moveError), 'error');
+      notifyStorefront('banners'); toast('Ordem dos banners atualizada.'); render('banners');
+    }));
     $$('[data-banner-delete]').forEach(button => button.onclick = () => runAction(button, async () => {
       const source = rowFor(button.dataset.bannerDelete);
       if (!source || !canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
       if (!await confirmAction({ title: 'Excluir este banner?', message: `“${source.title}” será excluído. Esta ação não poderá ser desfeita e ficará registrada na auditoria.`, confirmLabel: 'Excluir', tone: 'danger' })) return;
       const { error: deleteError } = await db.from('banners').delete().eq('id', source.id);
       if (deleteError) return toast(explain(deleteError), 'error');
-      if (source.promotion_id) await db.from('promotions').delete().eq('id', source.promotion_id);
+      if (source.promotion_id) {
+        const { count, error: referenceError } = await db.from('banners').select('id', { count: 'exact', head: true }).eq('promotion_id', source.promotion_id);
+        if (referenceError) console.warn('Não foi possível verificar referências da promoção.', referenceError);
+        else if (!count) {
+          const { error: promotionDeleteError } = await db.from('promotions').delete().eq('id', source.promotion_id);
+          if (promotionDeleteError) console.warn('O banner foi removido, mas a promoção vinculada não pôde ser excluída.', promotionDeleteError);
+        }
+      }
+      const storedUrls = new Set([source.image_desktop_url, source.image_mobile_url].filter(Boolean));
+      for (const url of storedUrls) await removeUnusedBannerImage(url);
       notifyStorefront('banners'); toast('Banner excluído com sucesso. Os produtos permaneceram intactos.'); render('banners');
     }));
     let activeFilter = 'all';
@@ -1869,8 +2126,15 @@
       if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
       const record = rows.find(row => String(row.id) === button.dataset.delete);
       if (!await confirmAction({ title: 'Excluir este item?', message: `“${record?.name || record?.title || record?.code || config.singular}” será excluído. Esta ação não poderá ser desfeita e ficará registrada na auditoria.`, confirmLabel: 'Excluir', tone: 'danger' })) return;
+      const storedUrls = config.fields.filter(field => field[2] === 'file').map(([key]) => record?.[key]).filter(Boolean);
+      if (view === 'inspirations') {
+        const { data: gallery, error: galleryError } = await db.from('inspiration_images').select('image_url').eq('inspiration_id', record.id);
+        if (galleryError) return toast(explain(galleryError), 'error');
+        storedUrls.push(...(gallery || []).map(item => item.image_url).filter(Boolean));
+      }
       const { error: deleteError } = await db.from(config.table).delete().eq('id', button.dataset.delete);
       if (deleteError) return toast(explain(deleteError), 'error');
+      for (const url of new Set(storedUrls)) await removeStoredUrl(url, config.bucket);
       notifyStorefront(config.table); toast(`${config.singular} excluído com sucesso.`); render(view);
     }));
     bindSearch();
@@ -1902,17 +2166,56 @@
     $('#searchList')?.addEventListener('input', event => $$('tbody tr').forEach(row => { row.hidden = !row.textContent.toLowerCase().includes(event.target.value.toLowerCase()); }));
   }
 
-  const productFields = [
-    ['section', 'Informações principais'], ['name', 'Nome do produto', 'text', true], ['slug', 'URL amigável', 'slug', true], ['sku', 'SKU / código', 'text', true], ['short_description', 'Descrição curta', 'textarea'], ['description', 'Descrição completa', 'textarea'],
-    ['category_id', 'Categoria', 'relation', false, 'categories'], ['environment_id', 'Ambiente', 'relation', false, 'environments'], ['brand_id', 'Marca', 'relation', false, 'brands'],
-    ['section', 'Preço e parcelamento'], ['price', 'Preço normal', 'number', true], ['promotional_price', 'Preço promocional', 'number'], ['installment_enabled', 'Permitir parcelamento', 'checkbox'], ['max_installments', 'Máximo de parcelas', 'number'],
-    ['section', 'Venda no site'], ['whatsapp_enabled', 'Permitir compra pelo WhatsApp', 'checkbox'], ['cart_enabled', 'Permitir adicionar à sacola', 'checkbox'], ['is_campaign', 'Produto em campanha', 'checkbox'],
-    ['benefits', 'Benefícios e Selos'], ['free_city_shipping', 'Frete grátis para a cidade', 'checkbox'], ['free_assembly', 'Armação gratuita', 'checkbox'],
-    ['section', 'Estoque'], ['stock_quantity', 'Quantidade', 'number', true], ['low_stock_threshold', 'Estoque mínimo', 'number', true],
-    ['section', 'Características'], ['dimensions_text', 'Medidas', 'text'], ['material', 'Material', 'text'], ['color', 'Cores', 'text'], ['warranty', 'Garantia', 'text'],
-    ['section', 'Exibição'], ['featured', 'Destaque', 'checkbox'], ['new_arrival', 'Lançamento', 'checkbox'], ['best_seller', 'Mais vendido', 'checkbox'], ['on_sale', 'Em oferta', 'checkbox'], ['active', 'Publicado', 'checkbox'], ['sort_order', 'Ordem', 'number'],
-    ['section', 'SEO e imagens'], ['meta_title', 'Título SEO', 'text'], ['meta_description', 'Descrição SEO', 'textarea'], ['og_image_url', 'Imagem de compartilhamento', 'file'], ['gallery', 'Fotos do produto — até 10', 'multifile']
+  const productEditorSections = [
+    { key: 'basic', label: 'Informações básicas', help: 'Nome, endereço do produto e classificação.', fields: [
+      ['name', 'Nome do produto', 'text', true], ['slug', 'Slug / URL', 'slug', true],
+      ['category_id', 'Categoria', 'relation', true, 'categories'], ['sku', 'Código / SKU (opcional)', 'text'],
+      ['environment_id', 'Ambiente (opcional)', 'relation', false, 'environments'], ['brand_id', 'Marca (opcional)', 'relation', false, 'brands']
+    ] },
+    { key: 'price', label: 'Preço e condições', help: 'Preço normal, promoção e parcelamento.', fields: [
+      ['price', 'Preço normal', 'number', true], ['promotional_price', 'Preço promocional (opcional)', 'number'],
+      ['installment_enabled', 'Permitir parcelamento', 'checkbox'], ['max_installments', 'Máximo de parcelas', 'number']
+    ] },
+    { key: 'photos', label: 'Fotos', help: 'Envie até 10 fotos e escolha a imagem principal.', fields: [
+      ['gallery', 'Galeria do produto — até 10 fotos', 'multifile'],
+      ['og_image_url', 'Imagem de compartilhamento (opcional)', 'file']
+    ] },
+    { key: 'availability', label: 'Disponibilidade', help: 'Controle de quantidade e aviso de estoque baixo.', fields: [
+      ['stock_quantity', 'Quantidade em estoque', 'number', true], ['low_stock_threshold', 'Avisar quando chegar a', 'number', true]
+    ] },
+    { key: 'benefits', label: 'Benefícios / Selos', help: 'Escolha nenhum, um ou os dois benefícios.', fields: [
+      ['benefits', 'Benefícios e Selos'], ['free_city_shipping', 'Frete grátis', 'checkbox'], ['free_assembly', 'Armação gratuita', 'checkbox']
+    ] },
+    { key: 'description', label: 'Descrição', help: 'Apresente o produto e registre suas especificações.', fields: [
+      ['short_description', 'Descrição curta', 'textarea'], ['description', 'Descrição completa', 'textarea'],
+      ['specifications_text', 'Especificações — uma por linha (ex.: Lugares: 3)', 'textarea'],
+      ['dimensions_text', 'Medidas', 'text'], ['material', 'Material', 'text'], ['color', 'Cores', 'text'], ['warranty', 'Garantia', 'text']
+    ] },
+    { key: 'publication', label: 'Publicação', help: 'Venda, destaques e visibilidade no site.', fields: [
+      ['whatsapp_enabled', 'Permitir compra pelo WhatsApp', 'checkbox'], ['cart_enabled', 'Permitir adicionar à sacola', 'checkbox'],
+      ['featured', 'Produto em destaque', 'checkbox'], ['best_seller', 'Mais vendido', 'checkbox'],
+      ['new_arrival', 'Lançamento', 'checkbox'], ['on_sale', 'Em oferta', 'checkbox'],
+      ['is_campaign', 'Produto em campanha', 'checkbox'], ['active', 'Produto publicado', 'checkbox'],
+      ['sort_order', 'Ordem de exibição', 'number'], ['meta_title', 'Título SEO (opcional)', 'text'],
+      ['meta_description', 'Descrição SEO (opcional)', 'textarea']
+    ] }
   ];
+  const productFields = productEditorSections.flatMap(section => section.fields);
+  function formatSpecificationsText(specifications) {
+    if (!specifications || typeof specifications !== 'object' || Array.isArray(specifications)) return '';
+    return Object.entries(specifications).map(([key, value]) => `${key}: ${typeof value === 'string' ? value : JSON.stringify(value)}`).join('\n');
+  }
+  function parseSpecificationsText(value) {
+    const specifications = {};
+    String(value || '').split(/\r?\n/).forEach((line, index) => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+      const separator = trimmed.indexOf(':');
+      if (separator < 1 || !trimmed.slice(separator + 1).trim()) throw new Error(`Especificação inválida na linha ${index + 1}. Use o formato Nome: valor.`);
+      specifications[trimmed.slice(0, separator).trim()] = trimmed.slice(separator + 1).trim();
+    });
+    return specifications;
+  }
   function productBenefitBadgesMarkup(freeShipping, freeAssembly) {
     return [
       freeShipping ? '<span class="product-benefit-preview-badge is-shipping"><img src="assets/seal-free-shipping.png" alt="Frete grátis para a cidade"></span>' : '',
@@ -1971,58 +2274,247 @@
     image.src = editorState.previewObjectUrl;
     photo.classList.add('has-image');
   }
+  function activateProductEditorTab(key, focus = false) {
+    const dialog = $('#editorDialog');
+    $$('[data-product-tab]', dialog).forEach(button => {
+      const active = button.dataset.productTab === key;
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-selected', String(active));
+      button.tabIndex = active ? 0 : -1;
+      if (active && focus) button.focus();
+    });
+    $$('[data-product-panel]', dialog).forEach(panel => { panel.hidden = panel.dataset.productPanel !== key; });
+    if (editorState?.view === 'products') editorState.activeTab = key;
+  }
+  function setProductEditorDirty(dirty = true, message = '') {
+    if (editorState?.view !== 'products') return;
+    editorState.dirty = dirty;
+    const status = $('#productUnsavedStatus');
+    if (!status) return;
+    status.classList.toggle('has-changes', dirty);
+    status.textContent = message || (dirty ? 'Alterações não salvas' : 'Sem alterações pendentes');
+  }
+  function productGalleryFileKey(file) {
+    return `${file.name}:${file.size}:${file.lastModified}`;
+  }
+  function validatePendingProductImages(files) {
+    for (const file of files) {
+      if (!allowedImageTypes.has(file.type)) throw new Error(`“${file.name}” não é JPG, PNG ou WebP.`);
+      if (file.size > maxImageBytes) throw new Error(`“${file.name}” ultrapassa o limite de 8 MB.`);
+    }
+  }
+  function renderPendingProductGallery() {
+    const root = $('#pendingGalleryPreview');
+    if (!root || editorState?.view !== 'products') return;
+    (editorState.previewObjectUrls || []).forEach(url => URL.revokeObjectURL(url));
+    editorState.previewObjectUrls = [];
+    const files = editorState.pendingGalleryFiles || [];
+    if (!files.length) {
+      root.innerHTML = '<p class="pending-gallery-empty">As novas fotos aparecerão aqui antes de salvar.</p>';
+      return;
+    }
+    root.innerHTML = files.map((file, index) => {
+      const url = URL.createObjectURL(file);
+      editorState.previewObjectUrls.push(url);
+      const cover = file === editorState.pendingCoverFile;
+      return `<figure data-pending-image="${index}"><img src="${esc(url)}" alt="Prévia de ${esc(file.name)}"><figcaption>${cover ? '<b>Imagem principal</b>' : `Nova foto ${index + 1}`}</figcaption><div class="gallery-actions">${cover ? '' : `<button type="button" data-pending-cover="${index}">Principal</button>`}<button type="button" data-pending-move="up" data-pending-index="${index}" ${index === 0 ? 'disabled' : ''} aria-label="Mover foto para a esquerda">←</button><button type="button" data-pending-move="down" data-pending-index="${index}" ${index === files.length - 1 ? 'disabled' : ''} aria-label="Mover foto para a direita">→</button><button type="button" class="danger" data-pending-delete="${index}" aria-label="Remover foto antes de salvar">×</button></div></figure>`;
+    }).join('');
+    $$('[data-pending-cover]', root).forEach(button => button.onclick = () => {
+      editorState.pendingCoverFile = files[Number(button.dataset.pendingCover)];
+      setProductBenefitPreviewImage(editorState.pendingCoverFile);
+      setProductEditorDirty();
+      renderPendingProductGallery();
+    });
+    $$('[data-pending-move]', root).forEach(button => button.onclick = () => {
+      const from = Number(button.dataset.pendingIndex);
+      const to = button.dataset.pendingMove === 'up' ? from - 1 : from + 1;
+      if (to < 0 || to >= files.length) return;
+      [files[from], files[to]] = [files[to], files[from]];
+      setProductEditorDirty();
+      renderPendingProductGallery();
+    });
+    $$('[data-pending-delete]', root).forEach(button => button.onclick = () => {
+      const [removed] = files.splice(Number(button.dataset.pendingDelete), 1);
+      if (removed === editorState.pendingCoverFile) editorState.pendingCoverFile = editorState.record ? null : files[0] || null;
+      if (editorState.pendingCoverFile) setProductBenefitPreviewImage(editorState.pendingCoverFile);
+      setProductEditorDirty();
+      renderPendingProductGallery();
+    });
+  }
+  function addPendingProductImages(fileList) {
+    const incoming = [...(fileList || [])];
+    if (!incoming.length || editorState?.view !== 'products') return;
+    try { validatePendingProductImages(incoming); }
+    catch (error) { toast(error.message, 'error'); return; }
+    const files = editorState.pendingGalleryFiles || (editorState.pendingGalleryFiles = []);
+    const known = new Set(files.map(productGalleryFileKey));
+    incoming.forEach(file => { if (!known.has(productGalleryFileKey(file))) files.push(file); });
+    if ((editorState.existingGalleryCount || 0) + files.length > 10) {
+      files.splice(Math.max(0, 10 - (editorState.existingGalleryCount || 0)));
+      toast('A galeria aceita no máximo 10 fotos.', 'error');
+    }
+    if (!editorState.record && !editorState.pendingCoverFile) editorState.pendingCoverFile = files[0] || null;
+    setProductBenefitPreviewImage(editorState.pendingCoverFile || files[0]);
+    setProductEditorDirty();
+    renderPendingProductGallery();
+  }
+  async function productEditorMarkup(record) {
+    const tabs = productEditorSections.map((section, index) => `<button type="button" role="tab" aria-selected="${index === 0}" tabindex="${index === 0 ? '0' : '-1'}" class="${index === 0 ? 'is-active' : ''}" data-product-tab="${section.key}">${esc(section.label)}</button>`).join('');
+    const panels = [];
+    for (const [index, section] of productEditorSections.entries()) {
+      const fields = [];
+      for (const field of section.fields) {
+        if (field[0] === 'benefits') fields.push(productBenefitsEditorHtml(record));
+        else if (!['free_city_shipping', 'free_assembly'].includes(field[0])) fields.push(await fieldHtml(field, record));
+      }
+      panels.push(`<section class="product-editor-panel" role="tabpanel" data-product-panel="${section.key}" ${index === 0 ? '' : 'hidden'}><header><div><h3>${esc(section.label)}</h3><p>${esc(section.help)}</p></div><span>${index + 1} de ${productEditorSections.length}</span></header><div class="product-section-fields">${fields.join('')}</div></section>`);
+    }
+    return `<nav class="product-editor-tabs" role="tablist" aria-label="Seções do produto">${tabs}</nav><div class="product-editor-panels">${panels.join('')}</div>`;
+  }
   async function productEditor(record = null) {
     if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.');
     resetEditorChrome();
-    const commerceDefaults = { whatsapp_enabled: true, cart_enabled: true, free_city_shipping: false, free_assembly: false, is_campaign: false };
-    const editRecord = record ? { ...commerceDefaults, ...record, dimensions_text: record.dimensions?.description || '' } : { ...commerceDefaults };
-    editorState = { view: 'products', record: editRecord };
+    const commerceDefaults = {
+      whatsapp_enabled: true,
+      cart_enabled: true,
+      free_city_shipping: false,
+      free_assembly: false,
+      is_campaign: false,
+      max_installments: 12,
+      stock_quantity: 0,
+      low_stock_threshold: 5,
+      sort_order: 0
+    };
+    const editRecord = record ? {
+      ...commerceDefaults,
+      ...record,
+      dimensions_text: record.dimensions?.description || '',
+      specifications_text: formatSpecificationsText(record.specifications)
+    } : { ...commerceDefaults, specifications_text: '' };
+    // Keep the defaults only for rendering a new product. The persistence
+    // layer must receive a null record so it executes INSERT instead of
+    // attempting PATCH /products?id=eq.undefined.
+    editorState = {
+      view: 'products', record: record ? editRecord : null, activeTab: 'basic', dirty: false, saving: false,
+      existingGalleryCount: record?.product_images?.length || 0, pendingGalleryFiles: [], pendingCoverFile: null,
+      previewObjectUrls: []
+    };
     $('#editorDialog').classList.add('product-editor-dialog');
     $('#dialogEyebrow').textContent = 'CATÁLOGO';
     $('#dialogTitle').textContent = record ? 'Editar produto' : 'Novo produto';
-    const html = [];
-    for (const field of productFields) {
-      if (field[0] === 'section') html.push(`<h3 class="form-section">${esc(field[1])}</h3>`);
-      else if (field[0] === 'benefits') html.push(productBenefitsEditorHtml(editRecord));
-      else if (!['free_city_shipping', 'free_assembly'].includes(field[0])) html.push(await fieldHtml(field, editRecord || {}));
-    }
-    $('#editorFields').innerHTML = html.join('');
+    $('#editorFields').innerHTML = await productEditorMarkup(editRecord);
+    $('#existingGallery')?.insertAdjacentHTML('afterend', '<div class="pending-gallery-heading"><b>Novas fotos</b><small>Prévia antes de salvar</small></div><div id="pendingGalleryPreview" class="multi-images pending-gallery-preview"></div>');
+    renderPendingProductGallery();
+    $('#editorForm>footer .editor-footer-spacer')?.insertAdjacentHTML('beforebegin', '<span id="productUnsavedStatus" class="product-unsaved-status" role="status">Sem alterações pendentes</span>');
+    $$('[data-product-tab]').forEach(button => {
+      button.onclick = () => activateProductEditorTab(button.dataset.productTab);
+      button.onkeydown = event => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const tabs = $$('[data-product-tab]');
+        const currentIndex = tabs.indexOf(button);
+        const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+        activateProductEditorTab(tabs[nextIndex].dataset.productTab, true);
+      };
+    });
+    const numericRules = {
+      price: { min: '0.01', step: '0.01' }, promotional_price: { min: '0.01', step: '0.01' },
+      max_installments: { min: '1', max: '24', step: '1' }, stock_quantity: { min: '0', step: '1' },
+      low_stock_threshold: { min: '0', step: '1' }, sort_order: { min: '0', step: '1' }
+    };
+    Object.entries(numericRules).forEach(([name, rules]) => {
+      const input = $(`[name="${name}"]`);
+      Object.entries(rules).forEach(([attribute, value]) => input?.setAttribute(attribute, value));
+    });
     $('[name="name"]')?.addEventListener('input', event => {
       if (!record) $('[name="slug"]').value = slugify(event.target.value);
       const previewName = $('#productBenefitPreviewName');
       if (previewName) previewName.textContent = event.target.value.trim() || 'Nome do produto';
     });
     $$('[name="free_city_shipping"], [name="free_assembly"]').forEach(input => input.addEventListener('change', syncProductBenefitPreview));
-    $('[name="gallery"]')?.addEventListener('change', event => setProductBenefitPreviewImage(event.target.files?.[0]));
-    $('[name="og_image_url"]')?.addEventListener('change', event => { if (!$('[name="gallery"]')?.files?.length) setProductBenefitPreviewImage(event.target.files?.[0]); });
+    $('[name="gallery"]')?.addEventListener('change', event => { addPendingProductImages(event.target.files); event.target.value = ''; });
+    $('[name="og_image_url"]')?.addEventListener('change', event => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      try { validatePendingProductImages([file]); }
+      catch (error) { event.target.value = ''; return toast(error.message, 'error'); }
+      if (!editorState.pendingGalleryFiles.length) setProductBenefitPreviewImage(file);
+    });
     if (record) await loadGallery(record.id, 'product_images', 'product_id');
+    $('#editorForm').oninput = () => setProductEditorDirty();
+    $('#editorForm').onchange = () => setProductEditorDirty();
     $('#editorDialog').showModal();
   }
   async function saveProduct(event) {
     event.preventDefault();
     const form = event.currentTarget;
-    if (!form?.reportValidity()) return;
+    if (!form) return;
+    if (!form.checkValidity()) {
+      const invalid = form.querySelector(':invalid');
+      const panel = invalid?.closest('[data-product-panel]');
+      if (panel) activateProductEditorTab(panel.dataset.productPanel);
+      form.reportValidity();
+      invalid?.focus();
+      return toast('Revise os campos obrigatórios antes de salvar.', 'error');
+    }
+    const price = Number(form.elements.price.value);
+    const promotionalPrice = form.elements.promotional_price.value === '' ? null : Number(form.elements.promotional_price.value);
+    if (!Number.isFinite(price) || price <= 0) { activateProductEditorTab('price'); form.elements.price.focus(); return toast('Informe um preço normal maior que zero.', 'error'); }
+    if (promotionalPrice != null && (!Number.isFinite(promotionalPrice) || promotionalPrice <= 0 || promotionalPrice >= price)) {
+      activateProductEditorTab('price'); form.elements.promotional_price.focus();
+      return toast('O preço promocional deve ser maior que zero e menor que o preço normal.', 'error');
+    }
+    for (const name of ['stock_quantity', 'low_stock_threshold', 'sort_order']) {
+      const input = form.elements[name];
+      if (input?.value !== '' && (!Number.isInteger(Number(input.value)) || Number(input.value) < 0)) {
+        activateProductEditorTab(name === 'sort_order' ? 'publication' : 'availability'); input.focus();
+        return toast('Quantidade, estoque mínimo e ordem devem usar números inteiros positivos.', 'error');
+      }
+    }
     const record = editorState?.record || null;
     const button = $('#saveEditor');
     button.disabled = true;
     button.textContent = 'Salvando…';
+    if (editorState) editorState.saving = true;
+    setProductEditorDirty(true, editorState?.pendingGalleryFiles?.length ? 'Salvando e enviando fotos…' : 'Salvando alterações…');
+    let uploadedOgImage = null;
+    let persisted = false;
+    let createdProductId = null;
+    let completed = false;
     try {
       const values = formValues(productFields.filter(field => !['section', 'benefits'].includes(field[0])), form);
       values.dimensions = values.dimensions_text ? { description: values.dimensions_text } : {};
+      values.specifications = parseSpecificationsText(values.specifications_text);
+      values.sku = values.sku || null;
       delete values.dimensions_text;
+      delete values.specifications_text;
       const ogFile = form.elements.og_image_url?.files?.[0];
-      if (ogFile) values.og_image_url = (await upload('products', ogFile, 'sharing')).url; else delete values.og_image_url;
+      if (ogFile) { uploadedOgImage = await upload('products', ogFile, 'sharing'); values.og_image_url = uploadedOgImage.url; }
+      else delete values.og_image_url;
       const result = record
         ? await db.from('products').update(values).eq('id', record.id).select().single()
         : await db.from('products').insert(values).select().single();
       if (result.error) throw result.error;
-      await saveGallery(result.data.id, form.elements.gallery, 'products');
+      persisted = true;
+      if (!record) createdProductId = result.data.id;
+      if (uploadedOgImage && record?.og_image_url && record.og_image_url !== uploadedOgImage.url) await removeStoredUrl(record.og_image_url, 'products');
+      await saveGallery(result.data.id, form.elements.gallery, 'products', {
+        files: editorState?.pendingGalleryFiles || [], coverFile: editorState?.pendingCoverFile || null
+      });
+      completed = true;
+      if (editorState) editorState.dirty = false;
       notifyStorefront('products'); $('#editorDialog').close(); toast('Produto salvo e sincronizado com o catálogo.'); render('products');
     } catch (error) {
-      if (error?.code === '42703' || /whatsapp_enabled|cart_enabled|free_city_shipping|free_assembly|is_campaign/i.test(error?.message || '')) toast('Execute a migration 20260920_product_commerce_cards.sql no Supabase antes de salvar estes campos.', 'error');
+      if (createdProductId && !completed) {
+        const { error: rollbackError } = await db.from('products').delete().eq('id', createdProductId);
+        if (!rollbackError && uploadedOgImage) await db.storage.from(uploadedOgImage.bucket).remove([uploadedOgImage.path]);
+      } else if (uploadedOgImage && !persisted) await db.storage.from(uploadedOgImage.bucket).remove([uploadedOgImage.path]);
+      if (error?.code === '23502' && /sku/i.test(error?.message || error?.details || '')) toast('Execute a migration 20260922_complete_product_editor.sql no Supabase para permitir produtos sem SKU.', 'error');
+      else if (error?.code === '42703' || /whatsapp_enabled|cart_enabled|free_city_shipping|free_assembly|is_campaign/i.test(error?.message || '')) toast('Execute a migration 20260920_product_commerce_cards.sql no Supabase antes de salvar estes campos.', 'error');
       else toast(explain(error), 'error');
+      if (editorState) { editorState.saving = false; setProductEditorDirty(true); }
     }
-    finally { button.disabled = false; button.textContent = 'Salvar alterações'; }
+    finally { button.disabled = false; button.textContent = 'Salvar alterações'; if (editorState) editorState.saving = false; }
   }
   function productStockState(row) {
     if (Number(row.stock_quantity) === 0) return { key: 'out', label: 'Sem estoque' };
@@ -2051,7 +2543,7 @@
     });
     return `<tr data-product-id="${row.id}">
       <td class="product-select-cell"><input type="checkbox" data-product-select="${row.id}" aria-label="Selecionar ${esc(row.name)}" ${productViewState.selected.has(row.id) ? 'checked' : ''}></td>
-      <td><div class="product-identity">${image ? `<img class="thumb" src="${esc(image)}" alt="${esc(row.name)}">` : '<span class="product-thumb-placeholder" aria-hidden="true">▦</span>'}<span><b>${esc(row.name)}</b><small>SKU: ${esc(row.sku)}</small></span></div></td>
+      <td><div class="product-identity">${image ? `<img class="thumb" src="${esc(image)}" alt="${esc(row.name)}">` : '<span class="product-thumb-placeholder" aria-hidden="true">▦</span>'}<span><b>${esc(row.name)}</b><small>${row.sku ? `SKU: ${esc(row.sku)}` : 'SKU não informado'}</small></span></div></td>
       <td><span class="product-category-chip">${esc(row.categories?.name || 'Sem categoria')}</span></td>
       <td class="product-price">${row.promotional_price ? `<del>${brl(row.price)}</del>` : ''}<strong>${brl(currentPrice)}</strong></td>
       <td class="product-stock"><b>${Number(row.stock_quantity)}</b><span class="stock-chip ${stock.key}">${stock.label}</span></td>
@@ -2098,7 +2590,7 @@
       const term = productViewState.search.trim().toLowerCase();
       const filtered = rows.filter(row => {
         const stock = productStockState(row).key;
-        return (!term || `${row.name} ${row.sku}`.toLowerCase().includes(term))
+        return (!term || `${row.name} ${row.sku || ''}`.toLowerCase().includes(term))
           && (!productViewState.category || row.categories?.name === productViewState.category)
           && (!productViewState.status || (productViewState.status === 'active') === Boolean(row.active))
           && (!productViewState.stock || stock === productViewState.stock)
@@ -2119,7 +2611,7 @@
       const copy = Object.fromEntries(allowed.map(key => [key, source[key]]));
       copy.name = `${source.name} — cópia`;
       copy.slug = `${source.slug}-copia-${Date.now().toString().slice(-6)}`;
-      copy.sku = `${source.sku}-C${Date.now().toString().slice(-5)}`;
+      copy.sku = source.sku ? `${source.sku}-C${Date.now().toString().slice(-5)}` : null;
       copy.active = false;
       copy.view_count = 0;
       const { data: duplicate, error: duplicateError } = await db.from('products').insert(copy).select().single();
@@ -2262,7 +2754,7 @@
   function stockRow(row) {
     const label = row.stock_quantity === 0 ? 'Sem estoque' : row.stock_quantity <= row.low_stock_threshold ? 'Estoque baixo' : 'Disponível';
     const action = ActionMenu({ id: `stock-${row.id}`, label: row.name, primary: { label: 'Salvar', icon: 'save', attributes: { 'data-stock-save': row.id } } });
-    return `<tr data-stock="${label}"><td><b>${esc(row.name)}</b></td><td>${esc(row.sku)}</td><td><input style="width:90px" type="number" min="0" value="${row.stock_quantity}" data-stock-qty="${row.id}"></td><td><input style="width:90px" type="number" min="0" value="${row.low_stock_threshold}" data-stock-min="${row.id}"></td><td><span class="badge ${label === 'Sem estoque' ? 'off' : label === 'Estoque baixo' ? 'warn' : ''}">${label}</span></td><td class="action-cell">${action}</td></tr>`;
+    return `<tr data-stock="${label}"><td><b>${esc(row.name)}</b></td><td>${row.sku ? esc(row.sku) : '—'}</td><td><input style="width:90px" type="number" min="0" value="${row.stock_quantity}" data-stock-qty="${row.id}"></td><td><input style="width:90px" type="number" min="0" value="${row.low_stock_threshold}" data-stock-min="${row.id}"></td><td><span class="badge ${label === 'Sem estoque' ? 'off' : label === 'Estoque baixo' ? 'warn' : ''}">${label}</span></td><td class="action-cell">${action}</td></tr>`;
   }
 
   async function renderLeads(revision) {
@@ -2279,6 +2771,104 @@
       select.disabled = false;
       toast(saveError ? explain(saveError) : 'Status do atendimento atualizado.', saveError ? 'error' : 'success');
     });
+  }
+
+  function ecommerceSchemaMissing(error) {
+    return ['42P01', 'PGRST205'].includes(error?.code) || /online_sales_settings|orders|does not exist|schema cache/i.test(error?.message || '');
+  }
+  function ecommerceMigrationNotice() {
+    return `<div class="card empty ecommerce-migration"><h2>Estrutura pronta para ativação</h2><p>Execute a migration <b>20260923_ecommerce_foundation.sql</b> no Supabase para habilitar pedidos, reservas de estoque e configurações de vendas.</p><small>Nenhuma cobrança será criada enquanto um gateway oficial não estiver configurado.</small></div>`;
+  }
+  function orderStatusGroup(order) {
+    if (['cancelled', 'refunded'].includes(order.status)) return 'cancelled';
+    if (order.status === 'completed') return 'completed';
+    if (['ready_for_pickup', 'out_for_delivery'].includes(order.status)) return 'fulfillment';
+    if (order.status === 'preparing') return 'preparing';
+    if (order.payment_status === 'approved') return 'paid';
+    return 'pending';
+  }
+  function orderStatusTone(status) {
+    if (['cancelled', 'refunded'].includes(status)) return 'off';
+    if (['payment_approved', 'completed'].includes(status)) return 'success';
+    if (['awaiting_payment', 'received'].includes(status)) return 'warn';
+    return 'info';
+  }
+  function allowedOrderTransitions(order) {
+    if (['received', 'awaiting_payment'].includes(order.status)) return [['cancelled', 'Cancelar pedido']];
+    if (order.status === 'payment_approved') return [['preparing', 'Iniciar preparação']];
+    if (order.status === 'preparing') return order.delivery_method === 'pickup' ? [['ready_for_pickup', 'Pronto para retirada']] : [['out_for_delivery', 'Saiu para entrega']];
+    if (['ready_for_pickup', 'out_for_delivery'].includes(order.status)) return [['completed', 'Concluir pedido']];
+    return [];
+  }
+  function orderAddress(order) {
+    if (order.delivery_method === 'pickup') return 'Retirada na loja';
+    const address = order.delivery_address || {};
+    return [address.street && `${address.street}, ${address.number || 's/n'}`, address.complement, address.neighborhood, [address.city, address.state].filter(Boolean).join(' - '), address.postal_code].filter(Boolean).join(' · ') || 'Endereço não informado';
+  }
+  function openOrderDetail(order) {
+    const dialog = $('#orderDetailDialog');
+    const items = order.order_items || [];
+    const events = [...(order.order_events || [])].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    const transitions = allowedOrderTransitions(order);
+    dialog.innerHTML = `<div class="order-detail-shell"><header><div><small>PEDIDO</small><h2>${esc(order.order_number)}</h2><span class="badge ${orderStatusTone(order.status)}">${esc(ORDER_STATUS_LABELS[order.status] || order.status)}</span></div><button class="icon-close" type="button" data-order-close aria-label="Fechar">×</button></header><div class="order-detail-grid"><section><h3>Cliente</h3><p><b>${esc(order.customer_name)}</b><br>${esc(order.customer_email)}<br>${esc(order.customer_phone)}${order.customer_cpf ? `<br>CPF: ${esc(order.customer_cpf)}` : ''}</p></section><section><h3>Entrega</h3><p>${esc(orderAddress(order))}</p></section><section><h3>Pagamento</h3><p><b>${order.payment_method === 'pix' ? 'PIX' : 'Cartão de crédito'}</b><br>${esc(PAYMENT_STATUS_LABELS[order.payment_status] || order.payment_status)}${order.gateway_transaction_id ? `<br>Transação: ${esc(order.gateway_transaction_id)}` : ''}</p></section></div><section class="order-items"><h3>Itens do pedido</h3>${items.map(item => `<div><img src="${esc(item.product_image_url || 'assets/logo.png')}" alt=""><span><b>${esc(item.product_name)}</b><small>${item.quantity} × ${brl(item.unit_price)}</small></span><strong>${brl(item.line_total)}</strong></div>`).join('') || '<p>Nenhum item registrado.</p>'}</section><section class="order-money"><span>Subtotal <b>${brl(order.subtotal)}</b></span><span>Descontos <b>− ${brl(order.discount_total)}</b></span><span>Frete <b>${brl(order.shipping_total)}</b></span><strong>Total <b>${brl(order.total)}</b></strong></section><section class="order-timeline"><h3>Histórico</h3>${events.map(event => `<div><i></i><span><b>${esc(event.title)}</b><small>${dateTime(event.created_at)}${event.description ? ` · ${esc(event.description)}` : ''}</small></span></div>`).join('') || '<p>O histórico aparecerá conforme o pedido avançar.</p>'}</section><footer>${transitions.map(([status, label]) => `<button type="button" data-order-next="${status}" class="${status === 'cancelled' ? 'secondary' : ''}">${esc(label)}</button>`).join('')}<button class="secondary" type="button" data-order-close>Fechar</button></footer><p class="payment-safety-note">O pagamento não pode ser aprovado manualmente. Essa confirmação será feita somente pelo webhook autenticado do gateway.</p></div>`;
+    $$('[data-order-close]', dialog).forEach(button => button.onclick = () => dialog.close());
+    $$('[data-order-next]', dialog).forEach(button => button.onclick = () => runAction(button, async () => {
+      if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
+      const next = button.dataset.orderNext;
+      const label = ORDER_STATUS_LABELS[next] || next;
+      if (!await confirmAction({ title: `Atualizar para “${label}”?`, message: `O pedido ${order.order_number} avançará no fluxo operacional.`, confirmLabel: label, tone: next === 'cancelled' ? 'danger' : 'default' })) return;
+      const { error } = await db.rpc('admin_transition_order', { target_order_id: order.id, target_status: next });
+      if (error) throw error;
+      dialog.close(); toast('Status operacional atualizado.'); render('orders');
+    }));
+    dialog.showModal();
+  }
+  async function renderOrders(revision) {
+    const { data, error } = await db.from('orders').select('*,order_items(*),order_events(*)').order('created_at', { ascending: false }).limit(300);
+    if (error) {
+      if (ecommerceSchemaMissing(error)) { if (revision === viewRevision) $('#content').innerHTML = ecommerceMigrationNotice(); return; }
+      throw error;
+    }
+    if (revision !== viewRevision) return;
+    const rows = data || [];
+    const filters = [['all','Todos'],['pending','Aguardando pagamento'],['paid','Pagos'],['preparing','Preparando'],['fulfillment','Entrega / Retirada'],['completed','Concluídos'],['cancelled','Cancelados']];
+    $('#content').innerHTML = `<div class="order-toolbar"><label><span aria-hidden="true">⌕</span><input id="searchOrders" type="search" placeholder="Buscar número, cliente ou telefone…"></label><div class="order-filters">${filters.map(([key,label]) => `<button type="button" data-order-filter="${key}" class="${key === 'all' ? 'is-active' : ''}">${label}</button>`).join('')}</div></div>${rows.length ? `<div class="card table-wrap"><table class="data-table order-table"><thead><tr><th>Número</th><th>Cliente</th><th>Data</th><th>Valor</th><th>Pagamento</th><th>Entrega</th><th>Status</th><th></th></tr></thead><tbody>${rows.map(order => `<tr data-order-group="${orderStatusGroup(order)}" data-order-search="${esc(`${order.order_number} ${order.customer_name} ${order.customer_phone}`.toLowerCase())}"><td><b>${esc(order.order_number)}</b></td><td><b>${esc(order.customer_name)}</b><small>${esc(order.customer_phone)}</small></td><td>${dateTime(order.created_at)}</td><td><b>${brl(order.total)}</b></td><td><span class="badge ${order.payment_status === 'approved' ? 'success' : order.payment_status === 'pending' ? 'warn' : 'off'}">${esc(PAYMENT_STATUS_LABELS[order.payment_status] || order.payment_status)}</span></td><td>${order.delivery_method === 'pickup' ? 'Retirada' : 'Entrega'}</td><td><span class="badge ${orderStatusTone(order.status)}">${esc(ORDER_STATUS_LABELS[order.status] || order.status)}</span></td><td><button class="secondary compact" type="button" data-order-open="${order.id}">Ver pedido</button></td></tr>`).join('')}</tbody></table></div>` : `<div class="card empty"><h2>Nenhum pedido recebido</h2><p>Os pedidos reais aparecerão aqui quando o checkout e o gateway forem ativados.</p><small>A estrutura não cria pedidos ou pagamentos demonstrativos.</small></div>`}<dialog id="orderDetailDialog" class="order-detail-dialog"></dialog>`;
+    let activeFilter = 'all';
+    const apply = () => {
+      const term = ($('#searchOrders')?.value || '').trim().toLowerCase();
+      $$('tbody tr', $('#content')).forEach(row => { row.hidden = (activeFilter !== 'all' && row.dataset.orderGroup !== activeFilter) || !row.dataset.orderSearch.includes(term); });
+    };
+    $('#searchOrders')?.addEventListener('input', apply);
+    $$('[data-order-filter]').forEach(button => button.onclick = () => { activeFilter = button.dataset.orderFilter; $$('[data-order-filter]').forEach(item => item.classList.toggle('is-active', item === button)); apply(); });
+    $$('[data-order-open]').forEach(button => button.onclick = () => openOrderDetail(rows.find(order => order.id === button.dataset.orderOpen)));
+  }
+  async function renderOnlineSales(revision) {
+    const { data, error } = await db.from('online_sales_settings').select('*').eq('id', true).maybeSingle();
+    if (error) {
+      if (ecommerceSchemaMissing(error)) { if (revision === viewRevision) $('#content').innerHTML = ecommerceMigrationNotice(); return; }
+      throw error;
+    }
+    if (revision !== viewRevision) return;
+    const settings = data || {};
+    const providerReady = Boolean(settings.gateway_provider);
+    const rule = Array.isArray(settings.shipping_rules) ? settings.shipping_rules[0] || {} : {};
+    $('#content').innerHTML = `<form id="onlineSalesForm" class="online-sales-layout"><section class="card panel"><div class="online-sales-heading"><div><small>STATUS DA VENDA ONLINE</small><h2>${providerReady ? 'Gateway preparado' : 'Integração financeira pendente'}</h2><p>${providerReady ? `Provedor: ${esc(settings.gateway_provider)}` : 'PIX e cartão permanecerão bloqueados até a configuração segura do provedor.'}</p></div><span class="online-status ${providerReady ? 'ready' : ''}">${providerReady ? 'PRONTO' : 'ESTRUTURA'}</span></div><div class="settings-toggles"><label class="toggle"><input name="online_sales_enabled" type="checkbox" ${settings.online_sales_enabled ? 'checked' : ''} ${providerReady ? '' : 'disabled'}> Venda online ativa</label><label class="toggle"><input name="pix_enabled" type="checkbox" ${settings.pix_enabled ? 'checked' : ''} ${providerReady ? '' : 'disabled'}> PIX</label><label class="toggle"><input name="card_enabled" type="checkbox" ${settings.card_enabled ? 'checked' : ''} ${providerReady ? '' : 'disabled'}> Cartão de crédito</label><label class="toggle"><input name="pickup_enabled" type="checkbox" ${settings.pickup_enabled !== false ? 'checked' : ''}> Retirada na loja</label><label class="toggle"><input name="delivery_enabled" type="checkbox" ${settings.delivery_enabled ? 'checked' : ''}> Entrega</label><label class="toggle"><input name="require_cpf" type="checkbox" ${settings.require_cpf ? 'checked' : ''}> Solicitar CPF no checkout</label></div></section><section class="card panel"><h2>Condições comerciais</h2><div class="form-grid compact-settings"><div class="field"><label>Pedido mínimo</label><input name="minimum_order_amount" type="number" min="0" step="0.01" value="${Number(settings.minimum_order_amount || 0)}"></div><div class="field"><label>Máximo de parcelas</label><input name="max_installments" type="number" min="1" max="24" value="${Number(settings.max_installments || 10)}"></div><div class="field"><label>Reserva de estoque (minutos)</label><input name="reservation_minutes" type="number" min="5" max="1440" value="${Number(settings.reservation_minutes || 30)}"></div></div></section><section class="card panel"><h2>Regra principal de entrega</h2><p class="helper">A regra será aplicada somente aos CEPs informados. Frete grátis nunca será presumido para todo o Brasil.</p><div class="form-grid compact-settings"><div class="field"><label>Nome da região</label><input name="region_label" value="${esc(rule.label || '')}" placeholder="Ex.: Ribeira do Pombal"></div><div class="field"><label>Prefixos de CEP</label><input name="cep_prefixes" value="${esc((rule.cep_prefixes || []).join(', '))}" placeholder="Ex.: 48400, 48401"></div><div class="field"><label>Frete fixo</label><input name="flat_rate" type="number" min="0" step="0.01" value="${Number(rule.flat_rate || 0)}"></div><div class="field"><label>Frete grátis acima de</label><input name="free_shipping_min" type="number" min="0" step="0.01" value="${Number(rule.free_shipping_min || 0)}"></div><label class="toggle field-span"><input name="allow_product_free_shipping" type="checkbox" ${rule.allow_product_free_shipping ? 'checked' : ''}> Respeitar selo “Frete Grátis” nesta região</label></div></section><section class="card panel gateway-security"><h2>Segurança do gateway</h2><p>As credenciais secretas serão configuradas somente no ambiente seguro da função backend. Elas não aparecerão neste painel nem no navegador.</p><dl><div><dt>Provedor</dt><dd>${esc(settings.gateway_provider || 'A definir com o cliente')}</dd></div><div><dt>Webhook</dt><dd>${providerReady ? 'Aguardando endpoint oficial' : 'Será criado após a escolha do provedor'}</dd></div></dl></section><footer class="online-sales-save"><button type="submit">Salvar estrutura</button></footer></form>`;
+    $('#onlineSalesForm').onsubmit = async event => {
+      event.preventDefault();
+      if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
+      const form = event.currentTarget; const button = form.querySelector('[type="submit"]');
+      if (button.disabled) return; button.disabled = true; button.classList.add('is-loading');
+      try {
+        const prefixes = form.elements.cep_prefixes.value.split(',').map(value => value.replace(/\D/g, '')).filter(Boolean);
+        const shippingRules = prefixes.length ? [{ id: rule.id || crypto.randomUUID(), label: form.elements.region_label.value.trim() || 'Região de entrega', active: true, cep_prefixes: prefixes, flat_rate: Number(form.elements.flat_rate.value || 0), free_shipping_min: Number(form.elements.free_shipping_min.value || 0), allow_product_free_shipping: form.elements.allow_product_free_shipping.checked }] : [];
+        const values = { pickup_enabled: form.elements.pickup_enabled.checked, delivery_enabled: form.elements.delivery_enabled.checked, require_cpf: form.elements.require_cpf.checked, minimum_order_amount: Number(form.elements.minimum_order_amount.value || 0), max_installments: Number(form.elements.max_installments.value || 10), reservation_minutes: Number(form.elements.reservation_minutes.value || 30), shipping_rules: shippingRules };
+        if (providerReady) Object.assign(values, { online_sales_enabled: form.elements.online_sales_enabled.checked, pix_enabled: form.elements.pix_enabled.checked, card_enabled: form.elements.card_enabled.checked });
+        const { error: saveError } = await db.from('online_sales_settings').update(values).eq('id', true);
+        if (saveError) throw saveError;
+        notifyStorefront('online_sales_settings'); toast('Estrutura de vendas online salva.'); render('online-sales');
+      } catch (saveError) { toast(explain(saveError), 'error'); }
+      finally { button.disabled = false; button.classList.remove('is-loading'); }
+    };
   }
 
   const settingGroups = {
@@ -2410,6 +3000,8 @@
       else if (view === 'banners') await renderBanners(revision);
       else if (view === 'stock') await renderStock(revision);
       else if (view === 'leads') await renderLeads(revision);
+      else if (view === 'orders') await renderOrders(revision);
+      else if (view === 'online-sales') await renderOnlineSales(revision);
       else if (['store', 'seo', 'settings'].includes(view)) await renderSettings(view, revision);
       else if (view === 'users') await renderUsers(revision);
       else if (view === 'audit') await renderAudit(revision);
@@ -2472,7 +3064,20 @@
     listSearch.value = event.target.value;
     listSearch.dispatchEvent(new Event('input', { bubbles: true }));
   });
-  $$('[data-close]').forEach(button => button.onclick = () => $('#editorDialog').close());
+  async function requestEditorClose() {
+    const dialog = $('#editorDialog');
+    if (!dialog.open) return;
+    if (editorState?.view === 'products' && editorState.dirty && !editorState.saving) {
+      const discard = await confirmAction({
+        title: 'Descartar alterações?',
+        message: 'Este produto possui alterações que ainda não foram salvas.',
+        confirmLabel: 'Descartar', tone: 'danger'
+      });
+      if (!discard) return;
+    }
+    dialog.close();
+  }
+  $$('[data-close]').forEach(button => button.onclick = requestEditorClose);
   $('#editorForm').addEventListener('submit', event => {
     if (editorState?.quick) { event.preventDefault(); return; }
     if (editorState?.view === 'products') return saveProduct(event);
@@ -2483,7 +3088,8 @@
   });
   const editorDialog = $('#editorDialog');
   new MutationObserver(() => document.body.classList.toggle('dialog-open', editorDialog.open)).observe(editorDialog, { attributes: true, attributeFilter: ['open'] });
-  editorDialog.addEventListener('click', event => { if (event.target === editorDialog) editorDialog.close(); });
+  editorDialog.addEventListener('click', event => { if (event.target === editorDialog) requestEditorClose(); });
+  editorDialog.addEventListener('cancel', event => { event.preventDefault(); requestEditorClose(); });
   editorDialog.addEventListener('close', () => {
     document.body.classList.remove('dialog-open');
     if (editorState?.previewObjectUrl) URL.revokeObjectURL(editorState.previewObjectUrl);

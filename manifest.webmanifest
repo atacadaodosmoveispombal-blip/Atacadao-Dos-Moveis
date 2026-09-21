@@ -1,0 +1,34 @@
+{
+  "name": "Atacarejo dos Móveis",
+  "short_name": "Atacarejo",
+  "description": "Móveis, ofertas e atendimento do Atacarejo dos Móveis.",
+  "lang": "pt-BR",
+  "id": "/",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#023497",
+  "theme_color": "#023497",
+  "categories": ["shopping", "lifestyle"],
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "/assets/pwa-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/pwa-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/pwa-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
