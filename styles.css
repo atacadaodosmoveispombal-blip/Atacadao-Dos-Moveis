@@ -630,9 +630,11 @@ button{touch-action:manipulation}
 .official-product-heart svg{width:24px;height:24px}
 .official-product-heart:hover,.official-product-heart.active{background:#fff;color:#d32039}.official-product-heart.active svg{fill:currentColor}
 .photo-benefits{position:absolute;z-index:2;left:7px;right:7px;bottom:1px;display:flex;align-items:flex-end;justify-content:space-between;gap:3px;pointer-events:none}
-.photo-benefit{display:block;min-width:0;max-width:50%}
+.photo-benefit{display:block;min-width:0}
+.photo-benefit.is-shipping{width:36%;max-width:128px}
+.photo-benefit.is-assembly{width:29%;max-width:104px}
 .photo-benefit>img{display:block;width:100%;height:auto;filter:drop-shadow(0 5px 8px rgba(3,29,69,.18))}
-.photo-benefit:only-child{max-width:min(72%,250px)}.photo-benefit.is-assembly:only-child{margin-left:auto}
+.photo-benefit.is-assembly:only-child{margin-left:auto}
 .official-product-body{display:flex;min-width:0;flex:1;flex-direction:column;padding:18px 19px 19px}
 .official-product-body .official-product-category{display:block;margin:0 0 6px;color:#607591;font-size:.75rem;font-weight:600}
 .official-product-body h3{min-height:2.5em;margin:0 0 7px;color:#0c336e;font-size:1.05rem;font-weight:850;line-height:1.25;overflow-wrap:anywhere}
