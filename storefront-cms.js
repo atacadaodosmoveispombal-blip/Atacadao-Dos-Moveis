@@ -300,7 +300,8 @@
     const discount = regularPrice && sellingPrice < regularPrice ? Math.round((1 - sellingPrice / regularPrice) * 100) : 0;
     const installments = Number(row.max_installments);
     return {
-      id: stableProductId(row.id), dbId: row.id, n: row.name, cat: row.categories?.name || row.environments?.name || 'Móveis',
+      id: stableProductId(row.id), dbId: row.id, n: row.name, cat: row.categories?.name || 'Móveis',
+      environment: row.environments?.name || '', subcategory: row.categories?.name || '', brand: row.brands?.name || '', keywords: row.categories?.search_keywords || '',
       price: sellingPrice, old: sellingPrice < regularPrice ? regularPrice : null, discount,
       img: orderedImages[0]?.image_url || row.og_image_url || imageFallback,
       images: orderedImages.slice(1).map(image => image.image_url), best: row.best_seller ? 1 : 0,
@@ -316,12 +317,26 @@
     };
   }
   async function loadStorefrontCategories() {
-    const extended = await cms.from('categories').select('name,slug,image_url,sort_order,show_on_homepage,show_in_menu').eq('active', true).order('sort_order');
+    const extended = await cms.from('categories').select('id,name,slug,description,image_url,sort_order,show_on_homepage,show_in_menu,environment_id,search_keywords,active').eq('active', true).order('sort_order');
     if (!extended.error) return extended;
-    if (extended.error.code !== '42703' && !/show_on_homepage|show_in_menu/i.test(extended.error.message || '')) return extended;
-    const legacy = await cms.from('categories').select('name,slug,image_url,sort_order').eq('active', true).order('sort_order');
-    if (legacy.data) legacy.data = legacy.data.map(item => ({ ...item, show_on_homepage: true, show_in_menu: true }));
+    if (extended.error.code !== '42703' && !/show_on_homepage|show_in_menu|environment_id|search_keywords/i.test(extended.error.message || '')) return extended;
+    const legacy = await cms.from('categories').select('id,name,slug,description,image_url,sort_order,show_on_homepage,show_in_menu,active').eq('active', true).order('sort_order');
+    if (legacy.error && (legacy.error.code === '42703' || /show_on_homepage|show_in_menu/i.test(legacy.error.message || ''))) {
+      const minimal = await cms.from('categories').select('id,name,slug,description,image_url,sort_order,active').eq('active', true).order('sort_order');
+      if (minimal.data) minimal.data = minimal.data.map(item => ({ ...item, show_on_homepage: true, show_in_menu: true, environment_id: null, search_keywords: '' }));
+      return minimal;
+    }
+    if (legacy.data) legacy.data = legacy.data.map(item => ({ ...item, show_on_homepage: item.show_on_homepage !== false, show_in_menu: item.show_in_menu !== false, environment_id: null, search_keywords: '' }));
     return legacy;
+  }
+  async function loadStorefrontProducts() {
+    const modern = await cms.from('products').select('*,categories(name,search_keywords),environments(name),brands(name),product_images(image_url,is_cover,sort_order)').eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
+    if (!modern.error) return modern;
+    if (modern.error.code !== '42703' && !/search_keywords/i.test(modern.error.message || '')) return modern;
+    return cms.from('products').select('*,categories(name),environments(name),brands(name),product_images(image_url,is_cover,sort_order)').eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
+  }
+  async function loadStorefrontEnvironments() {
+    return cms.from('environments').select('id,name,slug,description,image_url,sort_order,active').eq('active', true).order('sort_order');
   }
   async function loadOnlineSalesSettings() {
     const result = await cms.from('online_sales_settings').select('*').eq('id', true).maybeSingle();
@@ -331,9 +346,10 @@
   async function boot() {
     const revision = ++bootRevision;
     const now = new Date().toISOString();
-    const [productResult, categoryResult, bannerResult, promotionResult, sectionResult, settingResult, inspirationResult, onlineSalesResult] = await Promise.all([
-      cms.from('products').select('*,categories(name),environments(name),product_images(image_url,is_cover,sort_order)').eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false }),
+    const [productResult, categoryResult, environmentResult, bannerResult, promotionResult, sectionResult, settingResult, inspirationResult, onlineSalesResult] = await Promise.all([
+      loadStorefrontProducts(),
       loadStorefrontCategories(),
+      loadStorefrontEnvironments(),
       cms.from('banners').select('*').eq('active', true).eq('draft', false).eq('paused', false).or(`start_at.is.null,start_at.lte.${now}`).or(`end_at.is.null,end_at.gt.${now}`).order('sort_order'),
       cms.from('promotions').select('*,promotion_products(product_id)').eq('active', true).or(`start_at.is.null,start_at.lte.${now}`).or(`end_at.is.null,end_at.gt.${now}`),
       cms.from('site_sections').select('*').order('sort_order'),
@@ -341,7 +357,7 @@
       cms.from('inspirations').select('*,environments(name),inspiration_images(image_url,sort_order)').eq('active', true).order('sort_order'),
       loadOnlineSalesSettings()
     ]);
-    const failed = [productResult, categoryResult, bannerResult, promotionResult, sectionResult, settingResult, inspirationResult, onlineSalesResult].find(result => result.error);
+    const failed = [productResult, categoryResult, environmentResult, bannerResult, promotionResult, sectionResult, settingResult, inspirationResult, onlineSalesResult].find(result => result.error);
     if (failed) throw failed.error;
     if (revision !== bootRevision) return;
     applySettings(settingResult.data);
@@ -351,13 +367,11 @@
     renderInspirations(inspirationResult.data || []);
     {
       const categories = categoryResult.data || [];
+      const environments = environmentResult.data || [];
       cats.splice(0, cats.length, ...categories.map(item => [item.name, item.image_url || imageFallback]));
-      const homepageCategories = categories.filter(item => item.show_on_homepage !== false);
-      environmentCats.splice(0, environmentCats.length, ...homepageCategories.map(item => ({ label: item.name, category: item.name, img: item.image_url || imageFallback })));
-      if (typeof categoryMenuItems !== 'undefined' && typeof renderCategoryMenu === 'function') {
-        categoryMenuItems.splice(0, categoryMenuItems.length, ...categories.filter(item => item.show_in_menu !== false).map(item => [item.name, item.name]));
-        renderCategoryMenu();
-      }
+      const homepageEnvironments = environments.filter(item => item.active !== false);
+      environmentCats.splice(0, environmentCats.length, ...homepageEnvironments.map(item => ({ label: item.name, category: item.name, img: item.image_url || imageFallback })));
+      window.setStoreNavigationData?.(environments, categories.filter(item => item.show_in_menu !== false));
       renderCats();
     }
     const campaignPromotions = promotionResult.data || [];
@@ -371,16 +385,16 @@
     applySections(sectionResult.data || []);
     renderCampaignSections(bannerResult.data || [], productResult.data || [], campaignPromotions);
     const requestedParams = new URLSearchParams(location.search);
-    const requestedCategory = requestedParams.get('category');
-    if (requestedCategory) {
+    const requestedEnvironment = requestedParams.get('environment');
+    const requestedCategory = requestedParams.get('subcategory') || requestedParams.get('category');
+    if (requestedEnvironment || requestedCategory) {
       const category = (categoryResult.data || []).find(item => item.slug === requestedCategory);
-      if (category) {
-        requestAnimationFrame(() => {
-          const categoryButton = [...document.querySelectorAll('#filterPills .pill')]
-            .find(button => button.textContent.trim() === category.name);
-          categoryButton?.click();
-        });
-      }
+      const environment = (environmentResult.data || []).find(item => item.slug === requestedEnvironment || String(item.id) === String(category?.environment_id));
+      requestAnimationFrame(() => {
+        if (environment && category) window.filterSubcategory?.(environment.name, category.name);
+        else if (environment) window.filterEnvironment?.(environment.name);
+        else if (category) window.filterCategory?.(category.name);
+      });
     }
     const requestedProduct = requestedParams.get('product');
     if (requestedProduct && !deepLinkOpened) {

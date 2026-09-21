@@ -8,7 +8,7 @@
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const titles = {
-    dashboard: 'Visão geral', products: 'Produtos', categories: 'Categorias', environments: 'Ambientes',
+    dashboard: 'Visão geral', products: 'Produtos', categories: 'Subcategorias', environments: 'Ambientes',
     brands: 'Marcas', stock: 'Estoque', promotions: 'Promoções', coupons: 'Cupons', banners: 'Campanhas e Banners',
     sections: 'Página inicial', inspirations: 'Inspirações', leads: 'Leads / Orçamentos', store: 'Loja e WhatsApp',
     orders: 'Pedidos', 'online-sales': 'Vendas online',
@@ -17,7 +17,7 @@
   const viewMeta = {
     dashboard: ['⌂', 'Acompanhe o desempenho da sua loja em tempo real.'],
     products: ['▦', 'Gerencie seus produtos, preços, fotos e disponibilidade.'],
-    categories: ['▦', 'Gerencie as categorias exibidas na loja.'],
+    categories: ['▦', 'Organize as subcategorias dentro de cada ambiente.'],
     environments: ['⌂', 'Organize os ambientes apresentados no catálogo.'],
     brands: ['◇', 'Gerencie as marcas vinculadas aos produtos.'],
     stock: ['▤', 'Acompanhe e atualize o estoque da loja.'],
@@ -400,8 +400,8 @@
   }
 
   const configs = {
-    categories: { table: 'categories', singular: 'Categoria', plural: 'categorias', bucket: 'categories', fields: [
-      ['name', 'Nome', 'text', true], ['slug', 'URL amigável', 'slug', true], ['description', 'Descrição', 'textarea'], ['image_url', 'Imagem', 'file'], ['sort_order', 'Ordem', 'number'], ['active', 'Ativa', 'checkbox'], ['show_on_homepage', 'Mostrar na página inicial', 'checkbox'], ['show_in_menu', 'Mostrar no menu de categorias', 'checkbox'] ] },
+    categories: { table: 'categories', singular: 'Subcategoria', plural: 'subcategorias', bucket: 'categories', fields: [
+      ['environment_id', 'Ambiente', 'relation', true, 'environments'], ['name', 'Nome', 'text', true], ['slug', 'URL amigável', 'slug', true], ['description', 'Descrição', 'textarea'], ['search_keywords', 'Palavras relacionadas para busca', 'text'], ['image_url', 'Imagem', 'file'], ['sort_order', 'Ordem', 'number'], ['active', 'Ativa', 'checkbox'], ['show_on_homepage', 'Mostrar na página inicial', 'checkbox'], ['show_in_menu', 'Mostrar no menu de ambientes', 'checkbox'] ] },
     environments: { table: 'environments', singular: 'Ambiente', plural: 'ambientes', bucket: 'environments', fields: [
       ['name', 'Nome', 'text', true], ['slug', 'URL amigável', 'slug', true], ['description', 'Descrição', 'textarea'], ['image_url', 'Imagem', 'file'], ['sort_order', 'Ordem', 'number'], ['active', 'Ativo', 'checkbox'] ] },
     brands: { table: 'brands', singular: 'Marca', plural: 'marcas', bucket: 'brands', fields: [
@@ -434,8 +434,13 @@
     if (type === 'textarea') return `<div class="field full"><label for="f-${key}">${esc(label)}</label><textarea id="f-${key}" name="${key}" ${required ? 'required' : ''}>${esc(value)}</textarea></div>`;
     if (type === 'select') return `<div class="field"><label for="f-${key}">${esc(label)}</label><select id="f-${key}" name="${key}">${choices.map(([v, text]) => `<option value="${v}" ${value === v ? 'selected' : ''}>${esc(text)}</option>`).join('')}</select></div>`;
     if (type === 'relation') {
-      const rows = await options(choices);
-      return `<div class="field"><label for="f-${key}">${esc(label)}</label><select id="f-${key}" name="${key}" ${required ? 'required' : ''}><option value="">${required ? 'Selecione' : 'Nenhum'}</option>${rows.map(row => `<option value="${row.id}" ${value === row.id ? 'selected' : ''}>${esc(row.name)}</option>`).join('')}</select></div>`;
+      let rows;
+      if (key === 'category_id') {
+        const result = await db.from('categories').select('id,name,environment_id,active').order('sort_order').order('name');
+        if (result.error) throw result.error;
+        rows = (result.data || []).filter(row => row.active !== false);
+      } else rows = await options(choices);
+      return `<div class="field"><label for="f-${key}">${esc(label)}</label><select id="f-${key}" name="${key}" ${required ? 'required' : ''}><option value="">${required ? 'Selecione' : 'Nenhum'}</option>${rows.map(row => `<option value="${row.id}" ${row.environment_id ? `data-environment-id="${row.environment_id}"` : ''} ${value === row.id ? 'selected' : ''}>${esc(row.name)}</option>`).join('')}</select></div>`;
     }
     if (type === 'file') return `<div class="field"><label for="f-${key}">${esc(label)}</label><input id="f-${key}" name="${key}" type="file" accept="image/*">${value ? `<img class="image-preview" src="${esc(value)}" alt="Imagem atual">` : ''}</div>`;
     if (type === 'multifile') return `<div class="field full"><label for="f-${key}">${esc(label)}</label><input id="f-${key}" name="${key}" type="file" accept="image/*" multiple></div><div id="existingGallery" class="multi-images"></div>`;
@@ -479,15 +484,19 @@
   }
   async function openCategoryEditor(record = null) {
     if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.');
-    const [categoryResult, productResult] = await Promise.all([
-      db.from('categories').select('id,name,sort_order').order('sort_order').order('created_at'),
+    const [categoryResult, environmentResult, productResult] = await Promise.all([
+      db.from('categories').select('id,name,sort_order,environment_id').order('sort_order').order('created_at'),
+      db.from('environments').select('id,name,active,sort_order').order('sort_order').order('name'),
       record ? db.from('products').select('id,name,sku,product_images(image_url,is_cover,sort_order)', { count: 'exact' }).eq('category_id', record.id).is('deleted_at', null).order('created_at', { ascending: false }).limit(5) : Promise.resolve({ data: [], count: 0 })
     ]);
     if (categoryResult.error) return toast(explain(categoryResult.error));
+    if (environmentResult.error) return toast(explain(environmentResult.error));
     if (productResult.error) return toast(explain(productResult.error));
     const categories = categoryResult.data || [];
+    const environments = (environmentResult.data || []).filter(item => item.active !== false || String(item.id) === String(record?.environment_id));
+    const selectedEnvironmentId = record?.environment_id || environments[0]?.id || '';
     const products = productResult.data || [];
-    const orderedWithoutCurrent = categories.filter(item => String(item.id) !== String(record?.id));
+    const orderedWithoutCurrent = categories.filter(item => String(item.id) !== String(record?.id) && String(item.environment_id) === String(selectedEnvironmentId));
     const currentIndex = record ? Math.max(0, categories.findIndex(item => String(item.id) === String(record.id))) : categories.length;
     const totalPositions = Math.max(1, orderedWithoutCurrent.length + 1);
     const positionOptions = Array.from({ length: totalPositions }, (_, index) => {
@@ -511,7 +520,7 @@
     $('#editorFields').innerHTML = `<div class="category-editor-layout">
       <section class="category-editor-section category-info-section">
         <header><span>1</span><div><h3>Informações da categoria</h3><p>Conte aos clientes o que eles encontram nesta seção.</p></div></header>
-        <div class="category-editor-fields"><label>Nome da categoria<input name="name" type="text" required value="${esc(record?.name || '')}" placeholder="Ex.: Sala"></label><label>Descrição<textarea name="description" placeholder="Apresente a categoria em poucas palavras.">${esc(record?.description || '')}</textarea></label></div>
+        <div class="category-editor-fields"><label>Ambiente<select name="environment_id" required><option value="">Selecione</option>${environments.map(environment => `<option value="${environment.id}" ${String(environment.id) === String(selectedEnvironmentId) ? 'selected' : ''}>${esc(environment.name)}</option>`).join('')}</select></label><label>Nome da subcategoria<input name="name" type="text" required value="${esc(record?.name || '')}" placeholder="Ex.: Sofá"></label><label>Descrição<textarea name="description" placeholder="Apresente a subcategoria em poucas palavras.">${esc(record?.description || '')}</textarea></label><label>Palavras relacionadas para busca<input name="search_keywords" type="text" value="${esc(record?.search_keywords || '')}" placeholder="Ex.: sofá retrátil, estofado, 3 lugares"></label></div>
         <div class="category-address"><span>Endereço da página</span><code id="categoryAddressText">/categoria/${esc(record?.slug || 'categoria')}</code><button id="editCategorySlug" type="button">Editar endereço</button></div>
         <label class="category-slug-editor" id="categorySlugEditor" hidden>Final do endereço<input name="slug" type="text" required value="${esc(record?.slug || '')}" placeholder="sala"><small>Use letras, números e hífens.</small></label>
       </section>
@@ -525,12 +534,12 @@
         <p>Esta é uma representação fiel do card usado na loja. O enquadramento pode variar levemente conforme a tela.</p>
       </aside>
       <section class="category-editor-section category-position-section">
-        <header><span>3</span><div><h3>Posição no site</h3><p>Define em qual posição esta categoria aparece para os clientes.</p></div></header>
-        <label class="category-position-control">Posição da categoria<select name="position_index">${positionOptions}</select></label><small class="category-drag-note">💡 Você também pode arrastar os cards na página de categorias para reorganizar.</small>
+        <header><span>3</span><div><h3>Posição no ambiente</h3><p>Define em qual posição esta subcategoria aparece dentro do ambiente.</p></div></header>
+        <label class="category-position-control">Posição da subcategoria<select name="position_index">${positionOptions}</select></label><small class="category-drag-note">💡 Você também pode arrastar os cards na página de subcategorias para reorganizar.</small>
       </section>
       <section class="category-editor-section category-visibility-section">
         <header><span>4</span><div><h3>Exibição</h3><p>Escolha onde esta categoria ficará disponível.</p></div></header>
-        <div class="category-switch-list"><label><span><b>Categoria ativa</b><small>Permite publicar esta categoria para os clientes.</small></span><input name="active" type="checkbox" ${record?.active !== false ? 'checked' : ''}><i></i></label><label><span><b>Mostrar na página inicial</b><small>Exibe o card entre as categorias da home.</small></span><input name="show_on_homepage" type="checkbox" ${record?.show_on_homepage !== false ? 'checked' : ''}><i></i></label><label><span><b>Mostrar no menu de categorias</b><small>Inclui esta opção no menu principal da loja.</small></span><input name="show_in_menu" type="checkbox" ${record?.show_in_menu !== false ? 'checked' : ''}><i></i></label></div>
+        <div class="category-switch-list"><label><span><b>Subcategoria ativa</b><small>Permite publicar esta subcategoria para os clientes.</small></span><input name="active" type="checkbox" ${record?.active !== false ? 'checked' : ''}><i></i></label><label><span><b>Mostrar na página inicial</b><small>Disponibiliza esta classificação para destaques da home.</small></span><input name="show_on_homepage" type="checkbox" ${record?.show_on_homepage !== false ? 'checked' : ''}><i></i></label><label><span><b>Mostrar no menu do ambiente</b><small>Inclui esta opção no mega menu e no painel mobile.</small></span><input name="show_in_menu" type="checkbox" ${record?.show_in_menu !== false ? 'checked' : ''}><i></i></label></div>
       </section>
       <section class="category-editor-section category-products-section">
         <header><span>5</span><div><h3>Produtos desta categoria</h3><p><b>${productResult.count || 0}</b> produto${productResult.count === 1 ? '' : 's'} cadastrado${productResult.count === 1 ? '' : 's'}.</p></div></header>
@@ -1645,8 +1654,8 @@
     }
     finally { button.disabled = false; button.textContent = 'Salvar alterações'; }
   }
-  async function normalizeCategoryPosition(categoryId, position) {
-    const { data, error } = await db.from('categories').select('id,sort_order,created_at').order('sort_order').order('created_at');
+  async function normalizeCategoryPosition(categoryId, position, environmentId) {
+    const { data, error } = await db.from('categories').select('id,sort_order,created_at,environment_id').eq('environment_id', environmentId).order('sort_order').order('created_at');
     if (error) throw error;
     const ordered = (data || []).filter(item => String(item.id) !== String(categoryId));
     ordered.splice(Math.max(0, Math.min(ordered.length, Number(position || 1) - 1)), 0, { id: categoryId });
@@ -1686,9 +1695,11 @@
     try {
       const form = event.currentTarget;
       const values = {
+        environment_id: form.elements.environment_id.value,
         name: form.elements.name.value.trim(),
         slug: slugify(form.elements.slug.value || form.elements.name.value),
         description: form.elements.description.value.trim() || null,
+        search_keywords: form.elements.search_keywords.value.trim() || null,
         active: saveMode === 'draft' ? false : form.elements.active.checked,
         show_on_homepage: form.elements.show_on_homepage.checked,
         show_in_menu: form.elements.show_in_menu.checked
@@ -1706,11 +1717,11 @@
       persisted = true;
       if (!record) createdCategoryId = result.data.id;
       if ((uploadedImage || editorState.removeImage) && record?.image_url && record.image_url !== values.image_url) await removeStoredUrl(record.image_url, 'categories');
-      await normalizeCategoryPosition(result.data.id, form.elements.position_index.value);
+      await normalizeCategoryPosition(result.data.id, form.elements.position_index.value, values.environment_id);
       completed = true;
       notifyStorefront('categories');
       $('#editorDialog').close();
-      toast(saveMode === 'draft' ? 'Categoria salva como rascunho.' : 'Categoria salva e publicada no site.');
+      toast(saveMode === 'draft' ? 'Subcategoria salva como rascunho.' : 'Subcategoria salva e publicada no site.');
       render('categories');
     } catch (error) {
       if (createdCategoryId && !completed) {
@@ -1741,9 +1752,10 @@
         { label: 'Excluir', icon: 'trash', danger: true, attributes: { 'data-category-delete': row.id } }
       ]
     });
-    return `<tr data-category-id="${row.id}" data-name="${esc(row.name.toLowerCase())}" data-active="${row.active}" data-order="${Number(row.sort_order || 0)}">
+    return `<tr data-category-id="${row.id}" data-environment-id="${esc(row.environment_id || '')}" data-name="${esc(row.name.toLowerCase())}" data-active="${row.active}" data-order="${Number(row.sort_order || 0)}">
       <td class="category-drag-cell"><span class="category-drag" draggable="${canWrite()}" title="Arraste para reordenar" aria-label="Reordenar ${esc(row.name)}">⠿</span></td>
       <td><div class="category-identity">${row.image_url ? `<img class="thumb" src="${esc(row.image_url)}" alt="">` : '<span class="category-thumb-placeholder" aria-hidden="true">▦</span>'}<span><b>${esc(row.name)}</b><small>${countLabel}</small></span></div></td>
+      <td><span class="product-category-chip">${esc(row.environments?.name || 'Sem ambiente')}</span></td>
       <td class="category-slug">${esc(row.slug)}</td>
       <td>${Number(row.sort_order || 0)}</td>
       <td><span class="badge ${row.active ? '' : 'off'}"><i aria-hidden="true"></i>${row.active ? 'Ativo' : 'Inativo'}</span></td>
@@ -1752,7 +1764,7 @@
   }
   async function renderCategories(revision) {
     const [categoryResult, productResult] = await Promise.all([
-      db.from('categories').select('*').order('sort_order').order('created_at', { ascending: false }),
+      db.from('categories').select('*,environments(name)').order('sort_order').order('created_at', { ascending: false }),
       db.from('products').select('category_id').is('deleted_at', null)
     ]);
     if (categoryResult.error) throw categoryResult.error;
@@ -1766,16 +1778,16 @@
     const active = rows.filter(row => row.active).length;
     const inactive = rows.length - active;
     $('#content').innerHTML = `<div class="category-metrics">
-      <article class="category-metric total"><span class="metric-icon" aria-hidden="true">▱</span><div><b>${rows.length}</b><small>Total de categorias</small></div></article>
-      <article class="category-metric active"><span class="metric-icon" aria-hidden="true">✓</span><div><b>${active}</b><small>Categorias ativas</small></div></article>
-      <article class="category-metric inactive"><span class="metric-icon" aria-hidden="true">−</span><div><b>${inactive}</b><small>Categorias inativas</small></div></article>
+      <article class="category-metric total"><span class="metric-icon" aria-hidden="true">▱</span><div><b>${rows.length}</b><small>Total de subcategorias</small></div></article>
+      <article class="category-metric active"><span class="metric-icon" aria-hidden="true">✓</span><div><b>${active}</b><small>Subcategorias ativas</small></div></article>
+      <article class="category-metric inactive"><span class="metric-icon" aria-hidden="true">−</span><div><b>${inactive}</b><small>Subcategorias inativas</small></div></article>
     </div>
-    <div class="category-toolbar card"><label class="category-search"><span aria-hidden="true">⌕</span><input id="searchList" type="search" placeholder="Pesquisar categoria ou identificação..."></label><label class="inline-filter"><span>Status:</span><select id="categoryStatus"><option value="">Todas</option><option value="true">Ativas</option><option value="false">Inativas</option></select></label><label class="inline-filter"><span>Ordenar por:</span><select id="categorySort"><option value="order">Posição no site</option><option value="name">Nome (A–Z)</option><option value="order-desc">Posição inversa</option></select></label><div class="category-view-toggle" role="group" aria-label="Modo de visualização"><button type="button" data-category-view-mode="list" aria-label="Visualização em lista">☷</button><button class="is-active" type="button" data-category-view-mode="grid" aria-label="Visualização em grade">▦</button></div></div>
-    <div class="card table-wrap category-table-card grid-mode" id="categoryTableCard">${rows.length ? `<table class="data-table category-table"><thead><tr><th>#</th><th>Categoria</th><th>Identificação</th><th>Posição</th><th>Status</th><th>Ações</th></tr></thead><tbody>${rows.map(row => categoryRow(row, productCounts.get(row.id) || 0)).join('')}</tbody></table>` : '<div class="empty"><h2>Nenhuma categoria cadastrada</h2><p>Comece adicionando a primeira categoria.</p></div>'}</div>
-    <div class="category-pagination card"><span id="categoryCount">Mostrando ${rows.length} de ${rows.length} categorias</span><div><button type="button" disabled aria-label="Página anterior">‹</button><button class="current" type="button" aria-current="page">1</button><button type="button" disabled aria-label="Próxima página">›</button><select aria-label="Itens por página"><option>20 por página</option></select></div></div>`;
+    <div class="category-toolbar card"><label class="category-search"><span aria-hidden="true">⌕</span><input id="searchList" type="search" placeholder="Pesquisar subcategoria ou ambiente..."></label><label class="inline-filter"><span>Ambiente:</span><select id="categoryEnvironment"><option value="">Todos</option>${[...new Map(rows.filter(row=>row.environment_id).map(row=>[row.environment_id,row.environments?.name||'Sem ambiente'])).entries()].map(([id,name])=>`<option value="${id}">${esc(name)}</option>`).join('')}</select></label><label class="inline-filter"><span>Status:</span><select id="categoryStatus"><option value="">Todas</option><option value="true">Ativas</option><option value="false">Inativas</option></select></label><label class="inline-filter"><span>Ordenar por:</span><select id="categorySort"><option value="order">Posição no ambiente</option><option value="name">Nome (A–Z)</option><option value="order-desc">Posição inversa</option></select></label><div class="category-view-toggle" role="group" aria-label="Modo de visualização"><button type="button" data-category-view-mode="list" aria-label="Visualização em lista">☷</button><button class="is-active" type="button" data-category-view-mode="grid" aria-label="Visualização em grade">▦</button></div></div>
+    <div class="card table-wrap category-table-card grid-mode" id="categoryTableCard">${rows.length ? `<table class="data-table category-table"><thead><tr><th>#</th><th>Subcategoria</th><th>Ambiente</th><th>Identificação</th><th>Posição</th><th>Status</th><th>Ações</th></tr></thead><tbody>${rows.map(row => categoryRow(row, productCounts.get(row.id) || 0)).join('')}</tbody></table>` : '<div class="empty"><h2>Nenhuma subcategoria cadastrada</h2><p>Comece adicionando a primeira subcategoria.</p></div>'}</div>
+    <div class="category-pagination card"><span id="categoryCount">Mostrando ${rows.length} de ${rows.length} subcategorias</span><div><button type="button" disabled aria-label="Página anterior">‹</button><button class="current" type="button" aria-current="page">1</button><button type="button" disabled aria-label="Próxima página">›</button><select aria-label="Itens por página"><option>20 por página</option></select></div></div>`;
     const pageAction = $('#pageAction');
     pageAction.hidden = false;
-    pageAction.textContent = '+  Nova categoria';
+    pageAction.textContent = '+  Nova subcategoria';
     pageAction.onclick = () => openEditor('categories');
 
     const rowFor = id => rows.find(row => String(row.id) === String(id));
@@ -1792,10 +1804,10 @@
     $$('[data-category-duplicate]').forEach(button => button.onclick = () => runAction(button, async () => {
       if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
       const record = rowFor(button.dataset.categoryDuplicate);
-      const copy = { name: `${record.name} — cópia`, slug: `${record.slug}-copia-${Date.now().toString().slice(-6)}`, description: record.description, image_url: record.image_url, sort_order: Number(record.sort_order || 0) + 1, active: false, show_on_homepage: record.show_on_homepage !== false, show_in_menu: record.show_in_menu !== false };
+      const copy = { environment_id: record.environment_id, name: `${record.name} — cópia`, slug: `${record.slug}-copia-${Date.now().toString().slice(-6)}`, description: record.description, search_keywords: record.search_keywords, image_url: record.image_url, sort_order: Number(record.sort_order || 0) + 1, active: false, show_on_homepage: record.show_on_homepage !== false, show_in_menu: record.show_in_menu !== false };
       const { error } = await db.from('categories').insert(copy);
       if (error) return toast(explain(error), 'error');
-      notifyStorefront('categories'); toast('Categoria duplicada como inativa.'); render('categories');
+      notifyStorefront('categories'); toast('Subcategoria duplicada como inativa.'); render('categories');
     }));
     $$('[data-category-delete]').forEach(button => button.onclick = () => runAction(button, async () => {
       const record = rowFor(button.dataset.categoryDelete);
@@ -1804,6 +1816,7 @@
 
     const applyCategoryFilters = () => {
       const term = $('#searchList').value.trim().toLowerCase();
+      const environmentId = $('#categoryEnvironment').value;
       const status = $('#categoryStatus').value;
       const sort = $('#categorySort').value;
       const body = $('.category-table tbody');
@@ -1816,13 +1829,14 @@
       elements.forEach(row => body.append(row));
       let visible = 0;
       elements.forEach(row => {
-        const matches = (!term || row.textContent.toLowerCase().includes(term)) && (!status || row.dataset.active === status);
+        const matches = (!term || row.textContent.toLowerCase().includes(term)) && (!environmentId || row.dataset.environmentId === environmentId) && (!status || row.dataset.active === status);
         row.hidden = !matches;
         if (matches) visible++;
       });
-      $('#categoryCount').textContent = `Mostrando ${visible} de ${rows.length} categorias`;
+      $('#categoryCount').textContent = `Mostrando ${visible} de ${rows.length} subcategorias`;
     };
     $('#searchList').addEventListener('input', applyCategoryFilters);
+    $('#categoryEnvironment').addEventListener('change', applyCategoryFilters);
     $('#categoryStatus').addEventListener('change', applyCategoryFilters);
     $('#categorySort').addEventListener('change', applyCategoryFilters);
     $$('[data-category-view-mode]').forEach(button => button.onclick = () => {
@@ -1846,13 +1860,14 @@
         if (!sourceId || sourceId === targetId) return;
         const source = rowFor(sourceId);
         const destination = rowFor(targetId);
+        if (String(source.environment_id) !== String(destination.environment_id)) return toast('Para mover uma subcategoria para outro ambiente, use a edição.', 'error');
         const results = await Promise.all([
           db.from('categories').update({ sort_order: destination.sort_order }).eq('id', source.id),
           db.from('categories').update({ sort_order: source.sort_order }).eq('id', destination.id)
         ]);
         const error = results.find(result => result.error)?.error;
         if (error) return toast(explain(error));
-        notifyStorefront('categories'); toast('Ordem das categorias atualizada.'); render('categories');
+        notifyStorefront('categories'); toast('Ordem das subcategorias atualizada.'); render('categories');
       });
     });
   }
@@ -2169,8 +2184,8 @@
   const productEditorSections = [
     { key: 'basic', label: 'Informações básicas', help: 'Nome, endereço do produto e classificação.', fields: [
       ['name', 'Nome do produto', 'text', true], ['slug', 'Slug / URL', 'slug', true],
-      ['category_id', 'Categoria', 'relation', true, 'categories'], ['sku', 'Código / SKU (opcional)', 'text'],
-      ['environment_id', 'Ambiente (opcional)', 'relation', false, 'environments'], ['brand_id', 'Marca (opcional)', 'relation', false, 'brands']
+      ['environment_id', 'Ambiente', 'relation', true, 'environments'], ['category_id', 'Subcategoria', 'relation', true, 'categories'],
+      ['sku', 'Código / SKU (opcional)', 'text'], ['brand_id', 'Marca (opcional)', 'relation', false, 'brands']
     ] },
     { key: 'price', label: 'Preço e condições', help: 'Preço normal, promoção e parcelamento.', fields: [
       ['price', 'Preço normal', 'number', true], ['promotional_price', 'Preço promocional (opcional)', 'number'],
@@ -2403,6 +2418,22 @@
     $('#dialogEyebrow').textContent = 'CATÁLOGO';
     $('#dialogTitle').textContent = record ? 'Editar produto' : 'Novo produto';
     $('#editorFields').innerHTML = await productEditorMarkup(editRecord);
+    const environmentSelect = $('[name="environment_id"]');
+    const categorySelect = $('[name="category_id"]');
+    if (environmentSelect && categorySelect) {
+      const categoryOptions = [...categorySelect.options].slice(1).map(option => ({ value: option.value, label: option.textContent, environmentId: option.dataset.environmentId || '' }));
+      const initialCategory = String(editRecord.category_id || '');
+      const syncSubcategories = reset => {
+        const environmentId = environmentSelect.value;
+        const selected = reset ? '' : (categorySelect.value || initialCategory);
+        const matching = categoryOptions.filter(option => String(option.environmentId) === String(environmentId));
+        categorySelect.innerHTML = `<option value="">${environmentId ? 'Selecione a subcategoria' : 'Selecione primeiro o ambiente'}</option>${matching.map(option => `<option value="${option.value}" data-environment-id="${option.environmentId}" ${String(option.value) === String(selected) ? 'selected' : ''}>${esc(option.label)}</option>`).join('')}`;
+        categorySelect.disabled = !environmentId;
+        categorySelect.setCustomValidity(environmentId && !matching.length ? 'Cadastre uma subcategoria ativa para este ambiente.' : '');
+      };
+      syncSubcategories(false);
+      environmentSelect.addEventListener('change', () => { syncSubcategories(true); setProductEditorDirty(); });
+    }
     $('#existingGallery')?.insertAdjacentHTML('afterend', '<div class="pending-gallery-heading"><b>Novas fotos</b><small>Prévia antes de salvar</small></div><div id="pendingGalleryPreview" class="multi-images pending-gallery-preview"></div>');
     renderPendingProductGallery();
     $('#editorForm>footer .editor-footer-spacer')?.insertAdjacentHTML('beforebegin', '<span id="productUnsavedStatus" class="product-unsaved-status" role="status">Sem alterações pendentes</span>');
