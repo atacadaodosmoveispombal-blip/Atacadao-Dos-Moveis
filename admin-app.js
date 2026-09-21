@@ -1415,28 +1415,29 @@
   }
   async function saveGeneric(event) {
     event.preventDefault();
-    if (!editorState || !event.currentTarget.reportValidity()) return;
+    const form = event.currentTarget;
+    if (!editorState || !form?.reportValidity()) return;
     const { view, config, record } = editorState;
     const button = $('#saveEditor');
     button.disabled = true;
     button.textContent = 'Salvando…';
     try {
-      const values = formValues(config.fields, event.currentTarget);
+      const values = formValues(config.fields, form);
       if (view === 'sections') {
         try { values.content = values.content_text ? JSON.parse(values.content_text) : {}; }
         catch { throw new Error('O conteúdo JSON da seção não é válido.'); }
         delete values.content_text;
       }
       for (const [key, , type] of config.fields) {
-        const file = type === 'file' ? event.currentTarget.elements[key]?.files?.[0] : null;
+        const file = type === 'file' ? form.elements[key]?.files?.[0] : null;
         if (file) values[key] = (await upload(config.bucket, file, view)).url;
       }
       const result = record
         ? await db.from(config.table).update(values).eq('id', record.id).select().single()
         : await db.from(config.table).insert(values).select().single();
       if (result.error) throw result.error;
-      await saveProductLinks(view, result.data.id, event.currentTarget);
-      if (config.fields.some(field => field[2] === 'multifile')) await saveGallery(result.data.id, event.currentTarget.elements.gallery, view);
+      await saveProductLinks(view, result.data.id, form);
+      if (config.fields.some(field => field[2] === 'multifile')) await saveGallery(result.data.id, form.elements.gallery, view);
       $('#editorDialog').close();
       notifyStorefront(config.table);
       toast(`${config.singular} salvo com sucesso.`);
@@ -1999,21 +2000,23 @@
   }
   async function saveProduct(event) {
     event.preventDefault();
-    if (!event.currentTarget.reportValidity()) return;
+    const form = event.currentTarget;
+    if (!form?.reportValidity()) return;
+    const record = editorState?.record || null;
     const button = $('#saveEditor');
     button.disabled = true;
     button.textContent = 'Salvando…';
     try {
-      const values = formValues(productFields.filter(field => !['section', 'benefits'].includes(field[0])), event.currentTarget);
+      const values = formValues(productFields.filter(field => !['section', 'benefits'].includes(field[0])), form);
       values.dimensions = values.dimensions_text ? { description: values.dimensions_text } : {};
       delete values.dimensions_text;
-      const ogFile = event.currentTarget.elements.og_image_url?.files?.[0];
+      const ogFile = form.elements.og_image_url?.files?.[0];
       if (ogFile) values.og_image_url = (await upload('products', ogFile, 'sharing')).url; else delete values.og_image_url;
-      const result = editorState.record
-        ? await db.from('products').update(values).eq('id', editorState.record.id).select().single()
+      const result = record
+        ? await db.from('products').update(values).eq('id', record.id).select().single()
         : await db.from('products').insert(values).select().single();
       if (result.error) throw result.error;
-      await saveGallery(result.data.id, event.currentTarget.elements.gallery, 'products');
+      await saveGallery(result.data.id, form.elements.gallery, 'products');
       notifyStorefront('products'); $('#editorDialog').close(); toast('Produto salvo e sincronizado com o catálogo.'); render('products');
     } catch (error) {
       if (error?.code === '42703' || /whatsapp_enabled|cart_enabled|free_city_shipping|free_assembly|is_campaign/i.test(error?.message || '')) toast('Execute a migration 20260920_product_commerce_cards.sql no Supabase antes de salvar estes campos.', 'error');
@@ -2292,14 +2295,15 @@
     $('#settingsForm').onsubmit = async event => {
       event.preventDefault();
       if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
-      const submit = event.currentTarget.querySelector('[type="submit"]');
+      const form = event.currentTarget;
+      const submit = form.querySelector('[type="submit"]');
       if (submit.disabled) return;
       submit.disabled = true;
       submit.classList.add('is-loading');
       try {
-        const values = formValues(group.fields, event.currentTarget);
+        const values = formValues(group.fields, form);
         for (const [key, , type] of group.fields) if (type === 'file') {
-          const file = event.currentTarget.elements[key].files?.[0];
+          const file = form.elements[key].files?.[0];
           if (file) values[key] = (await upload('site', file, view)).url; else delete values[key];
         }
         const { error: saveError } = await db.from('store_settings').update(values).eq('id', true);
