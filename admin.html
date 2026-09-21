@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>ADM · Atacarejo dos Móveis</title>
   <link rel="icon" href="assets/logo.png">
-  <link rel="stylesheet" href="admin.css?v=banner-library-4">
+  <link rel="stylesheet" href="admin.css?v=action-menu-1">
   <script defer src="assets/supabase-2.116.0.js"></script>
-  <script defer src="admin-app.js?v=banner-library-4"></script>
+  <script defer src="admin-app.js?v=action-menu-1"></script>
 </head>
 <body>
   <section id="login" class="login card" aria-labelledby="loginTitle">
@@ -77,11 +77,25 @@
     </main>
   </div>
   <div id="toast" role="status" aria-live="polite"></div>
+  <button id="actionMenuBackdrop" class="action-menu-backdrop" type="button" aria-label="Fechar menu de ações" hidden></button>
   <dialog id="editorDialog" aria-labelledby="dialogTitle">
     <form id="editorForm">
       <header><div><small id="dialogEyebrow">CADASTRO</small><h2 id="dialogTitle">Editar</h2></div><button type="button" class="icon-close" data-close aria-label="Fechar">×</button></header>
       <div id="editorFields" class="form-grid"></div>
       <footer><span class="editor-footer-spacer"></span><button type="button" class="secondary" data-close>Cancelar</button><button id="saveDraftCategory" type="button" class="secondary" hidden>Salvar rascunho</button><button id="viewBannerSite" type="button" class="secondary" hidden>Visualizar no site</button><button id="saveEditor" type="submit">Salvar alterações</button></footer>
+    </form>
+  </dialog>
+  <dialog id="confirmDialog" class="confirm-dialog" aria-labelledby="confirmTitle" aria-describedby="confirmMessage">
+    <form method="dialog">
+      <div class="confirm-dialog-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M12 9v4m0 4h.01"/><path d="M10.3 4.1 2.6 18a2 2 0 0 0 1.8 3h15.2a2 2 0 0 0 1.8-3L13.7 4.1a2 2 0 0 0-3.4 0Z"/></svg>
+      </div>
+      <h2 id="confirmTitle">Confirmar ação</h2>
+      <p id="confirmMessage">Revise antes de continuar.</p>
+      <footer>
+        <button id="confirmCancel" class="secondary" type="submit" value="cancel">Cancelar</button>
+        <button id="confirmAccept" class="confirm-accept" type="submit" value="confirm">Confirmar</button>
+      </footer>
     </form>
   </dialog>
 </body>

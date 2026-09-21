@@ -56,12 +56,142 @@
       edit: '<path d="M4 20l4.2-1 10.5-10.5a2.1 2.1 0 0 0-3-3L5.2 16 4 20Z"/><path d="m14.5 6.8 3 3"/>',
       copy: '<rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
       trash: '<path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5"/>',
+      pause: '<circle cx="12" cy="12" r="9"/><path d="M10 9v6m4-6v6"/>',
+      play: '<circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4V8Z"/>',
+      save: '<path d="M5 4h12l2 2v14H5V4Z"/><path d="M8 4v6h8V4M8 20v-6h8v6"/>',
+      more: '<circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none"/>',
+      check: '<path d="m5 12 4 4L19 6"/>',
+      close: '<path d="m6 6 12 12M18 6 6 18"/>',
+      info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10h.01"/>',
       filter: '<path d="M4 5h16l-6.5 7.2V19l-3 1v-7.8L4 5Z"/>',
       list: '<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="5" cy="6" r="1"/><circle cx="5" cy="12" r="1"/><circle cx="5" cy="18" r="1"/>',
       grid: '<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/>'
     };
     return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || ''}</svg>`;
   };
+  const actionAttributes = attributes => Object.entries(attributes || {}).map(([name, value]) => ` ${name}="${esc(value)}"`).join('');
+  function ActionMenu({ id, label, primary, actions = [] }) {
+    const safeId = esc(id);
+    const primaryMarkup = primary ? `<button class="action-menu-primary" type="button" aria-label="${esc(primary.ariaLabel || `${primary.label} ${label}`)}" title="${esc(primary.label)}"${actionAttributes(primary.attributes)}>${actionIcon(primary.icon || 'edit')}<span>${esc(primary.label)}</span></button>` : '';
+    const menuActions = actions.map(action => {
+      if (action.separator) return '<span class="action-menu-separator" role="separator"></span>';
+      return `<button class="action-menu-item ${action.danger ? 'is-danger' : ''}" type="button" role="menuitem" tabindex="-1"${actionAttributes(action.attributes)}>${actionIcon(action.icon)}<span>${esc(action.label)}</span></button>`;
+    }).join('');
+    if (!menuActions) return `<div class="action-menu is-single" data-action-menu-root="${safeId}">${primaryMarkup}</div>`;
+    return `<div class="action-menu" data-action-menu-root="${safeId}">${primaryMarkup}<button class="action-menu-trigger" type="button" data-action-menu-trigger="${safeId}" aria-label="Mais ações para ${esc(label)}" aria-haspopup="menu" aria-expanded="false" title="Mais ações">${actionIcon('more')}</button><div class="action-menu-popover" data-action-menu-popover="${safeId}" role="menu" aria-label="Ações de ${esc(label)}" hidden>${menuActions}<button class="action-menu-cancel" type="button" data-action-menu-close>Cancelar</button></div></div>`;
+  }
+  let activeActionTrigger = null;
+  function closeActionMenus({ restoreFocus = false } = {}) {
+    $$('.action-menu-popover:not([hidden])').forEach(menu => {
+      menu.hidden = true;
+      menu.classList.remove('is-sheet');
+      menu.removeAttribute('style');
+    });
+    $$('[data-action-menu-trigger][aria-expanded="true"]').forEach(button => button.setAttribute('aria-expanded', 'false'));
+    $('#actionMenuBackdrop').hidden = true;
+    document.body.classList.remove('action-menu-open');
+    if (restoreFocus) activeActionTrigger?.focus();
+    activeActionTrigger = null;
+  }
+  function positionActionMenu(trigger, menu) {
+    const mobile = window.matchMedia('(max-width: 620px)').matches;
+    menu.hidden = false;
+    activeActionTrigger = trigger;
+    trigger.setAttribute('aria-expanded', 'true');
+    if (mobile) {
+      menu.classList.add('is-sheet');
+      $('#actionMenuBackdrop').hidden = false;
+      document.body.classList.add('action-menu-open');
+      return;
+    }
+    const rect = trigger.getBoundingClientRect();
+    const width = Math.min(224, window.innerWidth - 24);
+    menu.style.width = `${width}px`;
+    const height = menu.offsetHeight;
+    const left = Math.max(12, Math.min(rect.right - width, window.innerWidth - width - 12));
+    const below = window.innerHeight - rect.bottom >= height + 12;
+    const top = below ? rect.bottom + 7 : Math.max(12, rect.top - height - 7);
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+  }
+  function bindActionMenus(root = document) {
+    $$('[data-action-menu-trigger]', root).forEach(trigger => {
+      if (trigger.dataset.actionMenuBound) return;
+      trigger.dataset.actionMenuBound = 'true';
+      trigger.addEventListener('click', event => {
+        event.stopPropagation();
+        const menu = document.querySelector(`[data-action-menu-popover="${CSS.escape(trigger.dataset.actionMenuTrigger)}"]`);
+        const opening = menu?.hidden;
+        closeActionMenus();
+        if (opening && menu) positionActionMenu(trigger, menu);
+      });
+      trigger.addEventListener('keydown', event => {
+        if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+        event.preventDefault();
+        trigger.click();
+        const items = $$('[role="menuitem"]', document.querySelector(`[data-action-menu-popover="${CSS.escape(trigger.dataset.actionMenuTrigger)}"]`));
+        (event.key === 'ArrowUp' ? items.at(-1) : items[0])?.focus();
+      });
+    });
+    $$('.action-menu-popover', root).forEach(menu => {
+      if (menu.dataset.actionMenuBound) return;
+      menu.dataset.actionMenuBound = 'true';
+      menu.addEventListener('click', event => {
+        event.stopPropagation();
+        if (event.target.closest('[data-action-menu-close]')) closeActionMenus({ restoreFocus: true });
+        else if (event.target.closest('[role="menuitem"]')) requestAnimationFrame(() => closeActionMenus());
+      });
+      menu.addEventListener('keydown', event => {
+        const items = $$('[role="menuitem"]', menu).filter(item => !item.disabled);
+        const index = items.indexOf(document.activeElement);
+        if (event.key === 'Escape') { event.preventDefault(); closeActionMenus({ restoreFocus: true }); return; }
+        if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || !items.length) return;
+        event.preventDefault();
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : event.key === 'ArrowDown' ? (index + 1) % items.length : (index - 1 + items.length) % items.length;
+        items[next].focus();
+      });
+    });
+    const backdrop = $('#actionMenuBackdrop');
+    if (!backdrop.dataset.actionMenuBound) {
+      backdrop.dataset.actionMenuBound = 'true';
+      backdrop.addEventListener('click', () => closeActionMenus({ restoreFocus: true }));
+    }
+  }
+  async function runAction(button, operation) {
+    if (!button || button.dataset.processing === 'true') return;
+    const root = button.closest('.action-menu') || button.parentElement;
+    const controls = $$('button', root);
+    button.dataset.processing = 'true';
+    button.classList.add('is-loading');
+    button.setAttribute('aria-busy', 'true');
+    controls.forEach(control => { control.disabled = true; });
+    try { await operation(); }
+    catch (error) { toast(explain(error), 'error'); }
+    finally {
+      if (button.isConnected) {
+        delete button.dataset.processing;
+        button.classList.remove('is-loading');
+        button.removeAttribute('aria-busy');
+        controls.forEach(control => { control.disabled = false; });
+      }
+    }
+  }
+  function confirmAction({ title = 'Confirmar ação?', message = 'Revise antes de continuar.', confirmLabel = 'Confirmar', tone = 'default' } = {}) {
+    const dialog = $('#confirmDialog');
+    if (dialog.open) dialog.close('cancel');
+    $('#confirmTitle').textContent = title;
+    $('#confirmMessage').textContent = message;
+    const accept = $('#confirmAccept');
+    accept.textContent = confirmLabel;
+    accept.classList.toggle('is-danger', tone === 'danger');
+    dialog.returnValue = 'cancel';
+    return new Promise(resolve => {
+      dialog.addEventListener('close', () => resolve(dialog.returnValue === 'confirm'), { once: true });
+      dialog.addEventListener('cancel', () => { dialog.returnValue = 'cancel'; }, { once: true });
+      dialog.showModal();
+      requestAnimationFrame(() => $('#confirmCancel').focus());
+    });
+  }
   const dashboardIcon = name => {
     const paths = {
       products: '<path d="m5 7 7-4 7 4v10l-7 4-7-4V7Z"/><path d="m5 7 7 4 7-4M12 11v10"/>',
@@ -175,11 +305,14 @@
     const { error } = await db.auth.signOut({ scope: 'local' });
     showLogin(error ? explain(error) : 'Você saiu do painel.', Boolean(error));
   }
-  function toast(text) {
+  function toast(text, type = 'success') {
     clearTimeout(toastTimer);
-    $('#toast').textContent = text;
-    $('#toast').classList.add('show');
-    toastTimer = setTimeout(() => $('#toast').classList.remove('show'), 3500);
+    const element = $('#toast');
+    if (type === 'success' && /erro|falha|não foi possível|incorret|permissão|execute a migration/i.test(String(text))) type = 'error';
+    element.dataset.type = type;
+    element.innerHTML = `${actionIcon(type === 'error' ? 'close' : type === 'info' ? 'info' : 'check')}<span>${esc(text)}</span>`;
+    element.classList.add('show');
+    toastTimer = setTimeout(() => element.classList.remove('show'), 3500);
   }
   function notifyStorefront(entity = 'content') {
     const detail = { entity, changedAt: Date.now() };
@@ -424,12 +557,12 @@
     $('#saveDraftCategory').onclick = () => { editorState.saveMode = 'draft'; $('#editorForm').requestSubmit(); };
     $('#viewCategoryProducts')?.addEventListener('click', () => { productViewState.category = record.name; $('#editorDialog').close(); render('products'); });
     $('#addCategoryProduct')?.addEventListener('click', async () => { $('#editorDialog').close(); await productEditor(); $('[name="category_id"]').value = record.id; });
-    $('#deleteCategoryFromEditor')?.addEventListener('click', async () => {
-      if (!confirm(`Excluir a categoria “${record.name}”? Os produtos vinculados ficarão sem categoria.`)) return;
+    $('#deleteCategoryFromEditor')?.addEventListener('click', event => runAction(event.currentTarget, async () => {
+      if (!await confirmAction({ title: 'Excluir esta categoria?', message: `“${record.name}” será excluída e os produtos vinculados ficarão sem categoria. Esta ação não poderá ser desfeita.`, confirmLabel: 'Excluir', tone: 'danger' })) return;
       const { error } = await db.from('categories').delete().eq('id', record.id);
-      if (error) return toast(explain(error));
-      notifyStorefront('categories'); $('#editorDialog').close(); toast('Categoria excluída.'); render('categories');
-    });
+      if (error) return toast(explain(error), 'error');
+      notifyStorefront('categories'); $('#editorDialog').close(); toast('Categoria excluída com sucesso.'); render('categories');
+    }));
     syncCategoryPreview();
     $('#editorDialog').showModal();
   }
@@ -862,8 +995,8 @@
       duration = { startAt: startAt.toISOString(), endAt: endAt.toISOString() };
     } else duration = state.duration === 'custom' ? { startAt: state.record?.start_at || null, endAt: state.record?.end_at || null } : quickDurationRange(state.duration);
     const image = quickImage(state, products);
-    const actionLabel = state.publishMode === 'schedule' ? `Agendar “${state.title}”?\n\n${dateTime(duration.startAt)} → ${dateTime(duration.endAt)}` : `Publicar “${state.title}” agora?`;
-    if (!asDraft && !confirm(`${actionLabel}\n\n${products.length} produto(s) · ${quickPositionLabel(position)}`)) return;
+    const actionLabel = state.publishMode === 'schedule' ? `Agendar “${state.title}”?` : `Publicar “${state.title}” agora?`;
+    if (!asDraft && !await confirmAction({ title: actionLabel, message: `${state.publishMode === 'schedule' ? `${dateTime(duration.startAt)} → ${dateTime(duration.endAt)} · ` : ''}${products.length} produto(s) · ${quickPositionLabel(position)}`, confirmLabel: state.publishMode === 'schedule' ? 'Agendar' : 'Publicar' })) return;
     const actionButtons = $$('.quick-actions button'); actionButtons.forEach(button => { button.disabled = true; });
     let rollbackPromotionId = null;
     try {
@@ -1101,7 +1234,7 @@
       if (saveMode === 'publish') {
         const categoryName = editorState.categories.find(item => String(item.id) === String(categoryId))?.name || 'Todas as categorias';
         const summary = `${form.elements.title.value.trim()}\n\n${selectedProductIds.length} produto(s) selecionado(s)\n${categoryName}\n${startAt ? dateTime(startAt) : 'Publicar agora'} → ${endAt ? dateTime(endAt) : 'sem data final'}`;
-        if (!confirm(`Confirmar publicação?\n\n${summary}`)) { button.disabled = false; button.textContent = 'Salvar e publicar'; return; }
+        if (!await confirmAction({ title: 'Confirmar publicação?', message: summary, confirmLabel: 'Salvar e publicar' })) { button.disabled = false; button.textContent = 'Salvar e publicar'; return; }
       }
       const values = {
         title: form.elements.title.value.trim(), subtitle: form.elements.subtitle.value.trim() || null,
@@ -1227,18 +1360,18 @@
       if (moveError) return toast(explain(moveError));
       notifyStorefront(table); await loadGallery(parentId, table, foreignKey);
     });
-    $$('[data-image-delete]', root).forEach(button => button.onclick = async () => {
-      if (!confirm('Remover esta imagem?')) return;
+    $$('[data-image-delete]', root).forEach(button => button.onclick = () => runAction(button, async () => {
+      if (!await confirmAction({ title: 'Remover esta imagem?', message: 'A imagem será removida deste item. Esta ação não poderá ser desfeita.', confirmLabel: 'Remover', tone: 'danger' })) return;
       const item = (data || []).find(image => image.id === button.dataset.imageDelete);
       const { error: deleteError } = await db.from(table).delete().eq('id', button.dataset.imageDelete);
-      if (deleteError) return toast(explain(deleteError));
+      if (deleteError) return toast(explain(deleteError), 'error');
       if (item?.storage_path && /\/storage\/v1\/object\//.test(item.image_url || '')) await db.storage.from(bucket).remove([item.storage_path]);
       if (productGallery && item?.is_cover) {
         const { data: next } = await db.from(table).select('id').eq(foreignKey, parentId).order('sort_order').limit(1).maybeSingle();
         if (next) await db.from(table).update({ is_cover: true }).eq('id', next.id);
       }
       notifyStorefront(table); toast('Imagem removida.'); await loadGallery(parentId, table, foreignKey);
-    });
+    }));
   }
   async function upload(bucket, file, folder = '') {
     const extension = (file.name.split('.').pop() || 'jpg').toLowerCase();
@@ -1362,13 +1495,26 @@
   }
   function categoryRow(row, productCount) {
     const countLabel = `${productCount} produto${productCount === 1 ? '' : 's'}`;
+    const actions = ActionMenu({
+      id: `category-${row.id}`,
+      label: row.name,
+      primary: { label: 'Editar', icon: 'edit', attributes: { 'data-category-edit': row.id } },
+      actions: [
+        { label: 'Visualizar', icon: 'view', attributes: { 'data-category-view': row.id } },
+        { label: 'Editar', icon: 'edit', attributes: { 'data-category-edit': row.id } },
+        { label: 'Duplicar', icon: 'copy', attributes: { 'data-category-duplicate': row.id } },
+        { label: row.active ? 'Desativar' : 'Ativar', icon: row.active ? 'pause' : 'play', attributes: { 'data-category-toggle': row.id } },
+        { separator: true },
+        { label: 'Excluir', icon: 'trash', danger: true, attributes: { 'data-category-delete': row.id } }
+      ]
+    });
     return `<tr data-category-id="${row.id}" data-name="${esc(row.name.toLowerCase())}" data-active="${row.active}" data-order="${Number(row.sort_order || 0)}">
       <td class="category-drag-cell"><span class="category-drag" draggable="${canWrite()}" title="Arraste para reordenar" aria-label="Reordenar ${esc(row.name)}">⠿</span></td>
       <td><div class="category-identity">${row.image_url ? `<img class="thumb" src="${esc(row.image_url)}" alt="">` : '<span class="category-thumb-placeholder" aria-hidden="true">▦</span>'}<span><b>${esc(row.name)}</b><small>${countLabel}</small></span></div></td>
       <td class="category-slug">${esc(row.slug)}</td>
       <td>${Number(row.sort_order || 0)}</td>
       <td><span class="badge ${row.active ? '' : 'off'}"><i aria-hidden="true"></i>${row.active ? 'Ativo' : 'Inativo'}</span></td>
-      <td class="category-actions"><button class="category-edit" type="button" data-category-edit="${row.id}"><span aria-hidden="true">⌕</span> Editar</button><div class="category-more-wrap"><button class="category-more" type="button" data-category-menu="${row.id}" aria-label="Mais ações para ${esc(row.name)}" aria-expanded="false">•••</button><div class="category-action-menu" data-category-action-menu="${row.id}" hidden><button type="button" data-category-view="${row.id}">◉ <span>Visualizar</span></button><button type="button" data-category-duplicate="${row.id}">▣ <span>Duplicar</span></button><button type="button" data-category-toggle="${row.id}">◫ <span>${row.active ? 'Desativar' : 'Ativar'}</span></button><button class="danger-link" type="button" data-category-delete="${row.id}">♲ <span>Excluir</span></button></div></div></td>
+      <td class="category-actions action-cell">${actions}</td>
     </tr>`;
   }
   async function renderCategories(revision) {
@@ -1400,42 +1546,32 @@
     pageAction.onclick = () => openEditor('categories');
 
     const rowFor = id => rows.find(row => String(row.id) === String(id));
-    const closeMenus = () => {
-      $$('.category-action-menu').forEach(menu => { menu.hidden = true; });
-      $$('[data-category-menu]').forEach(button => button.setAttribute('aria-expanded', 'false'));
-    };
-    $$('[data-category-menu]').forEach(button => button.onclick = event => {
-      event.stopPropagation();
-      const menu = $(`[data-category-action-menu="${button.dataset.categoryMenu}"]`);
-      const opening = menu.hidden;
-      closeMenus();
-      menu.hidden = !opening;
-      button.setAttribute('aria-expanded', String(opening));
-    });
-    $$('.category-action-menu').forEach(menu => menu.onclick = event => event.stopPropagation());
     $$('[data-category-edit], [data-category-view]').forEach(button => button.onclick = () => openEditor('categories', rowFor(button.dataset.categoryEdit || button.dataset.categoryView)));
-    $$('[data-category-toggle]').forEach(button => button.onclick = async () => {
-      if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.');
+    $$('[data-category-toggle]').forEach(button => button.onclick = () => runAction(button, async () => {
+      if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
       const record = rowFor(button.dataset.categoryToggle);
+      const verb = record.active ? 'desativar' : 'ativar';
+      if (!await confirmAction({ title: `${record.active ? 'Desativar' : 'Ativar'} esta categoria?`, message: `A categoria “${record.name}” será ${verb === 'desativar' ? 'ocultada da loja' : 'publicada novamente na loja'}.`, confirmLabel: record.active ? 'Desativar' : 'Ativar' })) return;
       const { error } = await db.from('categories').update({ active: !record.active }).eq('id', record.id);
-      if (error) return toast(explain(error));
+      if (error) return toast(explain(error), 'error');
       notifyStorefront('categories'); toast(record.active ? 'Categoria desativada.' : 'Categoria ativada.'); render('categories');
-    });
-    $$('[data-category-duplicate]').forEach(button => button.onclick = async () => {
-      if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.');
+    }));
+    $$('[data-category-duplicate]').forEach(button => button.onclick = () => runAction(button, async () => {
+      if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
       const record = rowFor(button.dataset.categoryDuplicate);
       const copy = { name: `${record.name} — cópia`, slug: `${record.slug}-copia-${Date.now().toString().slice(-6)}`, description: record.description, image_url: record.image_url, sort_order: Number(record.sort_order || 0) + 1, active: false, show_on_homepage: record.show_on_homepage !== false, show_in_menu: record.show_in_menu !== false };
       const { error } = await db.from('categories').insert(copy);
-      if (error) return toast(explain(error));
+      if (error) return toast(explain(error), 'error');
       notifyStorefront('categories'); toast('Categoria duplicada como inativa.'); render('categories');
-    });
-    $$('[data-category-delete]').forEach(button => button.onclick = async () => {
+    }));
+    $$('[data-category-delete]').forEach(button => button.onclick = () => runAction(button, async () => {
       const record = rowFor(button.dataset.categoryDelete);
-      if (!canWrite() || !confirm(`Excluir a categoria “${record.name}”? Os produtos vinculados ficarão sem categoria.`)) return;
+      if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
+      if (!await confirmAction({ title: 'Excluir esta categoria?', message: `“${record.name}” será excluída e os produtos vinculados ficarão sem categoria. Esta ação não poderá ser desfeita.`, confirmLabel: 'Excluir', tone: 'danger' })) return;
       const { error } = await db.from('categories').delete().eq('id', record.id);
-      if (error) return toast(explain(error));
-      notifyStorefront('categories'); toast('Categoria excluída.'); render('categories');
-    });
+      if (error) return toast(explain(error), 'error');
+      notifyStorefront('categories'); toast('Categoria excluída com sucesso.'); render('categories');
+    }));
 
     const applyCategoryFilters = () => {
       const term = $('#searchList').value.trim().toLowerCase();
@@ -1499,11 +1635,24 @@
     const campaignType = campaignTypes[row.campaign_type] || (row.position === 'home_hero' ? 'Institucional' : 'Banner personalizado');
     const contentLabel = row.auto_include_category ? 'Todos os produtos da categoria' : productCount ? `${productCount} produto${productCount === 1 ? '' : 's'} selecionado${productCount === 1 ? '' : 's'}` : row.content_mode === 'products' ? 'Seção automática de produtos' : 'Apenas conteúdo visual';
     const period = status.key === 'scheduled' ? status.detail : (!row.start_at && !row.end_at ? 'Sempre ativo' : `${row.start_at ? dateTime(row.start_at) : 'Agora'} → ${row.end_at ? dateTime(row.end_at) : 'Sem término'}`);
+    const actions = ActionMenu({
+      id: `banner-${row.id}`,
+      label: row.title,
+      primary: { label: 'Editar', icon: 'edit', attributes: { 'data-banner-edit': row.id } },
+      actions: [
+        { label: 'Visualizar', icon: 'view', attributes: { 'data-banner-preview': row.id } },
+        { label: 'Editar', icon: 'edit', attributes: { 'data-banner-edit': row.id } },
+        { label: 'Duplicar', icon: 'copy', attributes: { 'data-banner-duplicate': row.id } },
+        { label: row.paused || !row.active ? 'Ativar' : 'Desativar', icon: row.paused || !row.active ? 'play' : 'pause', attributes: { 'data-banner-toggle': row.id } },
+        { separator: true },
+        { label: 'Excluir', icon: 'trash', danger: true, attributes: { 'data-banner-delete': row.id } }
+      ]
+    });
     return `<article class="banner-card" data-banner-id="${row.id}" data-position="${esc(row.position)}" data-campaign="${esc(row.campaign_type || 'custom')}" data-status="${status.key}" data-title="${esc(String(row.title || '').toLowerCase())}" data-order="${Number(row.sort_order || 0)}">
       <div class="banner-card-preview" ${image ? `style="background-image:linear-gradient(90deg,rgba(3,31,78,.74),rgba(3,31,78,.08)),url(&quot;${esc(image)}&quot;)"` : ''}><span class="banner-order-handle" draggable="${canWrite()}" title="Arraste para mudar a ordem" aria-label="Reordenar ${esc(row.title)}">⠿</span><div><small>${esc(bannerPositionShort[row.position] || row.position)}</small><strong>${esc(row.title)}</strong><p>${esc(row.subtitle || '')}</p>${row.button_text ? `<em>${esc(row.button_text)} →</em>` : ''}</div></div>
       <div class="banner-card-body"><div class="banner-card-heading"><div><h3>${esc(row.title)}</h3><p>${esc(bannerPositionLabels[row.position] || 'Área personalizada do site')}</p></div><span class="banner-status ${status.key}"><i></i>${esc(status.label)}</span></div>
       <dl><div><dt>Tipo</dt><dd>${esc(campaignType)}</dd></div><div><dt>Período</dt><dd>${esc(period)}</dd></div><div><dt>Conteúdo</dt><dd>${esc(contentLabel)}</dd></div><div><dt>Destino</dt><dd><b>${esc(destination.type)}</b><span title="${esc(destination.label)}">${esc(destination.label)}</span></dd></div></dl>
-      <div class="banner-card-actions"><button type="button" class="secondary" data-banner-preview="${row.id}">◉ Visualizar</button><button type="button" data-banner-edit="${row.id}">✎ Editar</button><button type="button" class="secondary" data-banner-duplicate="${row.id}">▣ Duplicar</button><button type="button" class="secondary" data-banner-toggle="${row.id}">${row.paused || !row.active ? '✓ Retomar' : 'Ⅱ Pausar'}</button><div class="banner-menu-wrap"><button type="button" class="banner-more" data-banner-menu="${row.id}" aria-label="Mais opções para ${esc(row.title)}" aria-expanded="false">•••</button><div class="banner-action-menu" data-banner-action-menu="${row.id}" hidden><button type="button" data-banner-edit="${row.id}">↕ Alterar posição</button><button type="button" data-banner-duplicate="${row.id}">▣ Copiar campanha</button><button type="button" class="danger-link" data-banner-delete="${row.id}">♲ Excluir</button></div></div></div></div>
+      <div class="banner-card-actions action-cell">${actions}</div></div>
     </article>`;
   }
   async function renderBanners(revision) {
@@ -1565,14 +1714,12 @@
     pageAction.textContent = '+  Modelos prontos';
     pageAction.onclick = () => openQuickCampaign();
     const rowFor = id => rows.find(row => String(row.id) === String(id));
-    const closeMenus = () => { $$('.banner-action-menu').forEach(menu => { menu.hidden = true; }); $$('[data-banner-menu]').forEach(button => button.setAttribute('aria-expanded', 'false')); };
-    $$('[data-banner-menu]').forEach(button => button.onclick = event => { event.stopPropagation(); const menu = $(`[data-banner-action-menu="${button.dataset.bannerMenu}"]`); const opening = menu.hidden; closeMenus(); menu.hidden = !opening; button.setAttribute('aria-expanded', String(opening)); });
     $$('[data-banner-edit]').forEach(button => button.onclick = () => openQuickCampaign(rowFor(button.dataset.bannerEdit)));
     $$('[data-quick-suggestion]').forEach(button => button.onclick = () => openQuickCampaign(null, button.dataset.quickSuggestion, true));
     $$('[data-banner-preview]').forEach(button => button.onclick = () => { const row = rowFor(button.dataset.bannerPreview); const url = row?.image_desktop_url || row?.image_mobile_url; if (url) window.open(url, '_blank', 'noopener'); else toast('Este banner ainda não possui imagem.'); });
-    $$('[data-banner-duplicate]').forEach(button => button.onclick = async () => {
+    $$('[data-banner-duplicate]').forEach(button => button.onclick = () => runAction(button, async () => {
       const source = rowFor(button.dataset.bannerDuplicate);
-      if (!source || !canWrite()) return;
+      if (!source || !canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
       let promotionId = null;
       if (source.promotion_id) {
         const { data: promotionSource } = await db.from('promotions').select('*').eq('id', source.promotion_id).maybeSingle();
@@ -1583,7 +1730,7 @@
           promotionCopy.start_at = null;
           promotionCopy.end_at = null;
           const { data: newPromotion, error: promotionError } = await db.from('promotions').insert(promotionCopy).select().single();
-          if (promotionError) return toast(explain(promotionError));
+          if (promotionError) return toast(explain(promotionError), 'error');
           promotionId = newPromotion.id;
           const { data: links } = await db.from('promotion_products').select('product_id').eq('promotion_id', source.promotion_id);
           if (links?.length) await db.from('promotion_products').insert(links.map(item => ({ promotion_id: promotionId, product_id: item.product_id })));
@@ -1593,26 +1740,28 @@
       const copy = { title: `${source.title} — cópia`, active: false, draft: true, paused: false, start_at: null, end_at: null, sort_order: Number(source.sort_order || 0) + 1, promotion_id: promotionId };
       keys.forEach(key => { if (key in source) copy[key] = source[key]; });
       const { error: duplicateError } = await db.from('banners').insert(copy);
-      if (duplicateError) { if (promotionId) await db.from('promotions').delete().eq('id', promotionId); return toast(explain(duplicateError)); }
+      if (duplicateError) { if (promotionId) await db.from('promotions').delete().eq('id', promotionId); return toast(explain(duplicateError), 'error'); }
       notifyStorefront('banners'); toast('Campanha duplicada como rascunho.'); render('banners');
-    });
-    $$('[data-banner-toggle]').forEach(button => button.onclick = async () => {
+    }));
+    $$('[data-banner-toggle]').forEach(button => button.onclick = () => runAction(button, async () => {
       const source = rowFor(button.dataset.bannerToggle);
-      if (!source || !canWrite()) return;
+      if (!source || !canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
       const resume = source.paused || !source.active;
+      if (!await confirmAction({ title: `${resume ? 'Ativar' : 'Desativar'} esta campanha?`, message: `A campanha “${source.title}” será ${resume ? 'publicada novamente na loja' : 'retirada da loja até ser reativada'}.`, confirmLabel: resume ? 'Ativar' : 'Desativar' })) return;
       const { error: toggleError } = await db.from('banners').update({ active: resume, paused: !resume, draft: false }).eq('id', source.id);
-      if (toggleError) return toast(explain(toggleError));
+      if (toggleError) return toast(explain(toggleError), 'error');
       if (source.promotion_id) await db.from('promotions').update({ active: resume }).eq('id', source.promotion_id);
-      notifyStorefront('banners'); toast(resume ? 'Campanha retomada.' : 'Campanha pausada.'); render('banners');
-    });
-    $$('[data-banner-delete]').forEach(button => button.onclick = async () => {
+      notifyStorefront('banners'); toast(resume ? 'Banner ativado.' : 'Banner desativado.'); render('banners');
+    }));
+    $$('[data-banner-delete]').forEach(button => button.onclick = () => runAction(button, async () => {
       const source = rowFor(button.dataset.bannerDelete);
-      if (!source || !canWrite() || !confirm(`Excluir o banner “${source.title}”? A ação ficará registrada na auditoria.`)) return;
+      if (!source || !canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
+      if (!await confirmAction({ title: 'Excluir este banner?', message: `“${source.title}” será excluído. Esta ação não poderá ser desfeita e ficará registrada na auditoria.`, confirmLabel: 'Excluir', tone: 'danger' })) return;
       const { error: deleteError } = await db.from('banners').delete().eq('id', source.id);
-      if (deleteError) return toast(explain(deleteError));
+      if (deleteError) return toast(explain(deleteError), 'error');
       if (source.promotion_id) await db.from('promotions').delete().eq('id', source.promotion_id);
-      notifyStorefront('banners'); toast('Campanha excluída. Os produtos permaneceram intactos.'); render('banners');
-    });
+      notifyStorefront('banners'); toast('Banner excluído com sucesso. Os produtos permaneceram intactos.'); render('banners');
+    }));
     let activeFilter = 'all';
     const applyFilters = () => {
       const term = $('#searchList').value.trim().toLowerCase();
@@ -1686,15 +1835,16 @@
     $('#content').innerHTML = `<div class="toolbar"><input id="searchList" placeholder="Pesquisar ${config.plural}…"><button class="primary-action" data-new>+ Novo ${config.singular.toLowerCase()}</button></div><div class="card table-wrap">${rows.length ? `<table class="data-table"><thead><tr><th>${config.singular}</th><th>Identificação</th><th>Ordem / período</th><th>Status</th><th>Ações</th></tr></thead><tbody>${rows.map(row => simpleRow(config, row)).join('')}</tbody></table>` : `<div class="empty"><h2>Nenhum registro cadastrado</h2><p>Comece adicionando ${config.singular.toLowerCase()}.</p><button data-new>+ Novo ${config.singular.toLowerCase()}</button></div>`}</div>`;
     $$('[data-new]').forEach(button => button.onclick = () => openEditor(view));
     $$('[data-edit]').forEach(button => button.onclick = () => openEditor(view, rows.find(row => String(row.id) === button.dataset.edit)));
-    $$('[data-toggle]').forEach(button => button.onclick = async () => {
-      if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.');
+    $$('[data-toggle]').forEach(button => button.onclick = () => runAction(button, async () => {
+      if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
       const record = rows.find(row => String(row.id) === button.dataset.toggle);
+      if (!await confirmAction({ title: `${record.active ? 'Desativar' : 'Ativar'} este item?`, message: `“${record.name || record.title || record.code || config.singular}” será ${record.active ? 'desativado' : 'ativado'}.`, confirmLabel: record.active ? 'Desativar' : 'Ativar' })) return;
       const { error: toggleError } = await db.from(config.table).update({ active: !record.active }).eq('id', record.id);
-      if (toggleError) return toast(explain(toggleError));
-      notifyStorefront(config.table); toast(record.active ? 'Registro desativado.' : 'Registro ativado.'); render(view);
-    });
-    $$('[data-duplicate]').forEach(button => button.onclick = async () => {
-      if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.');
+      if (toggleError) return toast(explain(toggleError), 'error');
+      notifyStorefront(config.table); toast(record.active ? `${config.singular} desativado.` : `${config.singular} ativado.`); render(view);
+    }));
+    $$('[data-duplicate]').forEach(button => button.onclick = () => runAction(button, async () => {
+      if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
       const record = rows.find(row => String(row.id) === button.dataset.duplicate);
       if (!record) return;
       const clone = {};
@@ -1705,19 +1855,21 @@
       if ('code' in clone) clone.code = `${clone.code}-COPIA-${Date.now().toString().slice(-4)}`;
       if ('active' in clone) clone.active = false;
       const { data: duplicate, error: duplicateError } = await db.from(config.table).insert(clone).select().single();
-      if (duplicateError) return toast(explain(duplicateError));
+      if (duplicateError) return toast(explain(duplicateError), 'error');
       if (view === 'inspirations') {
         const { data: gallery } = await db.from('inspiration_images').select('*').eq('inspiration_id', record.id).order('sort_order');
         if (gallery?.length) await db.from('inspiration_images').insert(gallery.map(item => ({ inspiration_id: duplicate.id, image_url: item.image_url, storage_path: `references/${duplicate.id}/${crypto.randomUUID()}`, alt_text: item.alt_text, sort_order: item.sort_order })));
       }
       notifyStorefront(config.table); toast(`${config.singular} duplicado como inativo.`); render(view);
-    });
-    $$('[data-delete]').forEach(button => button.onclick = async () => {
-      if (!canWrite() || !confirm('Excluir este registro? A ação ficará na auditoria.')) return;
+    }));
+    $$('[data-delete]').forEach(button => button.onclick = () => runAction(button, async () => {
+      if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
+      const record = rows.find(row => String(row.id) === button.dataset.delete);
+      if (!await confirmAction({ title: 'Excluir este item?', message: `“${record?.name || record?.title || record?.code || config.singular}” será excluído. Esta ação não poderá ser desfeita e ficará registrada na auditoria.`, confirmLabel: 'Excluir', tone: 'danger' })) return;
       const { error: deleteError } = await db.from(config.table).delete().eq('id', button.dataset.delete);
-      if (deleteError) return toast(explain(deleteError));
-      notifyStorefront(config.table); toast('Registro excluído.'); render(view);
-    });
+      if (deleteError) return toast(explain(deleteError), 'error');
+      notifyStorefront(config.table); toast(`${config.singular} excluído com sucesso.`); render(view);
+    }));
     bindSearch();
   }
   function simpleRow(config, row) {
@@ -1726,7 +1878,22 @@
     const identity = row.slug || row.position || row.discount_type || row.section_key || '—';
     const timing = row.sort_order ?? (row.start_at ? dateTime(row.start_at) : '—');
     const protectedSection = config.table === 'site_sections';
-    return `<tr><td>${imageKey && row[imageKey] ? `<img class="thumb" src="${esc(row[imageKey])}" alt=""> ` : ''}<b>${esc(title)}</b></td><td>${esc(identity)}</td><td>${esc(timing)}</td><td><span class="badge ${row.active ? '' : 'off'}">${row.active ? 'Ativo' : 'Inativo'}</span></td><td><button class="small-action" data-edit="${row.id}">Visualizar / Editar</button><button class="small-action" data-toggle="${row.id}">${row.active ? 'Desativar' : 'Ativar'}</button>${protectedSection ? '' : `<button class="small-action" data-duplicate="${row.id}">Duplicar</button><button class="small-action danger" data-delete="${row.id}">Excluir</button>`}</td></tr>`;
+    const actions = [
+      { label: 'Editar', icon: 'edit', attributes: { 'data-edit': row.id } },
+      { label: row.active ? 'Desativar' : 'Ativar', icon: row.active ? 'pause' : 'play', attributes: { 'data-toggle': row.id } }
+    ];
+    if (!protectedSection) actions.push(
+      { label: 'Duplicar', icon: 'copy', attributes: { 'data-duplicate': row.id } },
+      { separator: true },
+      { label: 'Excluir', icon: 'trash', danger: true, attributes: { 'data-delete': row.id } }
+    );
+    const menu = ActionMenu({
+      id: `simple-${config.table}-${row.id}`,
+      label: title,
+      primary: { label: 'Editar', icon: 'edit', attributes: { 'data-edit': row.id } },
+      actions
+    });
+    return `<tr><td>${imageKey && row[imageKey] ? `<img class="thumb" src="${esc(row[imageKey])}" alt=""> ` : ''}<b>${esc(title)}</b></td><td>${esc(identity)}</td><td>${esc(timing)}</td><td><span class="badge ${row.active ? '' : 'off'}">${row.active ? 'Ativo' : 'Inativo'}</span></td><td class="action-cell">${menu}</td></tr>`;
   }
   function bindSearch() {
     $('#searchList')?.addEventListener('input', event => $$('tbody tr').forEach(row => { row.hidden = !row.textContent.toLowerCase().includes(event.target.value.toLowerCase()); }));
@@ -1788,6 +1955,19 @@
     const image = productCover(row);
     const stock = productStockState(row);
     const currentPrice = row.promotional_price ?? row.price;
+    const actions = ActionMenu({
+      id: `product-${row.id}`,
+      label: row.name,
+      primary: { label: 'Editar', icon: 'edit', attributes: { 'data-product-edit': row.id } },
+      actions: [
+        { label: 'Visualizar', icon: 'view', attributes: { 'data-product-view': row.id } },
+        { label: 'Editar', icon: 'edit', attributes: { 'data-product-edit': row.id } },
+        { label: 'Duplicar', icon: 'copy', attributes: { 'data-product-duplicate': row.id } },
+        { label: row.active ? 'Desativar' : 'Ativar', icon: row.active ? 'pause' : 'play', attributes: { 'data-product-toggle': row.id } },
+        { separator: true },
+        { label: 'Excluir', icon: 'trash', danger: true, attributes: { 'data-product-delete': row.id } }
+      ]
+    });
     return `<tr data-product-id="${row.id}">
       <td class="product-select-cell"><input type="checkbox" data-product-select="${row.id}" aria-label="Selecionar ${esc(row.name)}" ${productViewState.selected.has(row.id) ? 'checked' : ''}></td>
       <td><div class="product-identity">${image ? `<img class="thumb" src="${esc(image)}" alt="${esc(row.name)}">` : '<span class="product-thumb-placeholder" aria-hidden="true">▦</span>'}<span><b>${esc(row.name)}</b><small>SKU: ${esc(row.sku)}</small></span></div></td>
@@ -1796,7 +1976,7 @@
       <td class="product-stock"><b>${Number(row.stock_quantity)}</b><span class="stock-chip ${stock.key}">${stock.label}</span></td>
       <td><span class="product-status ${row.active ? 'published' : 'inactive'}"><i aria-hidden="true"></i>${row.active ? 'Publicado' : 'Inativo'}</span></td>
       <td><label class="product-switch" title="${row.featured ? 'Remover dos destaques' : 'Adicionar aos destaques'}"><input type="checkbox" data-product-featured="${row.id}" ${row.featured ? 'checked' : ''} ${canWrite() ? '' : 'disabled'}><span></span><em>${row.featured ? 'ON' : 'OFF'}</em></label></td>
-      <td class="product-actions"><button class="product-icon-action" type="button" data-product-view="${row.id}" aria-label="Visualizar ${esc(row.name)}" title="Visualizar">${actionIcon('view')}</button><button class="product-icon-action" type="button" data-product-edit="${row.id}" aria-label="Editar ${esc(row.name)}" title="Editar">${actionIcon('edit')}</button><button class="product-icon-action" type="button" data-product-duplicate="${row.id}" aria-label="Duplicar ${esc(row.name)}" title="Duplicar">${actionIcon('copy')}</button><button class="product-icon-action danger" type="button" data-product-delete="${row.id}" aria-label="Excluir ${esc(row.name)}" title="Excluir">${actionIcon('trash')}</button><div class="product-more-wrap"><button class="product-icon-action" type="button" data-product-menu="${row.id}" aria-label="Mais opções para ${esc(row.name)}" aria-expanded="false" title="Mais opções">•••</button><div class="product-action-menu" data-product-action-menu="${row.id}" hidden><button type="button" data-product-toggle="${row.id}">${row.active ? '◫ Desativar produto' : '✓ Publicar produto'}</button><button type="button" data-product-edit="${row.id}">✎ Editar informações</button></div></div></td>
+      <td class="product-actions action-cell">${actions}</td>
     </tr>`;
   }
   function productPagination(current, total) {
@@ -1853,7 +2033,7 @@
       });
     };
     const duplicateProduct = async source => {
-      if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.');
+      if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
       const allowed = ['short_description','description','category_id','brand_id','environment_id','price','promotional_price','cost_price','stock_quantity','low_stock_threshold','featured','best_seller','new_arrival','on_sale','sort_order','warranty','dimensions','material','color','specifications','installment_enabled','max_installments','meta_title','meta_description','og_image_url'];
       const copy = Object.fromEntries(allowed.map(key => [key, source[key]]));
       copy.name = `${source.name} — cópia`;
@@ -1862,46 +2042,36 @@
       copy.active = false;
       copy.view_count = 0;
       const { data: duplicate, error: duplicateError } = await db.from('products').insert(copy).select().single();
-      if (duplicateError) return toast(explain(duplicateError));
+      if (duplicateError) return toast(explain(duplicateError), 'error');
       if (source.product_images?.length) {
         const imageCopies = source.product_images.map(image => ({ product_id: duplicate.id, image_url: image.image_url, storage_path: `references/${duplicate.id}/${crypto.randomUUID()}`, alt_text: image.alt_text, is_cover: image.is_cover, sort_order: image.sort_order }));
         const { error: imageError } = await db.from('product_images').insert(imageCopies);
-        if (imageError) toast(`Produto duplicado, mas as fotos não foram copiadas: ${explain(imageError)}`);
+        if (imageError) toast(`Produto duplicado, mas as fotos não foram copiadas: ${explain(imageError)}`, 'error');
       }
       notifyStorefront('products'); toast('Produto duplicado como rascunho.'); render('products');
     };
     const bindProductRows = pageRows => {
-      const closeMenus = () => {
-        $$('.product-action-menu').forEach(menu => { menu.hidden = true; });
-        $$('[data-product-menu]').forEach(button => button.setAttribute('aria-expanded', 'false'));
-      };
-      $$('[data-product-menu]').forEach(button => button.onclick = event => {
-        event.stopPropagation();
-        const menu = $(`[data-product-action-menu="${button.dataset.productMenu}"]`);
-        const opening = menu.hidden;
-        closeMenus();
-        menu.hidden = !opening;
-        button.setAttribute('aria-expanded', String(opening));
-      });
-      $$('.product-action-menu').forEach(menu => menu.onclick = event => event.stopPropagation());
+      bindActionMenus($('#productRows'));
       $$('[data-product-view]').forEach(button => button.onclick = () => window.open(`index.html?product=${encodeURIComponent(button.dataset.productView)}#catalogo`, '_blank', 'noopener'));
       $$('[data-product-edit]').forEach(button => button.onclick = () => productEditor(rowFor(button.dataset.productEdit)));
-      $$('[data-product-duplicate]').forEach(button => button.onclick = () => duplicateProduct(rowFor(button.dataset.productDuplicate)));
-      $$('[data-product-toggle]').forEach(button => button.onclick = async () => {
-        if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.');
+      $$('[data-product-duplicate]').forEach(button => button.onclick = () => runAction(button, () => duplicateProduct(rowFor(button.dataset.productDuplicate))));
+      $$('[data-product-toggle]').forEach(button => button.onclick = () => runAction(button, async () => {
+        if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
         const row = rowFor(button.dataset.productToggle);
+        if (!await confirmAction({ title: `${row.active ? 'Desativar' : 'Ativar'} este produto?`, message: `“${row.name}” será ${row.active ? 'retirado da vitrine' : 'publicado novamente na vitrine'}.`, confirmLabel: row.active ? 'Desativar' : 'Ativar' })) return;
         const { error: toggleError } = await db.from('products').update({ active: !row.active }).eq('id', row.id);
-        if (toggleError) return toast(explain(toggleError));
+        if (toggleError) return toast(explain(toggleError), 'error');
         notifyStorefront('products'); toast(row.active ? 'Produto desativado no site.' : 'Produto publicado no site.'); render('products');
-      });
-      $$('[data-product-delete]').forEach(button => button.onclick = async () => {
+      }));
+      $$('[data-product-delete]').forEach(button => button.onclick = () => runAction(button, async () => {
         const row = rowFor(button.dataset.productDelete);
-        if (!canWrite() || !confirm(`Excluir “${row.name}” do catálogo? O produto será arquivado e poderá ser recuperado diretamente no banco.`)) return;
+        if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
+        if (!await confirmAction({ title: 'Excluir este produto?', message: `“${row.name}” será removido do catálogo. Esta ação não poderá ser desfeita pelo painel.`, confirmLabel: 'Excluir', tone: 'danger' })) return;
         const { error: updateError } = await db.from('products').update({ deleted_at: new Date().toISOString(), active: false }).eq('id', row.id);
-        if (updateError) return toast(explain(updateError));
+        if (updateError) return toast(explain(updateError), 'error');
         productViewState.selected.delete(row.id);
-        notifyStorefront('products'); toast('Produto excluído do catálogo.'); render('products');
-      });
+        notifyStorefront('products'); toast('Produto excluído com sucesso.'); render('products');
+      }));
       $$('[data-product-featured]').forEach(input => input.onchange = async () => {
         if (!canWrite()) { input.checked = !input.checked; return toast('Seu perfil possui acesso somente para consulta.'); }
         input.disabled = true;
@@ -1999,18 +2169,19 @@
     $('#content').innerHTML = `<div class="toolbar"><input id="searchList" placeholder="Buscar produto…"><select id="stockFilter"><option value="">Todos</option><option>Sem estoque</option><option>Estoque baixo</option></select></div><div class="card table-wrap"><table class="data-table"><thead><tr><th>Produto</th><th>SKU</th><th>Quantidade</th><th>Mínimo</th><th>Situação</th><th>Ação</th></tr></thead><tbody>${(productsResult.data || []).map(stockRow).join('')}</tbody></table></div><details class="card history"><summary>Histórico de movimentações (${(historyResult.data || []).length})</summary><div class="table-wrap"><table class="data-table"><thead><tr><th>Data</th><th>Produto</th><th>Anterior</th><th>Novo</th><th>Alteração</th><th>Motivo</th></tr></thead><tbody>${(historyResult.data || []).map(row => `<tr><td>${dateTime(row.created_at)}</td><td>${esc(productNames[row.product_id] || row.product_id)}</td><td>${row.previous_quantity}</td><td>${row.new_quantity}</td><td>${row.change_quantity > 0 ? '+' : ''}${row.change_quantity}</td><td>${esc(row.reason)}</td></tr>`).join('')}</tbody></table></div></details>`;
     bindSearch();
     $('#stockFilter').onchange = event => $$('tbody tr').forEach(row => { if (row.dataset.stock) row.hidden = event.target.value && row.dataset.stock !== event.target.value; });
-    $$('[data-stock-save]').forEach(button => button.onclick = async () => {
-      if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.');
+    $$('[data-stock-save]').forEach(button => button.onclick = () => runAction(button, async () => {
+      if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
       const id = button.dataset.stockSave;
       const values = { stock_quantity: Number($(`[data-stock-qty="${id}"]`).value), low_stock_threshold: Number($(`[data-stock-min="${id}"]`).value) };
       const { error } = await db.from('products').update(values).eq('id', id);
-      if (error) return toast(explain(error));
+      if (error) return toast(explain(error), 'error');
       notifyStorefront('products'); toast('Estoque atualizado e histórico registrado.'); render('stock');
-    });
+    }));
   }
   function stockRow(row) {
     const label = row.stock_quantity === 0 ? 'Sem estoque' : row.stock_quantity <= row.low_stock_threshold ? 'Estoque baixo' : 'Disponível';
-    return `<tr data-stock="${label}"><td><b>${esc(row.name)}</b></td><td>${esc(row.sku)}</td><td><input style="width:90px" type="number" min="0" value="${row.stock_quantity}" data-stock-qty="${row.id}"></td><td><input style="width:90px" type="number" min="0" value="${row.low_stock_threshold}" data-stock-min="${row.id}"></td><td><span class="badge ${label === 'Sem estoque' ? 'off' : label === 'Estoque baixo' ? 'warn' : ''}">${label}</span></td><td><button class="small-action" data-stock-save="${row.id}">Salvar</button></td></tr>`;
+    const action = ActionMenu({ id: `stock-${row.id}`, label: row.name, primary: { label: 'Salvar', icon: 'save', attributes: { 'data-stock-save': row.id } } });
+    return `<tr data-stock="${label}"><td><b>${esc(row.name)}</b></td><td>${esc(row.sku)}</td><td><input style="width:90px" type="number" min="0" value="${row.stock_quantity}" data-stock-qty="${row.id}"></td><td><input style="width:90px" type="number" min="0" value="${row.low_stock_threshold}" data-stock-min="${row.id}"></td><td><span class="badge ${label === 'Sem estoque' ? 'off' : label === 'Estoque baixo' ? 'warn' : ''}">${label}</span></td><td class="action-cell">${action}</td></tr>`;
   }
 
   async function renderLeads(revision) {
@@ -2021,9 +2192,11 @@
     bindSearch();
     $('#leadFilter').onchange = event => $$('tbody tr').forEach(row => { row.hidden = event.target.value && row.dataset.status !== event.target.value; });
     $$('[data-lead-status]').forEach(select => select.onchange = async () => {
-      if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.');
+      if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
+      select.disabled = true;
       const { error: saveError } = await db.from('leads').update({ status: select.value }).eq('id', select.dataset.leadStatus);
-      toast(saveError ? explain(saveError) : 'Status do atendimento atualizado.');
+      select.disabled = false;
+      toast(saveError ? explain(saveError) : 'Status do atendimento atualizado.', saveError ? 'error' : 'success');
     });
   }
 
@@ -2040,7 +2213,11 @@
     $('#content').innerHTML = `<form id="settingsForm" class="card panel settings-form"><h2>${group.title}</h2><div class="form-grid" style="padding:0;max-height:none">${(await Promise.all(group.fields.map(field => fieldHtml(field, data)))).join('')}</div><div class="toolbar" style="margin-top:18px"><button type="submit">Salvar configurações</button></div></form>`;
     $('#settingsForm').onsubmit = async event => {
       event.preventDefault();
-      if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.');
+      if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
+      const submit = event.currentTarget.querySelector('[type="submit"]');
+      if (submit.disabled) return;
+      submit.disabled = true;
+      submit.classList.add('is-loading');
       try {
         const values = formValues(group.fields, event.currentTarget);
         for (const [key, , type] of group.fields) if (type === 'file') {
@@ -2051,7 +2228,8 @@
         if (saveError) throw saveError;
         notifyStorefront('store_settings');
         toast('Configurações salvas e disponíveis para o site.');
-      } catch (saveError) { toast(explain(saveError)); }
+      } catch (saveError) { toast(explain(saveError), 'error'); }
+      finally { submit.disabled = false; submit.classList.remove('is-loading'); }
     };
   }
 
@@ -2060,14 +2238,21 @@
     const { data, error } = await db.from('profiles').select('*').order('created_at', { ascending: false });
     if (error) throw error;
     if (revision !== viewRevision) return;
-    $('#content').innerHTML = `<div class="toolbar"><input id="searchList" placeholder="Buscar usuário…"><button class="primary-action" id="newUser">+ Novo usuário</button></div><div class="card table-wrap"><table class="data-table"><thead><tr><th>Usuário</th><th>E-mail</th><th>Função</th><th>Status</th><th>Ação</th></tr></thead><tbody>${(data || []).map(row => `<tr><td>${esc(row.full_name || 'Sem nome')}</td><td>${esc(row.email)}</td><td><select data-user-role="${row.id}" ${row.id === profile.id ? 'disabled' : ''}>${['viewer', 'editor', 'admin', 'super_admin'].map(role => `<option ${row.role === role ? 'selected' : ''}>${role}</option>`).join('')}</select></td><td><label class="toggle"><input type="checkbox" data-user-active="${row.id}" ${row.active ? 'checked' : ''} ${row.id === profile.id ? 'disabled' : ''}> Ativo</label></td><td><button class="small-action" data-user-save="${row.id}" ${row.id === profile.id ? 'disabled' : ''}>Salvar</button></td></tr>`).join('')}</tbody></table></div><p class="helper">Viewer consulta; editor altera conteúdo; admin gerencia usuários; super_admin possui acesso total.</p>`;
+    $('#content').innerHTML = `<div class="toolbar"><input id="searchList" placeholder="Buscar usuário…"><button class="primary-action" id="newUser">+ Novo usuário</button></div><div class="card table-wrap"><table class="data-table"><thead><tr><th>Usuário</th><th>E-mail</th><th>Função</th><th>Status</th><th>Ação</th></tr></thead><tbody>${(data || []).map(row => {
+      const saveAction = ActionMenu({
+        id: `user-${row.id}`,
+        label: row.full_name || row.email,
+        primary: { label: 'Salvar', icon: 'save', ariaLabel: `Salvar permissões de ${row.full_name || row.email}`, attributes: { 'data-user-save': row.id, ...(row.id === profile.id ? { disabled: true } : {}) } }
+      });
+      return `<tr><td>${esc(row.full_name || 'Sem nome')}</td><td>${esc(row.email)}</td><td><select data-user-role="${row.id}" ${row.id === profile.id ? 'disabled' : ''}>${['viewer', 'editor', 'admin', 'super_admin'].map(role => `<option ${row.role === role ? 'selected' : ''}>${role}</option>`).join('')}</select></td><td><label class="toggle"><input type="checkbox" data-user-active="${row.id}" ${row.active ? 'checked' : ''} ${row.id === profile.id ? 'disabled' : ''}> Ativo</label></td><td class="action-cell">${saveAction}</td></tr>`;
+    }).join('')}</tbody></table></div><p class="helper">Viewer consulta; editor altera conteúdo; admin gerencia usuários; super_admin possui acesso total.</p>`;
     bindSearch();
     $('#newUser').onclick = openNewUser;
-    $$('[data-user-save]').forEach(button => button.onclick = async () => {
+    $$('[data-user-save]').forEach(button => button.onclick = () => runAction(button, async () => {
       const id = button.dataset.userSave;
       const { error: saveError } = await db.from('profiles').update({ role: $(`[data-user-role="${id}"]`).value, active: $(`[data-user-active="${id}"]`).checked }).eq('id', id);
-      toast(saveError ? explain(saveError) : 'Permissões atualizadas.');
-    });
+      toast(saveError ? explain(saveError) : 'Permissões atualizadas.', saveError ? 'error' : 'success');
+    }));
   }
   function openNewUser() {
     editorState = { view: 'new-user' };
@@ -2080,15 +2265,24 @@
     event.preventDefault();
     const form = event.currentTarget;
     if (!form.reportValidity()) return;
-    const secondary = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
-    const { data, error } = await secondary.auth.signUp({ email: form.elements.email.value.trim(), password: form.elements.password.value, options: { data: { full_name: form.elements.full_name.value.trim() } } });
-    if (error) return toast(explain(error));
-    if (data.user) {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      const { error: profileError } = await db.from('profiles').update({ role: form.elements.role.value, active: true }).eq('id', data.user.id);
-      if (profileError) return toast(explain(profileError));
+    const button = $('#saveEditor');
+    if (button.disabled) return;
+    button.disabled = true;
+    button.textContent = 'Criando usuário…';
+    try {
+      const secondary = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+      const { data, error } = await secondary.auth.signUp({ email: form.elements.email.value.trim(), password: form.elements.password.value, options: { data: { full_name: form.elements.full_name.value.trim() } } });
+      if (error) return toast(explain(error), 'error');
+      if (data.user) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const { error: profileError } = await db.from('profiles').update({ role: form.elements.role.value, active: true }).eq('id', data.user.id);
+        if (profileError) return toast(explain(profileError), 'error');
+      }
+      $('#editorDialog').close(); toast('Usuário criado.'); render('users');
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Salvar alterações';
     }
-    $('#editorDialog').close(); toast('Usuário criado.'); render('users');
   }
   async function renderAudit(revision) {
     if (!canAdmin()) { $('#content').innerHTML = '<div class="card empty">Somente administradores podem consultar a auditoria.</div>'; return; }
@@ -2137,7 +2331,13 @@
       else await renderSimple(view, revision);
     } catch (error) {
       if (revision === viewRevision) $('#content').innerHTML = `<div class="card empty error" role="alert">Não foi possível carregar os dados. ${esc(explain(error))}</div>`;
-    } finally { if (revision === viewRevision) { enhanceTables($('#content')); $('#refresh').disabled = false; } }
+    } finally {
+      if (revision === viewRevision) {
+        enhanceTables($('#content'));
+        bindActionMenus($('#content'));
+        $('#refresh').disabled = false;
+      }
+    }
   }
   let menuHistoryPushed = false;
   function openMobileMenu() {
@@ -2166,6 +2366,13 @@
   function bindNav(root = document) {
     $$('[data-view]', root).forEach(button => button.onclick = () => { render(button.dataset.view); closeMobileMenu(); });
   }
+
+  window.AdminUI = Object.freeze({
+    ActionMenu,
+    bindActionMenus,
+    confirmAction,
+    toast
+  });
 
   $('#loginForm').addEventListener('submit', login);
   $('#logout').onclick = logout;
@@ -2203,18 +2410,14 @@
   window.addEventListener('popstate', () => { if ($('#sidebar').classList.contains('open')) closeMobileMenu(true); });
   document.addEventListener('keydown', event => {
     if (event.key !== 'Escape') return;
+    if (activeActionTrigger) closeActionMenus({ restoreFocus: true });
     if ($('#sidebar').classList.contains('open')) closeMobileMenu();
     const drawer = $('#productFilterDrawer');
     if (drawer && !drawer.hidden) { drawer.hidden = true; document.body.classList.remove('product-filters-open'); }
   });
-  document.addEventListener('click', () => {
-    $$('.category-action-menu').forEach(menu => { menu.hidden = true; });
-    $$('[data-category-menu]').forEach(button => button.setAttribute('aria-expanded', 'false'));
-    $$('.product-action-menu').forEach(menu => { menu.hidden = true; });
-    $$('[data-product-menu]').forEach(button => button.setAttribute('aria-expanded', 'false'));
-    $$('.banner-action-menu').forEach(menu => { menu.hidden = true; });
-    $$('[data-banner-menu]').forEach(button => button.setAttribute('aria-expanded', 'false'));
-  });
+  document.addEventListener('click', () => closeActionMenus());
+  window.addEventListener('resize', () => closeActionMenus());
+  document.addEventListener('scroll', event => { if (!event.target.closest?.('.action-menu-popover')) closeActionMenus(); }, true);
   window.addEventListener('offline', () => toast('Conexão interrompida.'));
   bindNav();
   restore();
