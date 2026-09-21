@@ -119,7 +119,7 @@
     if (button && banner.button_text) button.firstChild.textContent = `${banner.button_text} `;
     if (button && banner.button_url) button.onclick = () => { location.href = banner.button_url; };
     if (art && banner.image_desktop_url) {
-      const cleanHeroUrl = value => /editorial-room\.jpg/i.test(value) ? 'assets/editorial-room-clean.png' : value;
+      const cleanHeroUrl = value => /editorial-room(?:-clean)?\.(?:jpg|png)/i.test(value) ? 'assets/editorial-room-clean.png?v=caption-removed-1' : value;
       const desktopUrl = cleanHeroUrl(banner.image_desktop_url);
       const mobileUrl = banner.image_mobile_url ? cleanHeroUrl(banner.image_mobile_url) : desktopUrl;
       if (window.atacarejoHero?.setPrimaryImage) {

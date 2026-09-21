@@ -189,8 +189,8 @@ html,body{overflow-x:hidden}.hero-art{min-width:0}.nav{overflow-x:auto;scrollbar
 @media(prefers-reduced-motion:reduce){.site-footer .social-icon,.site-footer .footer-links a,.maps-button,.whatsapp-button{transition:none!important}}
 
 /* Hero image cleaned from the baked-in floating toolbar. */
-.hero-art{background-image:url('assets/editorial-room-clean.png')}
-@media(max-width:620px){.hero-art{background-image:var(--mobile-hero,url('assets/editorial-room-clean.png'))}}
+.hero-art{background-image:url('assets/editorial-room-clean.png?v=caption-removed-1')}
+@media(max-width:620px){.hero-art{background-image:var(--mobile-hero,url('assets/editorial-room-clean.png?v=caption-removed-1'))}}
 
 /* Dedicated office environment section. */
 .office-showcase{padding:46px max(var(--gutter),calc((100% - 1280px)/2));background:#f3f6fb;color:#142849}

@@ -638,7 +638,7 @@
   };
   const QUICK_TEMPLATE_IMAGES = {
     month: 'https://images.unsplash.com/photo-1618220179428-22790b461013?auto=format&fit=crop&w=1600&q=82',
-    complete: 'assets/editorial-room-clean.png',
+    complete: 'assets/editorial-room-clean.png?v=caption-removed-1',
     living: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=1600&q=82',
     bedrooms: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1600&q=82',
     kitchen: 'https://images.unsplash.com/photo-1556911220-bff31c812dba?auto=format&fit=crop&w=1600&q=82',
@@ -660,7 +660,7 @@
     summer: 'https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&w=1600&q=82',
     comfort: 'https://images.unsplash.com/photo-1600585154526-990dced4db0c?auto=format&fit=crop&w=1600&q=82',
     renew: 'https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=1600&q=82',
-    full_environment: 'assets/editorial-room-clean.png',
+    full_environment: 'assets/editorial-room-clean.png?v=caption-removed-1',
     product_spotlight: 'https://images.unsplash.com/photo-1580480055273-228ff5388ef8?auto=format&fit=crop&w=1600&q=82'
   };
   const QUICK_VISUALS = QUICK_LAYOUTS.map(item => [item.visual, item.name]);
