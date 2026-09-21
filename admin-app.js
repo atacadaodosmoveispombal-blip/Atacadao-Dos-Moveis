@@ -1903,6 +1903,7 @@
     ['section', 'Informações principais'], ['name', 'Nome do produto', 'text', true], ['slug', 'URL amigável', 'slug', true], ['sku', 'SKU / código', 'text', true], ['short_description', 'Descrição curta', 'textarea'], ['description', 'Descrição completa', 'textarea'],
     ['category_id', 'Categoria', 'relation', false, 'categories'], ['environment_id', 'Ambiente', 'relation', false, 'environments'], ['brand_id', 'Marca', 'relation', false, 'brands'],
     ['section', 'Preço e parcelamento'], ['price', 'Preço normal', 'number', true], ['promotional_price', 'Preço promocional', 'number'], ['installment_enabled', 'Permitir parcelamento', 'checkbox'], ['max_installments', 'Máximo de parcelas', 'number'],
+    ['section', 'Venda e benefícios do card'], ['whatsapp_enabled', 'Permitir compra pelo WhatsApp', 'checkbox'], ['cart_enabled', 'Permitir adicionar à sacola', 'checkbox'], ['free_city_shipping', 'Frete grátis para a cidade', 'checkbox'], ['free_assembly', 'Armação gratuita', 'checkbox'], ['is_campaign', 'Produto em campanha', 'checkbox'],
     ['section', 'Estoque'], ['stock_quantity', 'Quantidade', 'number', true], ['low_stock_threshold', 'Estoque mínimo', 'number', true],
     ['section', 'Características'], ['dimensions_text', 'Medidas', 'text'], ['material', 'Material', 'text'], ['color', 'Cores', 'text'], ['warranty', 'Garantia', 'text'],
     ['section', 'Exibição'], ['featured', 'Destaque', 'checkbox'], ['new_arrival', 'Lançamento', 'checkbox'], ['best_seller', 'Mais vendido', 'checkbox'], ['on_sale', 'Em oferta', 'checkbox'], ['active', 'Publicado', 'checkbox'], ['sort_order', 'Ordem', 'number'],
@@ -1911,7 +1912,8 @@
   async function productEditor(record = null) {
     if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.');
     resetEditorChrome();
-    const editRecord = record ? { ...record, dimensions_text: record.dimensions?.description || '' } : null;
+    const commerceDefaults = { whatsapp_enabled: true, cart_enabled: true, free_city_shipping: false, free_assembly: false, is_campaign: false };
+    const editRecord = record ? { ...commerceDefaults, ...record, dimensions_text: record.dimensions?.description || '' } : { ...commerceDefaults };
     editorState = { view: 'products', record: editRecord };
     $('#dialogEyebrow').textContent = 'CATÁLOGO';
     $('#dialogTitle').textContent = record ? 'Editar produto' : 'Novo produto';
@@ -1940,7 +1942,10 @@
       if (result.error) throw result.error;
       await saveGallery(result.data.id, event.currentTarget.elements.gallery, 'products');
       notifyStorefront('products'); $('#editorDialog').close(); toast('Produto salvo e sincronizado com o catálogo.'); render('products');
-    } catch (error) { toast(explain(error)); }
+    } catch (error) {
+      if (error?.code === '42703' || /whatsapp_enabled|cart_enabled|free_city_shipping|free_assembly|is_campaign/i.test(error?.message || '')) toast('Execute a migration 20260920_product_commerce_cards.sql no Supabase antes de salvar estes campos.', 'error');
+      else toast(explain(error), 'error');
+    }
     finally { button.disabled = false; button.textContent = 'Salvar alterações'; }
   }
   function productStockState(row) {
@@ -2034,7 +2039,7 @@
     };
     const duplicateProduct = async source => {
       if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
-      const allowed = ['short_description','description','category_id','brand_id','environment_id','price','promotional_price','cost_price','stock_quantity','low_stock_threshold','featured','best_seller','new_arrival','on_sale','sort_order','warranty','dimensions','material','color','specifications','installment_enabled','max_installments','meta_title','meta_description','og_image_url'];
+      const allowed = ['short_description','description','category_id','brand_id','environment_id','price','promotional_price','cost_price','stock_quantity','low_stock_threshold','featured','best_seller','new_arrival','on_sale','sort_order','warranty','dimensions','material','color','specifications','installment_enabled','max_installments','meta_title','meta_description','og_image_url','whatsapp_enabled','cart_enabled','free_city_shipping','free_assembly','is_campaign'];
       const copy = Object.fromEntries(allowed.map(key => [key, source[key]]));
       copy.name = `${source.name} — cópia`;
       copy.slug = `${source.slug}-copia-${Date.now().toString().slice(-6)}`;
@@ -2201,7 +2206,7 @@
   }
 
   const settingGroups = {
-    store: { title: 'Dados da loja e WhatsApp', fields: [['store_name', 'Nome da loja', 'text'], ['phone', 'Telefone', 'text'], ['whatsapp', 'WhatsApp', 'text'], ['whatsapp_message', 'Mensagem automática', 'textarea'], ['address', 'Endereço', 'text'], ['city', 'Cidade', 'text'], ['state', 'Estado', 'text'], ['postal_code', 'CEP', 'text'], ['map_url', 'Link do Google Maps', 'text'], ['instagram', 'Instagram', 'text'], ['facebook', 'Facebook', 'text'], ['opening_hours', 'Horários', 'textarea']] },
+    store: { title: 'Dados da loja e WhatsApp', fields: [['store_name', 'Nome da loja', 'text'], ['phone', 'Telefone', 'text'], ['whatsapp', 'Número oficial do WhatsApp', 'text'], ['whatsapp_message', 'Mensagem padrão do WhatsApp', 'textarea'], ['whatsapp_button_text', 'Texto do botão de produto', 'text'], ['whatsapp_button_subtitle', 'Texto de apoio do botão', 'text'], ['product_benefit_secure_text', 'Benefício: compra segura', 'text'], ['product_benefit_pickup_text', 'Benefício: retirada na loja', 'text'], ['service_region', 'Cidade / região atendida', 'text'], ['address', 'Endereço', 'text'], ['city', 'Cidade', 'text'], ['state', 'Estado', 'text'], ['postal_code', 'CEP', 'text'], ['map_url', 'Link do Google Maps', 'text'], ['instagram', 'Instagram', 'text'], ['facebook', 'Facebook', 'text'], ['opening_hours', 'Horários', 'textarea']] },
     seo: { title: 'SEO padrão do site', fields: [['default_meta_title', 'Título do site', 'text'], ['default_meta_description', 'Descrição', 'textarea'], ['default_og_image_url', 'Imagem de compartilhamento', 'file']] },
     settings: { title: 'Identidade e informações gerais', fields: [['logo_url', 'Logo oficial', 'file'], ['favicon_url', 'Favicon', 'file'], ['primary_color', 'Cor principal', 'color'], ['accent_color', 'Cor de destaque', 'color'], ['institutional_text', 'Texto institucional', 'textarea'], ['footer_text', 'Texto do rodapé', 'textarea']] }
   };
@@ -2228,7 +2233,10 @@
         if (saveError) throw saveError;
         notifyStorefront('store_settings');
         toast('Configurações salvas e disponíveis para o site.');
-      } catch (saveError) { toast(explain(saveError), 'error'); }
+      } catch (saveError) {
+        if (saveError?.code === '42703' || /whatsapp_button_text|whatsapp_button_subtitle|product_benefit_secure_text|product_benefit_pickup_text|service_region/i.test(saveError?.message || '')) toast('Execute a migration 20260920_product_commerce_cards.sql no Supabase antes de salvar estas configurações.', 'error');
+        else toast(explain(saveError), 'error');
+      }
       finally { submit.disabled = false; submit.classList.remove('is-loading'); }
     };
   }

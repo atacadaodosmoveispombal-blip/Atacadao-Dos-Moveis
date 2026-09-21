@@ -69,6 +69,7 @@
   }
   function applySettings(settings) {
     if (!settings) return;
+    window.setStorefrontCommerceSettings?.(settings);
     if (settings.default_meta_title) document.title = settings.default_meta_title;
     setMeta('description', settings.default_meta_description);
     setMeta('og:title', settings.default_meta_title, true);
@@ -99,8 +100,7 @@
     if (settings.whatsapp) {
       const number = String(settings.whatsapp).replace(/\D/g, '');
       const whatsappUrl = `https://wa.me/${number}?text=${encodeURIComponent(settings.whatsapp_message || 'Olá! Gostaria de conhecer os produtos.')}`;
-      window.openWhatsApp = () => window.open(whatsappUrl, '_blank', 'noopener');
-      document.querySelectorAll('a[href*="wa.me"]').forEach(link => { link.href = whatsappUrl; });
+      document.querySelectorAll('[data-store-whatsapp]').forEach(link => { link.href = whatsappUrl; });
       const phone = document.querySelector('.whatsapp-button strong');
       if (phone) phone.textContent = settings.phone || settings.whatsapp;
     }
@@ -181,7 +181,7 @@
       const section = document.createElement('section');
       section.className = 'section cms-campaign-section';
       section.dataset.cmsOrder = Number(banner.sort_order || 45) + 0.1;
-      section.innerHTML = `<div class="section-head"><div><p class="eyebrow">CAMPANHA ESPECIAL</p><h2>${escapeHtml(banner.title)}</h2><p>${escapeHtml(banner.subtitle || 'Confira os produtos selecionados para esta campanha.')}</p></div></div><div class="cms-campaign-products">${selected.slice(0, 8).map(product => { const mapped = mapProduct(product, 0, campaignPromotionFor(product, promotions)); return `<button type="button" onclick="openProduct(${mapped.id})"><img src="${escapeHtml(mapped.img)}" alt="${escapeHtml(mapped.n)}" loading="lazy"><span><small>${escapeHtml(mapped.cat)}</small><b>${escapeHtml(mapped.n)}</b><em>${mapped.old ? `<del>${mapped.old.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</del>` : ''}${mapped.price.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</em></span></button>`; }).join('')}</div>${banner.button_text ? `<a class="btn cms-campaign-link" href="${escapeHtml(banner.button_url || '#catalogo')}">${escapeHtml(banner.button_text)} →</a>` : ''}`;
+      section.innerHTML = `<div class="section-head"><div><p class="eyebrow">CAMPANHA ESPECIAL</p><h2>${escapeHtml(banner.title)}</h2><p>${escapeHtml(banner.subtitle || 'Confira os produtos selecionados para esta campanha.')}</p></div></div><div class="cms-campaign-products product-grid">${selected.slice(0, 8).map(product => officialProductCard(mapProduct(product, 0, campaignPromotionFor(product, promotions)))).join('')}</div>${banner.button_text ? `<a class="btn cms-campaign-link" href="${escapeHtml(banner.button_url || '#catalogo')}">${escapeHtml(banner.button_text)} →</a>` : ''}`;
       if (insertionPoint?.parentNode) insertionPoint.after(section); else main.append(section);
       insertionPoint = section;
     });
@@ -244,7 +244,9 @@
       badge: campaignPromotions.length && sellingPrice < regularPrice ? 'Campanha' : row.new_arrival ? 'Novidade' : row.on_sale ? 'Oferta' : row.featured ? 'Destaque' : '',
       description: row.short_description || row.description || '', installmentCount: row.installment_enabled ? row.max_installments : null,
       installmentValue: row.installment_enabled ? sellingPrice / row.max_installments : null, sku: row.sku,
-      stock: row.stock_quantity
+      stock: row.stock_quantity, campaign: Boolean(row.is_campaign || campaignPromotions.length),
+      whatsappEnabled: row.whatsapp_enabled !== false, cartEnabled: row.cart_enabled !== false,
+      freeCityShipping: Boolean(row.free_city_shipping), freeAssembly: Boolean(row.free_assembly)
     };
   }
   async function loadStorefrontCategories() {
