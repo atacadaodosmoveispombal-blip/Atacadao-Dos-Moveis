@@ -14,7 +14,6 @@
   let active = 0;
   let timer = 0;
   let pointerStart = null;
-  let cmsMode = false;
 
   function preload(index) {
     const image = slides[index]?.querySelector('img');
@@ -22,7 +21,6 @@
   }
 
   function show(index, userInitiated = false) {
-    if (cmsMode) index = 0;
     active = (index + slides.length) % slides.length;
     slides.forEach((slide, slideIndex) => {
       const selected = slideIndex === active;
@@ -46,7 +44,7 @@
 
   function start() {
     stop();
-    if (cmsMode || reducedMotion.matches || document.hidden) return;
+    if (slides.length < 2 || reducedMotion.matches || document.hidden) return;
     timer = window.setInterval(() => show(active + 1), 6500);
   }
 
@@ -81,11 +79,13 @@
   window.atacarejoHero = {
     show,
     setCmsMode(enabled) {
-      cmsMode = Boolean(enabled);
-      slides.forEach((slide, index) => { slide.hidden = cmsMode && index > 0; });
-      if (previous) previous.hidden = cmsMode;
-      if (next) next.hidden = cmsMode;
-      if (dotGroup) dotGroup.hidden = cmsMode;
+      // The CMS replaces the first slide; the remaining slides stay navigable.
+      root.dataset.cmsBanner = String(Boolean(enabled));
+      slides.forEach(slide => { slide.hidden = false; });
+      const singleSlide = slides.length < 2;
+      if (previous) previous.hidden = singleSlide;
+      if (next) next.hidden = singleSlide;
+      if (dotGroup) dotGroup.hidden = singleSlide;
       show(0);
       start();
     },

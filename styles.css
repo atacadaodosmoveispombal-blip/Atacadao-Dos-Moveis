@@ -848,3 +848,4 @@ button{touch-action:manipulation}
 .environment-mega-overview button span{flex:1}
 .environment-mega-overview button b{font-size:1rem}
 @media(max-width:1000px){.environment-mega-overview>div{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.hero-dots[hidden],.hero-arrow[hidden]{display:none}
