@@ -9,6 +9,22 @@
     {
       "source": "/admin",
       "destination": "/admin.html"
+    },
+    {
+      "source": "/ofertas",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/categorias",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/sacola",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/conta",
+      "destination": "/index.html"
     }
   ],
   "headers": [

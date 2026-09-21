@@ -21,7 +21,8 @@ const contentTypes = {
 
 const server = createServer((request, response) => {
   const pathname = decodeURIComponent(new URL(request.url, 'http://localhost').pathname);
-  const relativePath = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
+  const storefrontRoute = ['/', '/ofertas', '/categorias', '/sacola', '/conta'].includes(pathname.replace(/\/+$/, '') || '/');
+  const relativePath = storefrontRoute ? 'index.html' : pathname.replace(/^\/+/, '');
   const filePath = normalize(join(root, relativePath));
 
   if (!filePath.startsWith(root)) {

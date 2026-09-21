@@ -809,3 +809,42 @@ button{touch-action:manipulation}
 @media(max-width:900px){.environment-mobile-subcategories button{min-height:48px}}
 @media(max-width:620px){.section#categorias .category b .category-icon{width:28px;height:28px}.filter-pills.show .pill .category-icon{width:22px;height:22px}}
 @media(prefers-reduced-motion:reduce){.environment-nav-items>button,.environment-mega-links button,.environment-mobile-subcategories button,.drawer-environment-list details button,.filter-pills .pill{transition:none}}
+/* Mobile app navigation feedback and selected route */
+@media (max-width:620px){
+  .mobile-nav button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;min-height:56px;color:var(--muted);touch-action:manipulation;user-select:none;-webkit-user-select:none;transition:color 180ms ease}
+  .mobile-nav small{font-weight:600;line-height:1.15;white-space:nowrap;transition:color 180ms ease}
+  .mobile-nav-icon{display:grid;place-items:center;width:38px;height:32px;border-radius:12px;font-size:23px;line-height:1;background:transparent;transform:scale(1);transition:background-color 180ms ease,transform 180ms ease}
+  .mobile-nav button.is-active{color:var(--blue)}
+  .mobile-nav button.is-active small{font-weight:800}
+  .mobile-nav button.is-active .mobile-nav-icon{background:#e9f0ff;transform:scale(1.04)}
+  .mobile-nav button.is-pressing .mobile-nav-icon{transform:scale(.88)}
+  .mobile-nav button.is-tapped .mobile-nav-icon{animation:mobile-nav-tap 200ms ease-out}
+  .mobile-nav button.cart-added .mobile-nav-icon{animation:mobile-cart-added 230ms ease-out}
+  .mobile-nav button.cart-added #mobileBadge{animation:mobile-cart-badge 230ms ease-out}
+  .mobile-nav b{top:1px;right:max(5px,calc(50% - 31px));min-width:16px;text-align:center}
+  body.modal-open.mobile-route-drawer{touch-action:auto}
+  body.modal-open.mobile-route-drawer .mobile-nav{visibility:visible;transform:none;pointer-events:auto}
+  .drawer.mobile-route-drawer{bottom:calc(62px + var(--safe-bottom))}
+  .drawer.mobile-route-drawer .drawer-card{max-height:calc(100dvh - 62px - var(--safe-bottom) - env(safe-area-inset-top,0px));padding-bottom:22px}
+}
+@media (max-height:540px) and (orientation:landscape) and (max-width:620px){
+  .drawer.mobile-route-drawer{bottom:calc(54px + var(--safe-bottom))}
+  .drawer.mobile-route-drawer .drawer-card{max-height:calc(100dvh - 54px - var(--safe-bottom) - env(safe-area-inset-top,0px))}
+}
+@keyframes mobile-nav-tap{0%{transform:scale(.88)}55%{transform:scale(1.13)}100%{transform:scale(1.04)}}
+@keyframes mobile-cart-added{0%{transform:scale(1)}50%{transform:scale(1.2)}100%{transform:scale(1)}}
+@keyframes mobile-cart-badge{0%{transform:scale(1)}50%{transform:scale(1.25)}100%{transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){
+  .mobile-nav button,.mobile-nav small,.mobile-nav-icon{transition:none!important}
+  .mobile-nav button.is-tapped .mobile-nav-icon,.mobile-nav button.cart-added .mobile-nav-icon,.mobile-nav button.cart-added #mobileBadge{animation:none!important}
+}
+/* All environments selector in the desktop navigation */
+.environment-mega-overview{grid-column:1/-1;padding:22px 28px 28px}
+.environment-mega-overview>p{margin:0 0 15px;color:#69809f;font-size:.65rem;font-weight:800;letter-spacing:.13em}
+.environment-mega-overview>div{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.environment-mega-overview button{display:flex;align-items:center;gap:11px;min-height:72px;padding:12px;border:1px solid #dce5f0;border-radius:10px;background:#fff;color:var(--blue);text-align:left;font-size:.8rem;font-weight:800;transition:background-color .18s ease,border-color .18s ease}
+.environment-mega-overview button:hover,.environment-mega-overview button:focus-visible{background:#f1f6fd;border-color:#8aaee0}
+.environment-mega-overview button .category-icon{width:34px;height:34px}
+.environment-mega-overview button span{flex:1}
+.environment-mega-overview button b{font-size:1rem}
+@media(max-width:1000px){.environment-mega-overview>div{grid-template-columns:repeat(2,minmax(0,1fr))}}

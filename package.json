@@ -7,7 +7,7 @@
     "build": "node scripts/build-vercel.mjs",
     "dev": "node server.js",
     "start": "node server.js",
-    "check": "node --check category-icons.js && node --check app.js && node --check hero-carousel.js && node --check storefront-cms.js && node --check admin-app.js",
+    "check": "node --check category-icons.js && node --check app.js && node --check mobile-navigation.js && node --check hero-carousel.js && node --check storefront-cms.js && node --check admin-app.js",
     "verify:cms": "node --use-system-ca scripts/verify-cms.mjs"
   }
 }
