@@ -23,7 +23,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/assets/pwa-icon-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="styles.css?v=carousel-1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="styles.css?v=carousel-1"><link rel="stylesheet" href="virtual-assistant-launcher.css?v=1">
 </head>
 <body>
 <div class="topbar"><div>🚚 Mais conforto, da nossa loja para sua casa</div><div>▣ </div><div></div><div>⌕ Cuidar da sua casa começa aqui</div><div class="instagram">Siga @menorprecomoveis ↗</div></div>
@@ -94,6 +94,7 @@
   <button type="button" data-mobile-route="sacola" aria-label="Sacola"><span class="mobile-nav-icon" aria-hidden="true">🛒</span><small>Sacola</small><b id="mobileBadge" aria-live="polite" aria-atomic="true">0</b></button>
   <button type="button" data-mobile-route="conta" aria-label="Conta"><span class="mobile-nav-icon" aria-hidden="true">♙</span><small>Conta</small></button>
 </nav>
+<button id="virtualAssistantLauncher" class="virtual-assistant-launcher" type="button" aria-expanded="false" aria-controls="virtualAssistantPanel" aria-label="Abrir assistente de navegação"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v10H9l-4 4V5Z"/><path d="M8 9h8M8 12h5"/></svg><span>Encontre seu móvel</span></button>
 <div id="toast" role="status" aria-live="polite"></div><div id="drawer" class="drawer" role="dialog" aria-modal="true" aria-hidden="true" aria-label="Painel da loja"><div class="drawer-card" role="document"><button class="close" type="button" onclick="closeDrawer()" aria-label="Fechar painel">×</button><div id="drawerContent"></div></div></div>
 <script src="assets/supabase-2.116.0.js"></script>
 <script src="category-icons.js?v=1"></script>
@@ -101,5 +102,6 @@
 <script src="mobile-navigation.js?v=1"></script>
 <script src="hero-carousel.js?v=cms-banners-2"></script>
 <script src="storefront-cms.js?v=security-audit-2"></script>
+<script src="virtual-assistant-loader.js?v=1"></script>
 <script src="pwa.js?v=pwa-1"></script>
 </body></html>

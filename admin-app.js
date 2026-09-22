@@ -10,7 +10,7 @@
   const titles = {
     dashboard: 'Visão geral', products: 'Produtos', categories: 'Subcategorias', environments: 'Ambientes',
     brands: 'Marcas', stock: 'Estoque', promotions: 'Promoções', coupons: 'Cupons', banners: 'Campanhas e Banners',
-    sections: 'Página inicial', inspirations: 'Inspirações', leads: 'Leads / Orçamentos', store: 'Loja e WhatsApp',
+    sections: 'Página inicial', inspirations: 'Inspirações', leads: 'Leads / Orçamentos', store: 'Loja e WhatsApp', assistant: 'Assistente Virtual',
     orders: 'Pedidos', 'online-sales': 'Vendas online',
     seo: 'SEO', users: 'Usuários ADM', settings: 'Configurações', audit: 'Auditoria'
   };
@@ -28,6 +28,7 @@
     inspirations: ['◎', 'Publique ambientes e ideias para os clientes.'],
     leads: ['✉', 'Acompanhe contatos e solicitações de orçamento.'],
     store: ['⌖', 'Atualize os dados da loja e do WhatsApp.'],
+    assistant: ['✦', 'Configure o assistente gratuito de navegação da loja.'],
     orders: ['▧', 'Acompanhe pagamentos, separação, retirada e entrega dos pedidos.'],
     'online-sales': ['⚙', 'Prepare entrega, pagamento e regras comerciais do checkout.'],
     seo: ['⌕', 'Defina os dados padrão para buscadores e compartilhamento.'],
@@ -2954,6 +2955,7 @@
 
   const settingGroups = {
     store: { title: 'Dados da loja e WhatsApp', fields: [['store_name', 'Nome da loja', 'text'], ['phone', 'Telefone', 'text'], ['whatsapp', 'Número oficial do WhatsApp', 'text'], ['whatsapp_message', 'Mensagem padrão do WhatsApp', 'textarea'], ['whatsapp_button_text', 'Texto do botão de produto', 'text'], ['whatsapp_button_subtitle', 'Texto de apoio do botão', 'text'], ['product_benefit_secure_text', 'Benefício: compra segura', 'text'], ['product_benefit_pickup_text', 'Benefício: retirada na loja', 'text'], ['service_region', 'Cidade / região atendida', 'text'], ['address', 'Endereço', 'text'], ['city', 'Cidade', 'text'], ['state', 'Estado', 'text'], ['postal_code', 'CEP', 'text'], ['map_url', 'Link do Google Maps', 'text'], ['instagram', 'Instagram', 'text'], ['facebook', 'Facebook', 'text'], ['opening_hours', 'Horários', 'textarea']] },
+    assistant: { title: 'Assistente Virtual', fields: [['assistant_enabled', 'Assistente ativo', 'checkbox'], ['assistant_welcome_message', 'Mensagem de boas-vindas', 'textarea'], ['assistant_show_sala', 'Mostrar Sala', 'checkbox'], ['assistant_show_quarto', 'Mostrar Quarto', 'checkbox'], ['assistant_show_cozinha', 'Mostrar Cozinha', 'checkbox'], ['assistant_show_eletros', 'Mostrar Eletros', 'checkbox'], ['assistant_show_offers', 'Mostrar Ofertas', 'checkbox'], ['assistant_show_whatsapp', 'Mostrar WhatsApp', 'checkbox']] },
     seo: { title: 'SEO padrão do site', fields: [['default_meta_title', 'Título do site', 'text'], ['default_meta_description', 'Descrição', 'textarea'], ['default_og_image_url', 'Imagem de compartilhamento', 'file']] },
     settings: { title: 'Identidade e informações gerais', fields: [['logo_url', 'Logo oficial', 'file'], ['favicon_url', 'Favicon', 'file'], ['primary_color', 'Cor principal', 'color'], ['accent_color', 'Cor de destaque', 'color'], ['institutional_text', 'Texto institucional', 'textarea'], ['footer_text', 'Texto do rodapé', 'textarea']] }
   };
@@ -2982,7 +2984,7 @@
         notifyStorefront('store_settings');
         toast('Configurações salvas e disponíveis para o site.');
       } catch (saveError) {
-        if (saveError?.code === '42703' || /whatsapp_button_text|whatsapp_button_subtitle|product_benefit_secure_text|product_benefit_pickup_text|service_region/i.test(saveError?.message || '')) toast('Execute a migration 20260920_product_commerce_cards.sql no Supabase antes de salvar estas configurações.', 'error');
+        if (saveError?.code === '42703' || /assistant_|whatsapp_button_text|whatsapp_button_subtitle|product_benefit_secure_text|product_benefit_pickup_text|service_region/i.test(saveError?.message || '')) toast(view === 'assistant' ? 'Execute a migration 20260927_virtual_assistant.sql no Supabase antes de salvar.' : 'Execute a migration 20260920_product_commerce_cards.sql no Supabase antes de salvar estas configurações.', 'error');
         else toast(explain(saveError), 'error');
       }
       finally { submit.disabled = false; submit.classList.remove('is-loading'); }
@@ -3060,7 +3062,7 @@
       else if (view === 'leads') await renderLeads(revision);
       else if (view === 'orders') await renderOrders(revision);
       else if (view === 'online-sales') await renderOnlineSales(revision);
-      else if (['store', 'seo', 'settings'].includes(view)) await renderSettings(view, revision);
+      else if (['store', 'assistant', 'seo', 'settings'].includes(view)) await renderSettings(view, revision);
       else if (view === 'users') await renderUsers(revision);
       else if (view === 'audit') await renderAudit(revision);
       else await renderSimple(view, revision);

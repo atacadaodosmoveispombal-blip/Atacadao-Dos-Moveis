@@ -25,7 +25,9 @@ const publicFiles = new Set([
   'index.html', 'admin.html', '404.html', 'offline.html', 'robots.txt', 'sitemap.xml',
   'styles.css', 'admin.css', 'admin-design-system.css', 'app.js', 'admin-app.js',
   'storefront-cms.js', 'category-icons.js', 'mobile-navigation.js',
-  'hero-carousel.js', 'service-worker.js', 'pwa.js', 'manifest.webmanifest'
+  'hero-carousel.js', 'service-worker.js', 'pwa.js', 'manifest.webmanifest',
+  'virtual-assistant-launcher.css', 'virtual-assistant.css',
+  'virtual-assistant-loader.js', 'virtual-assistant.js'
 ]);
 
 const server = createServer((request, response) => {
