@@ -22,9 +22,9 @@ const contentTypes = {
 };
 
 const publicFiles = new Set([
-  'index.html', 'admin.html', '404.html', 'offline.html', 'robots.txt', 'sitemap.xml',
+  'index.html', 'admin.html', 'redefinir-senha.html', '404.html', 'offline.html', 'robots.txt', 'sitemap.xml',
   'styles.css', 'admin.css', 'admin-design-system.css', 'app.js', 'admin-app.js',
-  'storefront-cms.js', 'category-icons.js', 'mobile-navigation.js',
+  'storefront-cms.js', 'customer-account.js', 'customer-account.css', 'reset-password.js', 'category-icons.js', 'mobile-navigation.js',
   'hero-carousel.js', 'service-worker.js', 'pwa.js', 'manifest.webmanifest',
   'virtual-assistant-launcher.css', 'virtual-assistant.css', 'virtual-assistant-catalog.css',
   'virtual-assistant-loader.js', 'virtual-assistant.js', 'virtual-assistant-catalog.js'
@@ -36,7 +36,7 @@ const server = createServer((request, response) => {
   catch { response.writeHead(400).end('Bad request'); return; }
   const route = pathname.replace(/\/+$/, '') || '/';
   const storefrontRoute = ['/', '/ofertas', '/categorias', '/sacola', '/conta'].includes(route);
-  const relativePath = storefrontRoute ? 'index.html' : route === '/admin' ? 'admin.html' : route.replace(/^\/+/, '');
+  const relativePath = storefrontRoute ? 'index.html' : route === '/admin' ? 'admin.html' : route === '/redefinir-senha' ? 'redefinir-senha.html' : route.replace(/^\/+/, '');
   const segments = relativePath.split('/');
   const allowedAsset = relativePath.startsWith('assets/') && segments.every(segment => segment && !segment.startsWith('.'));
   if (relativePath.includes('\\') || (!publicFiles.has(relativePath) && !allowedAsset)) {
