@@ -19,13 +19,13 @@
     launcher.setAttribute('aria-busy', 'true');
     try {
       if (!document.querySelector('link[data-virtual-assistant-style]')) {
-        const style = document.createElement('link');
-        style.rel = 'stylesheet';
-        style.href = 'virtual-assistant.css?v=1';
-        style.dataset.virtualAssistantStyle = 'true';
-        document.head.append(style);
+        ['virtual-assistant.css?v=1', 'virtual-assistant-catalog.css?v=2'].forEach(href => {
+          const style = document.createElement('link');
+          style.rel = 'stylesheet'; style.href = href; style.dataset.virtualAssistantStyle = 'true';
+          document.head.append(style);
+        });
       }
-      const module = await import('./virtual-assistant.js?v=1');
+      const module = await import('./virtual-assistant-catalog.js?v=2');
       module.mountVirtualAssistant({ launcher });
       launcher.click();
     } catch (error) {
@@ -37,4 +37,3 @@
     }
   }, { once: true });
 })();
-

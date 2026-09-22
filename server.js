@@ -26,8 +26,8 @@ const publicFiles = new Set([
   'styles.css', 'admin.css', 'admin-design-system.css', 'app.js', 'admin-app.js',
   'storefront-cms.js', 'category-icons.js', 'mobile-navigation.js',
   'hero-carousel.js', 'service-worker.js', 'pwa.js', 'manifest.webmanifest',
-  'virtual-assistant-launcher.css', 'virtual-assistant.css',
-  'virtual-assistant-loader.js', 'virtual-assistant.js'
+  'virtual-assistant-launcher.css', 'virtual-assistant.css', 'virtual-assistant-catalog.css',
+  'virtual-assistant-loader.js', 'virtual-assistant.js', 'virtual-assistant-catalog.js'
 ]);
 
 const server = createServer((request, response) => {
