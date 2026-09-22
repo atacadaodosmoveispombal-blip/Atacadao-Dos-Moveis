@@ -24,6 +24,7 @@ const publicFiles = [
   'virtual-assistant-loader.js',
   'virtual-assistant.js',
   'virtual-assistant-catalog.js',
+  'virtual-assistant-voice.js',
   'virtual-assistant.css',
   'virtual-assistant-catalog.css',
   'manifest.webmanifest',

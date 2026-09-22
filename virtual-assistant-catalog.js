@@ -1,3 +1,5 @@
+import { setupVoiceSearch } from './virtual-assistant-voice.js';
+
 const DEFAULT_WELCOME = 'Olá! 👋 Eu conheço nosso catálogo e posso procurar produtos, preços e benefícios para você.';
 
 const STOP_WORDS = new Set([
@@ -336,7 +338,7 @@ function escapeHtml(value) {
 }
 
 function icon(name) {
-  const paths = { chat: '<path d="M5 5h14v10H9l-4 4V5Z"/><path d="M8 9h8M8 12h5"/>', close: '<path d="m7 7 10 10M17 7 7 17"/>', send: '<path d="m4 4 17 8-17 8 3-8-3-8Z"/><path d="M7 12h14"/>', bag: '<path d="M6 8h12l1 13H5L6 8Z"/><path d="M9 9V6a3 3 0 0 1 6 0v3"/>' };
+  const paths = { chat: '<path d="M5 5h14v10H9l-4 4V5Z"/><path d="M8 9h8M8 12h5"/>', close: '<path d="m7 7 10 10M17 7 7 17"/>', send: '<path d="m4 4 17 8-17 8 3-8-3-8Z"/><path d="M7 12h14"/>', mic: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4M8 21h8"/>', bag: '<path d="M6 8h12l1 13H5L6 8Z"/><path d="M9 9V6a3 3 0 0 1 6 0v3"/>' };
   return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || ''}</svg>`;
 }
 
@@ -363,7 +365,7 @@ export function mountVirtualAssistant({ launcher, api = window.StorefrontNavigat
   launcher.dataset.assistantMounted = 'true';
   const root = document.createElement('div'); root.className = 'virtual-assistant'; launcher.before(root); root.append(launcher);
   const panel = document.createElement('section'); panel.id = 'virtualAssistantPanel'; panel.className = 'virtual-assistant-panel'; panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-modal', 'false'); panel.setAttribute('aria-labelledby', 'virtualAssistantTitle'); panel.hidden = true;
-  panel.innerHTML = `<header class="virtual-assistant-header"><span class="virtual-assistant-avatar">${icon('chat')}</span><div><strong id="virtualAssistantTitle">ASSISTENTE ATACAREJO</strong><small><i></i> Especialista da loja</small></div><button type="button" data-assistant-close aria-label="Fechar assistente">${icon('close')}</button></header><div class="virtual-assistant-log" data-assistant-log role="log" aria-live="polite" aria-relevant="additions"></div><form class="virtual-assistant-form" data-assistant-form><label class="sr-only" for="virtualAssistantInput">Digite o que está procurando</label><input id="virtualAssistantInput" name="message" autocomplete="off" enterkeyhint="send" maxlength="160" placeholder="Ex.: armário 2 portas até R$ 1.000" required><button type="submit" aria-label="Enviar mensagem">${icon('send')}</button></form>`;
+  panel.innerHTML = `<header class="virtual-assistant-header"><span class="virtual-assistant-avatar">${icon('chat')}</span><div><strong id="virtualAssistantTitle">ASSISTENTE ATACAREJO</strong><small><i></i> Especialista da loja</small></div><button type="button" data-assistant-close aria-label="Fechar assistente">${icon('close')}</button></header><div class="virtual-assistant-log" data-assistant-log role="log" aria-live="polite" aria-relevant="additions"></div><form class="virtual-assistant-form" data-assistant-form><label class="sr-only" for="virtualAssistantInput">Digite ou fale o que procura</label><input id="virtualAssistantInput" name="message" autocomplete="off" enterkeyhint="send" maxlength="160" placeholder="Digite ou fale o que procura..." required><button class="virtual-assistant-voice" type="button" data-assistant-voice aria-label="Pesquisar por voz" hidden>${icon('mic')}</button><button type="submit" aria-label="Enviar mensagem">${icon('send')}</button><span class="virtual-assistant-voice-status" data-assistant-voice-status role="status" aria-live="polite" hidden></span></form>`;
   root.append(panel);
   const log = panel.querySelector('[data-assistant-log]'); const form = panel.querySelector('[data-assistant-form]'); const input = form.elements.message; const closeButton = panel.querySelector('[data-assistant-close]');
   const session = { lastQuery: '', lastAllIds: [], lastShownIds: [], selectedProductId: null };
@@ -371,7 +373,7 @@ export function mountVirtualAssistant({ launcher, api = window.StorefrontNavigat
   const currentData = () => api.getAssistantData();
 
   function addUserMessage(text) { const article = document.createElement('article'); article.className = 'virtual-assistant-message is-user'; article.textContent = text; log.append(article); }
-  function close() { panel.hidden = true; root.classList.remove('is-open'); launcher.setAttribute('aria-expanded', 'false'); launcher.focus({ preventScroll: true }); }
+  function close() { voice.stop(); panel.hidden = true; root.classList.remove('is-open'); launcher.setAttribute('aria-expanded', 'false'); launcher.focus({ preventScroll: true }); }
   function runIntent(intent) { close(); if (intent.type === 'subcategory') api.openSubcategory(intent.environment, intent.label); else if (intent.type === 'environment') api.openEnvironment(intent.environment || intent.label); else if (intent.type === 'offers') api.openOffers(); else if (intent.type === 'cart') api.openCart(); else if (intent.type === 'whatsapp') api.openWhatsApp(); else if (intent.type === 'home') api.openHome(); }
   function actionButton(intent, label) { const button = document.createElement('button'); button.type = 'button'; button.className = 'virtual-assistant-action'; button.innerHTML = `<span>${escapeHtml(label)}</span><b aria-hidden="true">→</b>`; button.addEventListener('click', () => runIntent(intent)); return button; }
   function queryButton(label, query) { const button = document.createElement('button'); button.type = 'button'; button.className = 'virtual-assistant-query'; button.textContent = label; button.addEventListener('click', () => submitMessage(query, label)); return button; }
@@ -417,7 +419,10 @@ export function mountVirtualAssistant({ launcher, api = window.StorefrontNavigat
   }
 
   function submitMessage(message, visibleText = message) { const text = String(message || '').trim(); if (!text) return; addUserMessage(visibleText); addAssistantResult(searchStore(text, currentData(), session)); form.reset(); input.focus(); }
+  const voice = setupVoiceSearch({ input, button: panel.querySelector('[data-assistant-voice]'), status: panel.querySelector('[data-assistant-voice-status]'), submit: submitMessage, isOpen: () => !panel.hidden, Recognition: window.SpeechRecognition || window.webkitSpeechRecognition });
   function addWelcome() { const data = currentData(); const article = document.createElement('article'); article.className = 'virtual-assistant-message is-assistant is-welcome'; const bubble = document.createElement('div'); bubble.textContent = data.settings?.welcome || DEFAULT_WELCOME; article.append(bubble); const shortcuts = document.createElement('div'); shortcuts.className = 'virtual-assistant-shortcuts'; configuredShortcuts(data).forEach(item => { const button = document.createElement('button'); button.type = 'button'; button.innerHTML = `<span aria-hidden="true">${item.emoji}</span>${escapeHtml(item.label)}`; button.addEventListener('click', () => submitMessage(item.query, item.label)); shortcuts.append(button); }); article.append(shortcuts); log.append(article); }
   function open() { if (!started) { addWelcome(); started = true; } panel.hidden = false; root.classList.add('is-open'); launcher.setAttribute('aria-expanded', 'true'); requestAnimationFrame(() => input.focus({ preventScroll: true })); }
-  launcher.addEventListener('click', () => panel.hidden ? open() : close()); closeButton.addEventListener('click', close); panel.addEventListener('keydown', event => { if (event.key === 'Escape') close(); }); form.addEventListener('submit', event => { event.preventDefault(); submitMessage(input.value); });
+  launcher.addEventListener('click', () => panel.hidden ? open() : close()); closeButton.addEventListener('click', close); panel.addEventListener('keydown', event => { if (event.key === 'Escape') close(); }); form.addEventListener('submit', event => { event.preventDefault(); voice.stop({ restoreDraft: false }); submitMessage(input.value); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) voice.stop(); });
+  window.addEventListener('pagehide', () => voice.stop());
 }
