@@ -19,7 +19,10 @@ const publicFiles = [
   'manifest.webmanifest',
   'service-worker.js',
   'pwa.js',
-  'offline.html'
+  'offline.html',
+  '404.html',
+  'robots.txt',
+  'sitemap.xml'
 ];
 
 rmSync(output, { recursive: true, force: true });

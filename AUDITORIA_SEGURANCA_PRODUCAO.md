@@ -1,0 +1,42 @@
+# Auditoria de segurança e produção — Atacarejo dos Móveis
+
+Data: 21/09/2026. Escopo: repositório local, migrations, build estático, domínio HTTPS e chamadas **sem login** à API pública do Supabase. Nenhuma credencial privada ou dado comercial foi incluído neste relatório. Nenhuma migration foi executada no banco de produção.
+
+## Conclusão
+
+**PRECISA CORREÇÃO antes da entrega ao cliente.** A escrita anônima testada em produtos, banners e promoções foi negada, mas o cadastro público de contas está habilitado e as migrations criam perfis `viewer` ativos. A função de autorização e policies permitem que um `viewer` ativo leia dados administrativos. A coluna `cost_price` também é selecionável sem login. O acesso real de uma conta auto cadastrada e as operações UPDATE/DELETE precisam de verificação autorizada em ambiente de teste; não foram criadas contas nem alterados registros de produção.
+
+## Checklist
+
+| Área | Resultado | Evidência e ação |
+| --- | --- | --- |
+| Chave privada no frontend | **PASSOU** | O frontend contém apenas chave publicável. Nenhuma chave `service_role` ou chave privada foi encontrada nos arquivos próprios rastreados. `.env.local` é ignorado pelo Git e não é servido pelo domínio. Revisar também o histórico Git antes da entrega. |
+| Escrita anônima em produtos, banners e promoções | **PASSOU para INSERT; PRECISA CORREÇÃO para garantia completa** | Payloads inválidos enviados sem login retornaram `401 / 42501`; não criaram registros. UPDATE/DELETE em linhas reais não foram executados. A migration preparada revoga também grants de escrita ao papel `anon`. |
+| Cadastro e autorização de administradores | **PRECISA CORREÇÃO — crítica** | `/auth/v1/settings` indica cadastro habilitado. A migration inicial cria perfil `viewer` ativo e `is_admin()` aceita `viewer`; policies de pedidos, leads e dados internos usam essa função. Aplicar a migration preparada após backup, revisar viewers existentes e desativar cadastro público em Supabase Auth. |
+| Leitura de custo dos produtos | **PRECISA CORREÇÃO — alta** | `products?select=id,cost_price` retornou `200` sem login. Nenhum produto público com custo preenchido foi encontrado no teste, mas um valor futuro ficaria acessível. Separar custo em tabela privada, ou implantar privilégios por coluna com consultas públicas explícitas; `select=*` no storefront precisa mudar antes de restringir coluna. |
+| RPC público de visualização | **PRECISA CORREÇÃO** | `register_product_view` é executável por `anon` e atualiza `products.view_count`. Embora não altere preço/conteúdo editorial, viola a regra literal de não alterar produtos por chamada direta e permite inflar métricas. Mover a contagem para tabela de analytics e limitar abuso. |
+| RLS e policies | **PASSOU no código; PRECISA CORREÇÃO na verificação final** | As tabelas declaradas têm RLS e políticas administrativas. Grants amplos de instalação antiga ainda dependem muito de RLS. A consulta `supabase/audits/production_readonly.sql` deve confirmar a configuração **efetiva** e testar perfis `anon`, `viewer`, `editor` e `super_admin`. |
+| Storage e upload | **PRECISA CORREÇÃO** | Buckets declaram limites de 4–8 MB e policies de escrita administrativa. `site` e `brands` ainda aceitam SVG na configuração do banco; a migration preparada restringe novos uploads a JPG/PNG/WebP. Revisar SVGs já existentes e testar policies efetivas no Storage. O frontend agora valida raster e tamanho. |
+| Sessão administrativa | **PASSOU com ressalva** | O painel usa `getUser()`, checa perfil e reage a `SIGNED_OUT`/`TOKEN_REFRESHED`. A página HTML `/admin` é pública, o que é normal para aplicação estática; os dados devem continuar protegidos pelo banco. Após a migration, `access_approved=false` também bloqueia a tela. |
+| Mensagens de erro | **PASSOU no código atualizado** | Erros desconhecidos agora mostram texto genérico; credenciais, stack trace e detalhes SQL não são exibidos na interface. |
+| Integridade e índices | **PASSOU no esquema versionado; PRECISA CORREÇÃO na checagem do banco vivo** | Migrations incluem FKs, unicidade de SKU/slug, restrições de preço/estoque/pedido e índices de catálogo, pedidos e relacionamentos. Conferir que todas foram aplicadas com a consulta somente leitura. |
+| Backup e restauração | **PRECISA CORREÇÃO** | Estratégia documentada em `BACKUP_RESTORE.md`, mas não houve comprovação de backup atual nem ensaio de restauração. O backup do banco não inclui bytes do Storage. |
+| Domínio e TLS | **PASSOU para HTTPS; PRECISA CORREÇÃO para redirecionamentos** | Apex e `www` responderam `200` com certificado válido. HSTS, `nosniff` e proteção de frame estão presentes. O acesso HTTP pela porta 80 não respondeu neste ambiente; validar redirecionamento com a equipe de DNS/Vercel. Definir `www` → apex para evitar duplicidade. |
+| Build e arquivos privados | **PASSOU** | `npm run check`, `npm run build` e `git diff --check` passaram. O build copia arquivos públicos por lista. GET de `/.env.local`, `/.git/config` e migrations em produção retornou `404`. O servidor local foi fechado para arquivos fora da lista pública. |
+| 404 e SEO técnico | **PASSOU no código atualizado; validar publicação** | Foram adicionados `404.html`, `robots.txt`, `sitemap.xml`, canonical, Open Graph, Twitter Card e `noindex` no administrativo. Favicon já respondia `200`. Verificar respostas após deploy. |
+| Variáveis e logs de produção | **PRECISA CORREÇÃO na verificação** | Não há credencial privada exigida pelo build estático e não foram encontradas variáveis privadas hardcoded. Não houve acesso autorizado ao painel Vercel/Supabase para listar variáveis de produção ou revisar logs; conferir nomes, escopo Production e eventos de erro no dashboard. |
+| Política de conteúdo | **PRECISA CORREÇÃO** | Cabeçalhos HSTS, `X-Content-Type-Options`, `X-Frame-Options`, Referrer e Permissions estão configurados. Falta CSP. O site usa scripts/handlers inline; aplicar CSP exige adaptar esses trechos e testar o PWA para não quebrar a navegação. |
+
+## Ordem recomendada para liberar a entrega
+
+1. Fazer e **testar** backup do banco e cópia dos objetos do Storage; registrar responsáveis e ponto de restauração.
+2. Revisar perfis ativos, aplicar `supabase/migrations/20260926_security_admin_gate.sql` em ambiente de teste e depois em produção, validar o painel, e desativar **Allow new users to sign up** em Supabase Auth. Novos administradores devem ser convidados pelo Dashboard e ativados no painel.
+3. Isolar `cost_price` do acesso público; atualizar as consultas `select=*` do storefront antes de alterar grants. Corrigir a mutação de `products.view_count` pelo RPC anônimo.
+4. Executar `supabase/audits/production_readonly.sql`, comparar grants/policies reais e fazer testes de acesso com contas de cada função. Não usar dados de clientes na conta de teste.
+5. Revisar variáveis e logs nos painéis Vercel/Supabase; validar 404, sitemap/robots, Open Graph, HTTPS e redirects após publicação.
+
+## Limites dos testes
+
+Os testes de produção foram de leitura, mais INSERTs com payload obrigatório inválido que o RLS rejeitou. Uma tentativa de testar PATCH em linhas reais com valores inválidos foi **rejeitada pela revisão automática de aprovação** porque poderia alterar dados caso alguma constraint não se comportasse como esperado. Nenhum PATCH ou DELETE foi executado. A confirmação de UPDATE/DELETE deve ocorrer em projeto de teste restaurado ou por inspeção administrativa das policies/grants.
+
+Referências: [RLS e grants](https://supabase.com/docs/guides/database/postgres/row-level-security), [privilégios por coluna](https://supabase.com/docs/guides/database/postgres/column-level-security), [cadastro Supabase Auth](https://supabase.com/docs/guides/auth/general-configuration), [backups Supabase](https://supabase.com/docs/guides/platform/backups), [logs Vercel](https://vercel.com/docs/logs/runtime).

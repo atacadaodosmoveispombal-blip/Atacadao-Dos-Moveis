@@ -8,6 +8,12 @@
   window.atacarejoDb = cms;
   const imageFallback = 'assets/logo.png';
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+  const safeNavigationUrl = value => {
+    try {
+      const target = new URL(String(value || ''), location.href);
+      return ['http:', 'https:', 'mailto:', 'tel:'].includes(target.protocol) ? target.href : '#catalogo';
+    } catch { return '#catalogo'; }
+  };
   const storefrontBrl = value => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   let deepLinkOpened = false;
   let bootTimer;
@@ -169,7 +175,7 @@
     if (title && banner.title) title.textContent = banner.title;
     if (subtitle && banner.subtitle) subtitle.textContent = banner.subtitle;
     if (button && banner.button_text) button.firstChild.textContent = `${banner.button_text} `;
-    if (button && banner.button_url) button.onclick = () => { location.href = banner.button_url; };
+    if (button && banner.button_url) button.onclick = () => { location.href = safeNavigationUrl(banner.button_url); };
     if (art && banner.image_desktop_url) {
       const cleanHeroUrl = value => /editorial-room(?:-clean)?\.(?:jpg|png)/i.test(value) ? 'assets/editorial-room-clean.png?v=caption-removed-1' : value;
       const desktopUrl = cleanHeroUrl(banner.image_desktop_url);
@@ -202,7 +208,7 @@
       if (subtitle && banner.subtitle) subtitle.textContent = banner.subtitle;
       if (banner.image_desktop_url) slot.style.backgroundImage = `url("${banner.image_desktop_url.replace(/"/g, '%22')}")`;
       if (button && banner.button_text) button.textContent = `${banner.button_text} →`;
-      if (button && banner.button_url) button.onclick = () => { location.href = banner.button_url; };
+      if (button && banner.button_url) button.onclick = () => { location.href = safeNavigationUrl(banner.button_url); };
     });
   }
   function campaignPromotionFor(row, promotions) {
@@ -236,7 +242,7 @@
       const section = document.createElement('section');
       section.className = 'section cms-campaign-section';
       section.dataset.cmsOrder = Number(banner.sort_order || 45) + 0.1;
-      section.innerHTML = `<div class="section-head"><div><p class="eyebrow">CAMPANHA ESPECIAL</p><h2>${escapeHtml(banner.title)}</h2><p>${escapeHtml(banner.subtitle || 'Confira os produtos selecionados para esta campanha.')}</p></div></div><div class="cms-campaign-products product-grid">${selected.slice(0, 8).map(product => officialProductCard(mapProduct(product, 0, campaignPromotionFor(product, promotions)))).join('')}</div>${banner.button_text ? `<a class="btn cms-campaign-link" href="${escapeHtml(banner.button_url || '#catalogo')}">${escapeHtml(banner.button_text)} →</a>` : ''}`;
+      section.innerHTML = `<div class="section-head"><div><p class="eyebrow">CAMPANHA ESPECIAL</p><h2>${escapeHtml(banner.title)}</h2><p>${escapeHtml(banner.subtitle || 'Confira os produtos selecionados para esta campanha.')}</p></div></div><div class="cms-campaign-products product-grid">${selected.slice(0, 8).map(product => officialProductCard(mapProduct(product, 0, campaignPromotionFor(product, promotions)))).join('')}</div>${banner.button_text ? `<a class="btn cms-campaign-link" href="${escapeHtml(safeNavigationUrl(banner.button_url))}">${escapeHtml(banner.button_text)} →</a>` : ''}`;
       if (insertionPoint?.parentNode) insertionPoint.after(section); else main.append(section);
       insertionPoint = section;
     });

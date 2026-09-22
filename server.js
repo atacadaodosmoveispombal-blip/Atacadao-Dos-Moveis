@@ -16,19 +16,32 @@ const contentTypes = {
   '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
-  '.webp': 'image/webp'
+  '.webp': 'image/webp',
+  '.txt': 'text/plain; charset=utf-8',
+  '.xml': 'application/xml; charset=utf-8'
 };
 
-const server = createServer((request, response) => {
-  const pathname = decodeURIComponent(new URL(request.url, 'http://localhost').pathname);
-  const storefrontRoute = ['/', '/ofertas', '/categorias', '/sacola', '/conta'].includes(pathname.replace(/\/+$/, '') || '/');
-  const relativePath = storefrontRoute ? 'index.html' : pathname.replace(/^\/+/, '');
-  const filePath = normalize(join(root, relativePath));
+const publicFiles = new Set([
+  'index.html', 'admin.html', '404.html', 'offline.html', 'robots.txt', 'sitemap.xml',
+  'styles.css', 'admin.css', 'admin-design-system.css', 'app.js', 'admin-app.js',
+  'storefront-cms.js', 'category-icons.js', 'mobile-navigation.js',
+  'hero-carousel.js', 'service-worker.js', 'pwa.js', 'manifest.webmanifest'
+]);
 
-  if (!filePath.startsWith(root)) {
-    response.writeHead(403).end('Forbidden');
+const server = createServer((request, response) => {
+  let pathname;
+  try { pathname = decodeURIComponent(new URL(request.url, 'http://localhost').pathname); }
+  catch { response.writeHead(400).end('Bad request'); return; }
+  const route = pathname.replace(/\/+$/, '') || '/';
+  const storefrontRoute = ['/', '/ofertas', '/categorias', '/sacola', '/conta'].includes(route);
+  const relativePath = storefrontRoute ? 'index.html' : route === '/admin' ? 'admin.html' : route.replace(/^\/+/, '');
+  const segments = relativePath.split('/');
+  const allowedAsset = relativePath.startsWith('assets/') && segments.every(segment => segment && !segment.startsWith('.'));
+  if (relativePath.includes('\\') || (!publicFiles.has(relativePath) && !allowedAsset)) {
+    response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }).end('Not found');
     return;
   }
+  const filePath = normalize(join(root, relativePath));
 
   stat(filePath, (error, file) => {
     if (error || !file.isFile()) {

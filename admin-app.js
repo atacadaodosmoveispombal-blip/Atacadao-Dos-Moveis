@@ -242,12 +242,16 @@
     message(text, error);
   }
   function explain(error) {
-    const text = error?.message || '';
+    const text = String(error?.message || '');
     if (error?.code === 'invalid_credentials' || /invalid login credentials/i.test(text)) return 'E-mail ou senha incorretos.';
     if (error?.code === 'email_not_confirmed') return 'Confirme seu e-mail antes de entrar.';
-    if (/row-level security|permission denied/i.test(text)) return 'Seu perfil não possui permissão para esta ação.';
+    if (error?.code === '42501' || /row-level security|permission denied/i.test(text)) return 'Seu perfil não possui permissão para esta ação.';
+    if (error?.code === '23505') return 'Já existe um registro com esses dados.';
+    if (error?.code === '23503') return 'Este registro ainda está vinculado a outros dados.';
+    if (error?.code === '23514' || error?.code === '22001') return 'Revise os dados informados e tente novamente.';
     if (/fetch|network|timeout|timed out/i.test(text)) return 'Falha de conexão. Verifique a internet.';
-    return text || 'Não foi possível concluir a operação.';
+    if (/^(?:Seu perfil não tem acesso ativo|A data final precisa|Formato inválido|A imagem deve|Não foi possível processar esta imagem|Não foi possível otimizar esta imagem|Envie no máximo|O conteúdo JSON|Especificação inválida|“[^”]+” não é JPG|“[^”]+” ultrapassa o limite)/.test(text)) return text;
+    return 'Não foi possível concluir a operação. Tente novamente ou contate o suporte.';
   }
   async function timedFetch(input, init = {}) {
     const controller = new AbortController();
@@ -270,10 +274,10 @@
     if (!session) { if (revision === authRevision) showLogin(); return; }
     const { data: userData, error: userError } = await db.auth.getUser();
     if (userError) throw userError;
-    const { data, error } = await db.from('profiles').select('id,email,full_name,role,active').eq('id', userData.user.id).maybeSingle();
+    const { data, error } = await db.from('profiles').select('*').eq('id', userData.user.id).maybeSingle();
     if (revision !== authRevision) return;
     if (error) throw error;
-    if (!data || !data.active || !ROLES.has(data.role)) throw new Error('Seu perfil não tem acesso ativo ao painel.');
+    if (!data || !data.active || data.access_approved === false || !ROLES.has(data.role)) throw new Error('Seu perfil não tem acesso ativo ao painel.');
     profile = data;
     $('#who').textContent = `${data.full_name || data.email} · ${data.role}`;
     $('#whoTop').textContent = data.full_name || data.role;
@@ -442,8 +446,8 @@
       } else rows = await options(choices);
       return `<div class="field"><label for="f-${key}">${esc(label)}</label><select id="f-${key}" name="${key}" ${required ? 'required' : ''}><option value="">${required ? 'Selecione' : 'Nenhum'}</option>${rows.map(row => `<option value="${row.id}" ${row.environment_id ? `data-environment-id="${row.environment_id}"` : ''} ${value === row.id ? 'selected' : ''}>${esc(row.name)}</option>`).join('')}</select></div>`;
     }
-    if (type === 'file') return `<div class="field"><label for="f-${key}">${esc(label)}</label><input id="f-${key}" name="${key}" type="file" accept="image/*">${value ? `<img class="image-preview" src="${esc(value)}" alt="Imagem atual">` : ''}</div>`;
-    if (type === 'multifile') return `<div class="field full"><label for="f-${key}">${esc(label)}</label><input id="f-${key}" name="${key}" type="file" accept="image/*" multiple></div><div id="existingGallery" class="multi-images"></div>`;
+    if (type === 'file') return `<div class="field"><label for="f-${key}">${esc(label)}</label><input id="f-${key}" name="${key}" type="file" accept="image/jpeg,image/png,image/webp">${value ? `<img class="image-preview" src="${esc(value)}" alt="Imagem atual">` : ''}</div>`;
+    if (type === 'multifile') return `<div class="field full"><label for="f-${key}">${esc(label)}</label><input id="f-${key}" name="${key}" type="file" accept="image/jpeg,image/png,image/webp" multiple></div><div id="existingGallery" class="multi-images"></div>`;
     const formatted = type === 'datetime-local' && value ? new Date(value).toISOString().slice(0, 16) : value;
     return `<div class="field"><label for="f-${key}">${esc(label)}</label><input id="f-${key}" name="${key}" type="${type === 'slug' ? 'text' : type}" value="${esc(formatted)}" ${required ? 'required' : ''} ${type === 'number' ? 'step="any"' : ''}></div>`;
   }
@@ -1496,7 +1500,6 @@
   const maxImageBytes = 8 * 1024 * 1024;
   async function optimizeImage(file, bucket) {
     const rules = imageUploadRules[bucket] || imageUploadRules.site;
-    if (file.type === 'image/svg+xml' && bucket === 'site') return file;
     if (!allowedImageTypes.has(file.type)) throw new Error('Formato inválido. Envie uma imagem JPG, PNG ou WebP.');
     if (file.size > maxImageBytes) throw new Error('A imagem deve ter no máximo 8 MB.');
     let bitmap;
@@ -1544,7 +1547,7 @@
   }
   async function upload(bucket, file, folder = '') {
     const optimized = await optimizeImage(file, bucket);
-    const extension = optimized.type === 'image/svg+xml' ? 'svg' : optimized.type === 'image/webp' ? 'webp' : (optimized.name.split('.').pop() || 'jpg').toLowerCase();
+    const extension = 'webp';
     const path = `${folder ? folder + '/' : ''}${crypto.randomUUID()}.${extension}`;
     const { error } = await db.storage.from(bucket).upload(path, optimized, { cacheControl: '31536000', contentType: optimized.type, upsert: false });
     if (error) throw error;
@@ -2991,7 +2994,7 @@
     const { data, error } = await db.from('profiles').select('*').order('created_at', { ascending: false });
     if (error) throw error;
     if (revision !== viewRevision) return;
-    $('#content').innerHTML = `<div class="toolbar"><input id="searchList" placeholder="Buscar usuário…"><button class="primary-action" id="newUser">+ Novo usuário</button></div><div class="card table-wrap"><table class="data-table"><thead><tr><th>Usuário</th><th>E-mail</th><th>Função</th><th>Status</th><th>Ação</th></tr></thead><tbody>${(data || []).map(row => {
+    $('#content').innerHTML = `<div class="toolbar"><input id="searchList" placeholder="Buscar usuário…"><button class="secondary" id="newUser" type="button">Como convidar usuário</button></div><div class="card table-wrap"><table class="data-table"><thead><tr><th>Usuário</th><th>E-mail</th><th>Função</th><th>Status</th><th>Ação</th></tr></thead><tbody>${(data || []).map(row => {
       const saveAction = ActionMenu({
         id: `user-${row.id}`,
         label: row.full_name || row.email,
@@ -3003,39 +3006,15 @@
     $('#newUser').onclick = openNewUser;
     $$('[data-user-save]').forEach(button => button.onclick = () => runAction(button, async () => {
       const id = button.dataset.userSave;
-      const { error: saveError } = await db.from('profiles').update({ role: $(`[data-user-role="${id}"]`).value, active: $(`[data-user-active="${id}"]`).checked }).eq('id', id);
+      const active = $(`[data-user-active="${id}"]`).checked;
+      const values = { role: $(`[data-user-role="${id}"]`).value, active };
+      if ((data || []).some(row => String(row.id) === id && Object.hasOwn(row, 'access_approved'))) values.access_approved = active;
+      const { error: saveError } = await db.from('profiles').update(values).eq('id', id);
       toast(saveError ? explain(saveError) : 'Permissões atualizadas.', saveError ? 'error' : 'success');
     }));
   }
   function openNewUser() {
-    editorState = { view: 'new-user' };
-    $('#dialogEyebrow').textContent = 'USUÁRIOS ADM';
-    $('#dialogTitle').textContent = 'Novo usuário';
-    $('#editorFields').innerHTML = `<p class="permission-note">Se a confirmação de e-mail estiver ativa no Supabase, o usuário precisará confirmar o endereço antes do primeiro login.</p><div class="field"><label>Nome</label><input name="full_name" required></div><div class="field"><label>E-mail</label><input name="email" type="email" required></div><div class="field"><label>Senha temporária</label><input name="password" type="password" minlength="8" required></div><div class="field"><label>Função</label><select name="role"><option value="viewer">viewer</option><option value="editor">editor</option><option value="admin">admin</option></select></div>`;
-    $('#editorDialog').showModal();
-  }
-  async function saveUser(event) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    if (!form.reportValidity()) return;
-    const button = $('#saveEditor');
-    if (button.disabled) return;
-    button.disabled = true;
-    button.textContent = 'Criando usuário…';
-    try {
-      const secondary = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
-      const { data, error } = await secondary.auth.signUp({ email: form.elements.email.value.trim(), password: form.elements.password.value, options: { data: { full_name: form.elements.full_name.value.trim() } } });
-      if (error) return toast(explain(error), 'error');
-      if (data.user) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-        const { error: profileError } = await db.from('profiles').update({ role: form.elements.role.value, active: true }).eq('id', data.user.id);
-        if (profileError) return toast(explain(profileError), 'error');
-      }
-      $('#editorDialog').close(); toast('Usuário criado.'); render('users');
-    } finally {
-      button.disabled = false;
-      button.textContent = 'Salvar alterações';
-    }
+    toast('Convide o usuário em Supabase → Authentication → Users. Depois, defina a função e ative o perfil nesta tela.', 'info');
   }
   async function renderAudit(revision) {
     if (!canAdmin()) { $('#content').innerHTML = '<div class="card empty">Somente administradores podem consultar a auditoria.</div>'; return; }
@@ -3163,7 +3142,6 @@
     if (editorState?.view === 'products') return saveProduct(event);
     if (editorState?.view === 'categories') return saveCategory(event);
     if (editorState?.view === 'banners') return saveBanner(event);
-    if (editorState?.view === 'new-user') return saveUser(event);
     return saveGeneric(event);
   });
   const editorDialog = $('#editorDialog');
