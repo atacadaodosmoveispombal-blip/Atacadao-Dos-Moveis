@@ -1796,7 +1796,8 @@
     </div>
     <div class="category-toolbar card"><label class="category-search"><span aria-hidden="true">⌕</span><input id="searchList" type="search" placeholder="Pesquisar subcategoria ou ambiente..."></label><label class="inline-filter"><span>Ambiente:</span><select id="categoryEnvironment"><option value="">Todos</option>${[...new Map(rows.filter(row=>row.environment_id).map(row=>[row.environment_id,row.environments?.name||'Sem ambiente'])).entries()].map(([id,name])=>`<option value="${id}">${esc(name)}</option>`).join('')}</select></label><label class="inline-filter"><span>Status:</span><select id="categoryStatus"><option value="">Todas</option><option value="true">Ativas</option><option value="false">Inativas</option></select></label><label class="inline-filter"><span>Ordenar por:</span><select id="categorySort"><option value="order">Posição no ambiente</option><option value="name">Nome (A–Z)</option><option value="order-desc">Posição inversa</option></select></label><div class="category-view-toggle" role="group" aria-label="Modo de visualização"><button type="button" data-category-view-mode="list" aria-label="Visualização em lista">☷</button><button class="is-active" type="button" data-category-view-mode="grid" aria-label="Visualização em grade">▦</button></div></div>
     <div class="card table-wrap category-table-card grid-mode" id="categoryTableCard">${rows.length ? `<table class="data-table category-table"><thead><tr><th>#</th><th>Subcategoria</th><th>Ambiente</th><th>Identificação</th><th>Posição</th><th>Status</th><th>Ações</th></tr></thead><tbody>${rows.map(row => categoryRow(row, productCounts.get(row.id) || 0)).join('')}</tbody></table>` : '<div class="empty"><h2>Nenhuma subcategoria cadastrada</h2><p>Comece adicionando a primeira subcategoria.</p></div>'}</div>
-    <div class="category-pagination card"><span id="categoryCount">Mostrando ${rows.length} de ${rows.length} subcategorias</span><div><button type="button" disabled aria-label="Página anterior">‹</button><button class="current" type="button" aria-current="page">1</button><button type="button" disabled aria-label="Próxima página">›</button><select aria-label="Itens por página"><option>20 por página</option></select></div></div>`;
+    <div id="categoryFilterEmpty" class="card empty admin-empty" hidden><span class="admin-empty-icon" aria-hidden="true">⌕</span><h2>Nenhuma subcategoria encontrada</h2><p>Tente ajustar a busca ou os filtros.</p></div>
+    <div class="category-pagination card" ${rows.length ? "" : "hidden"}><span id="categoryCount">Mostrando ${Math.min(rows.length, 20)} de ${rows.length} subcategorias</span><div><button id="categoryPrev" type="button" aria-label="Página anterior">‹</button><span id="categoryPage" aria-live="polite">Página 1</span><button id="categoryNext" type="button" aria-label="Próxima página">›</button><select id="categoryPageSize" aria-label="Itens por página"><option value="20">20 por página</option><option value="40">40 por página</option><option value="80">80 por página</option></select></div></div>`;
     const pageAction = $('#pageAction');
     pageAction.hidden = false;
     pageAction.textContent = '+  Nova subcategoria';
@@ -1826,11 +1827,14 @@
       if (await deleteCategorySafely(record)) render('categories');
     }));
 
-    const applyCategoryFilters = () => {
+    let categoryPage = 1;
+    const applyCategoryFilters = (resetPage = false) => {
+      if (resetPage) categoryPage = 1;
       const term = $('#searchList').value.trim().toLowerCase();
       const environmentId = $('#categoryEnvironment').value;
       const status = $('#categoryStatus').value;
       const sort = $('#categorySort').value;
+      const pageSize = Number($('#categoryPageSize').value);
       const body = $('.category-table tbody');
       if (!body) return;
       const elements = $$('tr', body).sort((left, right) => {
@@ -1839,18 +1843,24 @@
         return (Number(left.dataset.order) - Number(right.dataset.order)) * direction;
       });
       elements.forEach(row => body.append(row));
-      let visible = 0;
-      elements.forEach(row => {
-        const matches = (!term || row.textContent.toLowerCase().includes(term)) && (!environmentId || row.dataset.environmentId === environmentId) && (!status || row.dataset.active === status);
-        row.hidden = !matches;
-        if (matches) visible++;
-      });
-      $('#categoryCount').textContent = `Mostrando ${visible} de ${rows.length} subcategorias`;
+      const matches = elements.filter(row => (!term || row.textContent.toLowerCase().includes(term)) && (!environmentId || row.dataset.environmentId === environmentId) && (!status || row.dataset.active === status));
+      const pageCount = Math.max(1, Math.ceil(matches.length / pageSize));
+      categoryPage = Math.min(categoryPage, pageCount);
+      const start = (categoryPage - 1) * pageSize;
+      const visible = new Set(matches.slice(start, start + pageSize));
+      elements.forEach(row => { row.hidden = !visible.has(row); });
+      $('#categoryCount').textContent = matches.length ? `Mostrando ${start + 1}–${Math.min(start + pageSize, matches.length)} de ${matches.length} subcategorias` : 'Nenhuma subcategoria encontrada';
+      $('#categoryFilterEmpty').hidden = matches.length > 0;
+      $('#categoryPage').textContent = `Página ${categoryPage} de ${pageCount}`;
+      $('#categoryPrev').disabled = categoryPage <= 1;
+      $('#categoryNext').disabled = categoryPage >= pageCount;
     };
-    $('#searchList').addEventListener('input', applyCategoryFilters);
-    $('#categoryEnvironment').addEventListener('change', applyCategoryFilters);
-    $('#categoryStatus').addEventListener('change', applyCategoryFilters);
-    $('#categorySort').addEventListener('change', applyCategoryFilters);
+    for (const id of ['searchList', 'categoryEnvironment', 'categoryStatus', 'categorySort', 'categoryPageSize']) {
+      $(`#${id}`).addEventListener(id === 'searchList' ? 'input' : 'change', () => applyCategoryFilters(true));
+    }
+    $('#categoryPrev').onclick = () => { categoryPage--; applyCategoryFilters(); };
+    $('#categoryNext').onclick = () => { categoryPage++; applyCategoryFilters(); };
+    applyCategoryFilters();
     $$('[data-category-view-mode]').forEach(button => button.onclick = () => {
       $$('[data-category-view-mode]').forEach(item => item.classList.toggle('is-active', item === button));
       $('#categoryTableCard').classList.toggle('grid-mode', button.dataset.categoryViewMode === 'grid');
@@ -1957,9 +1967,9 @@
       return items.length ? items.map(item => `<button type="button" data-banner-edit="${item.id}"><span class="banner-structure-thumb" ${item.image_desktop_url ? `style="background-image:url(&quot;${esc(item.image_desktop_url)}&quot;)"` : ''}></span><span><b>${esc(item.title)}</b><small>${esc(bannerSchedule(item, now).label)} · ordem ${Number(item.sort_order || 0)}</small></span></button>`).join('') : `<p>${esc(emptyText)}</p>`;
     };
     $('#content').innerHTML = `<div class="banner-summary"><article><span>▣</span><div><b>${active}</b><small>Campanhas ativas</small></div></article><article class="scheduled"><span>◷</span><div><b>${scheduled}</b><small>Agendadas</small></div></article><article class="ended"><span>✓</span><div><b>${ended}</b><small>Encerradas</small></div></article><article class="inactive"><span>−</span><div><b>${drafts}</b><small>Rascunhos / pausadas</small></div></article></div>
-      <section class="quick-suggestions card"><header><span>💡</span><div><h2>Sugestões para sua loja</h2><p>O painel analisou produtos, preços, fotos e estoque reais do catálogo.</p></div><b>⚡ Campanha em 1 clique</b></header><div>${suggestions.map(item => `<article><span>${item.icon}</span><p>${esc(item.text)}</p><button type="button" data-quick-suggestion="${item.preset}">${esc(item.action)}</button></article>`).join('')}</div></section>
+      <details class="quick-suggestions card admin-disclosure"><summary><span aria-hidden="true">💡</span><span><strong>Sugestões para sua loja</strong><small>Ideias criadas a partir do catálogo e estoque.</small></span><em aria-hidden="true">⌄</em></summary><div>${suggestions.map(item => `<article><span>${item.icon}</span><p>${esc(item.text)}</p><button type="button" data-quick-suggestion="${item.preset}">${esc(item.action)}</button></article>`).join('')}</div></details>
       <section class="banner-toolbar card"><label class="banner-search"><span aria-hidden="true">⌕</span><input id="searchList" type="search" placeholder="Pesquisar campanha ou banner..."></label><div class="banner-filter-tabs" role="group" aria-label="Filtrar campanhas"><button class="is-active" type="button" data-banner-filter="all">Todos</button><button type="button" data-banner-filter="home_hero">Hero principal</button><button type="button" data-banner-filter="campaign:promotion">Promoções</button><button type="button" data-banner-filter="campaign:category">Categorias</button><button type="button" data-banner-filter="campaign:products">Produtos</button><button type="button" data-banner-filter="status:scheduled">Agendados</button><button type="button" data-banner-filter="status:draft">Rascunhos</button><button type="button" data-banner-filter="status:ended">Encerrados</button></div><label class="banner-sort">Ordenar<select id="bannerSort"><option value="order">Ordem no site</option><option value="name">Nome (A–Z)</option><option value="order-desc">Ordem inversa</option></select></label></section>
-      <div class="banner-workspace"><section><div class="banner-section-heading"><div><h2>Campanhas e banners</h2><p>Arraste pelo ícone ⠿ para reorganizar a ordem de exibição.</p></div><span id="bannerResults">${rows.length} campanha${rows.length === 1 ? '' : 's'}</span></div><div class="banner-card-list" id="bannerCardList">${rows.map(row => bannerCard(row, now, productCounts.get(String(row.promotion_id)) || 0)).join('') || '<div class="card empty"><h2>Nenhuma campanha cadastrada</h2><p>Crie o primeiro destaque comercial da loja.</p></div>'}</div></section>
+      <div class="banner-workspace"><section><div class="banner-section-heading"><div><h2>Campanhas e banners</h2><p>Arraste pelo ícone ⠿ para reorganizar a ordem de exibição.</p></div><span id="bannerResults">${rows.length} campanha${rows.length === 1 ? '' : 's'}</span></div><div class="banner-card-list" id="bannerCardList">${rows.map(row => bannerCard(row, now, productCounts.get(String(row.promotion_id)) || 0)).join('') || '<div class="card empty admin-empty"><span class="admin-empty-icon" aria-hidden="true">▣</span><h2>Nenhuma campanha cadastrada</h2><p>Crie o primeiro destaque comercial da loja.</p><button class="secondary" type="button" data-open-quick-campaign>Explorar modelos</button></div>'}</div></section>
       <aside class="home-structure card"><header><span>⌂</span><div><h2>Estrutura da Home</h2><p>Veja onde cada banner aparece para os clientes.</p></div></header><ol>
         <li><i>1</i><div><strong>Hero principal</strong><small>Primeira área da página</small><div class="home-slot-banners">${structureBanner('home_hero', 'Nenhum banner nesta posição.')}</div></div></li>
         <li class="fixed"><i>2</i><div><strong>Categorias</strong><small>Seção automática do catálogo</small></div></li>
@@ -1974,6 +1984,7 @@
     const rowFor = id => rows.find(row => String(row.id) === String(id));
     $$('[data-banner-edit]').forEach(button => button.onclick = () => openQuickCampaign(rowFor(button.dataset.bannerEdit)));
     $$('[data-quick-suggestion]').forEach(button => button.onclick = () => openQuickCampaign(null, button.dataset.quickSuggestion, true));
+    $$('[data-open-quick-campaign]').forEach(button => button.onclick = () => openQuickCampaign());
     $$('[data-banner-preview]').forEach(button => button.onclick = () => { const row = rowFor(button.dataset.bannerPreview); const url = row?.image_desktop_url || row?.image_mobile_url; if (url) window.open(url, '_blank', 'noopener'); else toast('Este banner ainda não possui imagem.'); });
     $$('[data-banner-duplicate]').forEach(button => button.onclick = () => runAction(button, async () => {
       const source = rowFor(button.dataset.bannerDuplicate);
@@ -2119,7 +2130,13 @@
     if (error) throw error;
     if (revision !== viewRevision) return;
     const rows = (data || []).map(row => view === 'sections' ? { ...row, content_text: JSON.stringify(row.content || {}, null, 2) } : row);
-    $('#content').innerHTML = `<div class="toolbar"><input id="searchList" placeholder="Pesquisar ${config.plural}…"><button class="primary-action" data-new>+ Novo ${config.singular.toLowerCase()}</button></div><div class="card table-wrap">${rows.length ? `<table class="data-table"><thead><tr><th>${config.singular}</th><th>Identificação</th><th>Ordem / período</th><th>Status</th><th>Ações</th></tr></thead><tbody>${rows.map(row => simpleRow(config, row)).join('')}</tbody></table>` : `<div class="empty"><h2>Nenhum registro cadastrado</h2><p>Comece adicionando ${config.singular.toLowerCase()}.</p><button data-new>+ Novo ${config.singular.toLowerCase()}</button></div>`}</div>`;
+    if (view === 'promotions') {
+      const pageAction = $('#pageAction');
+      pageAction.hidden = false;
+      pageAction.textContent = '+ Nova promoção';
+      pageAction.onclick = () => openEditor(view);
+    }
+    $('#content').innerHTML = `<div class="toolbar admin-list-toolbar card"><label class="admin-search-label"><span class="sr-only">Pesquisar ${config.plural}</span><input id="searchList" type="search" placeholder="Pesquisar ${config.plural}…"></label>${view === 'promotions' ? '' : `<button class="primary-action" data-new>+ Novo ${config.singular.toLowerCase()}</button>`}</div><div class="card table-wrap">${rows.length ? `<table class="data-table"><thead><tr><th>${config.singular}</th><th>Identificação</th><th>Ordem / período</th><th>Status</th><th>Ações</th></tr></thead><tbody>${rows.map(row => simpleRow(config, row)).join('')}</tbody></table>` : `<div class="empty admin-empty"><span class="admin-empty-icon" aria-hidden="true">＋</span><h2>${view === 'promotions' ? 'Nenhuma promoção cadastrada' : 'Nenhum registro cadastrado'}</h2><p>Comece adicionando ${config.singular.toLowerCase()}.</p><button class="secondary" data-new type="button">+ Novo ${config.singular.toLowerCase()}</button></div>`}</div>`;
     $$('[data-new]').forEach(button => button.onclick = () => openEditor(view));
     $$('[data-edit]').forEach(button => button.onclick = () => openEditor(view, rows.find(row => String(row.id) === button.dataset.edit)));
     $$('[data-toggle]').forEach(button => button.onclick = () => runAction(button, async () => {
@@ -2190,7 +2207,25 @@
     return `<tr><td>${config.table === 'environments' ? CategoryIcons.icon(row.icon_key||row.name,{size:28}) : imageKey && row[imageKey] ? `<img class="thumb" src="${esc(row[imageKey])}" alt=""> ` : ''}<b>${esc(title)}</b></td><td>${esc(identity)}</td><td>${esc(timing)}</td><td><span class="badge ${row.active ? '' : 'off'}">${row.active ? 'Ativo' : 'Inativo'}</span></td><td class="action-cell">${menu}</td></tr>`;
   }
   function bindSearch() {
-    $('#searchList')?.addEventListener('input', event => $$('tbody tr').forEach(row => { row.hidden = !row.textContent.toLowerCase().includes(event.target.value.toLowerCase()); }));
+    const search = $('#searchList');
+    const content = $('#content');
+    if (!search || !content) return;
+    const rows = $$('tbody tr', content);
+    if (!rows.length) return;
+    const empty = document.createElement('div');
+    empty.className = 'card empty admin-empty admin-search-empty';
+    empty.hidden = true;
+    empty.innerHTML = '<span class="admin-empty-icon" aria-hidden="true">⌕</span><h2>Nenhum resultado encontrado</h2><p>Tente outro termo de busca.</p>';
+    ($('.table-wrap', content) || content.lastElementChild)?.after(empty);
+    search.addEventListener('input', event => {
+      const term = event.target.value.trim().toLocaleLowerCase('pt-BR');
+      let visible = 0;
+      rows.forEach(row => {
+        row.hidden = !row.textContent.toLocaleLowerCase('pt-BR').includes(term);
+        if (!row.hidden) visible++;
+      });
+      empty.hidden = visible > 0;
+    });
   }
 
   const productEditorSections = [
@@ -2626,7 +2661,7 @@
       <article class="product-metric low"><span class="metric-icon" aria-hidden="true">!</span><div><b>${lowStock}</b><small>Estoque baixo</small></div></article>
     </div>
     <div class="product-controls card"><label class="product-search"><span aria-hidden="true">⌕</span><input id="searchList" type="search" placeholder="Buscar produto ou SKU..." value="${esc(productViewState.search)}"></label><div class="product-filter-row"><select id="categoryFilter" aria-label="Filtrar por categoria"><option value="">Todas as categorias</option>${categories.map(name => `<option value="${esc(name)}" ${productViewState.category === name ? 'selected' : ''}>${esc(name)}</option>`).join('')}</select><select id="statusFilter" aria-label="Filtrar por status"><option value="">Todos os status</option><option value="active" ${productViewState.status === 'active' ? 'selected' : ''}>Publicados</option><option value="inactive" ${productViewState.status === 'inactive' ? 'selected' : ''}>Inativos</option></select><select id="stockFilter" aria-label="Filtrar por estoque"><option value="">Todo estoque</option><option value="out" ${productViewState.stock === 'out' ? 'selected' : ''}>Sem estoque</option><option value="low" ${productViewState.stock === 'low' ? 'selected' : ''}>Estoque baixo</option><option value="in" ${productViewState.stock === 'in' ? 'selected' : ''}>Em estoque</option></select><select id="productSort" aria-label="Ordenar produtos"><option value="newest" ${productViewState.sort === 'newest' ? 'selected' : ''}>Ordenar por: recentes</option><option value="name" ${productViewState.sort === 'name' ? 'selected' : ''}>Nome (A–Z)</option><option value="price-asc" ${productViewState.sort === 'price-asc' ? 'selected' : ''}>Menor preço</option><option value="price-desc" ${productViewState.sort === 'price-desc' ? 'selected' : ''}>Maior preço</option><option value="stock" ${productViewState.sort === 'stock' ? 'selected' : ''}>Menor estoque</option></select></div><div class="product-view-toggle" role="group" aria-label="Modo de visualização"><button type="button" data-product-view-mode="list" class="${productViewState.view === 'list' ? 'is-active' : ''}" aria-label="Visualização em lista">${actionIcon('list')}</button><button type="button" data-product-view-mode="grid" class="${productViewState.view === 'grid' ? 'is-active' : ''}" aria-label="Visualização em grade">${actionIcon('grid')}</button></div><button class="advanced-filters" id="openProductFilters" type="button">${actionIcon('filter')}<span>Filtros avançados</span></button></div>
-    <div class="card product-table-card ${productViewState.view === 'grid' ? 'grid-mode' : ''}" id="productTableCard"><div class="table-wrap"><table class="data-table product-table" id="productTable"><thead><tr><th><input id="selectPageProducts" type="checkbox" aria-label="Selecionar produtos desta página"></th><th>Produto</th><th>Categoria</th><th>Preço</th><th>Estoque</th><th>Status</th><th>Destaque</th><th>Ações</th></tr></thead><tbody id="productRows"></tbody></table></div><div class="empty product-empty" id="productEmpty" hidden><h2>Nenhum produto encontrado</h2><p>Ajuste os filtros ou cadastre um novo produto.</p><button id="emptyNewProduct" type="button">+ Novo produto</button></div><footer class="product-pagination" id="productPagination"></footer></div>
+    <div class="card product-table-card ${productViewState.view === 'grid' ? 'grid-mode' : ''}" id="productTableCard"><div class="table-wrap"><table class="data-table product-table" id="productTable"><thead><tr><th><input id="selectPageProducts" type="checkbox" aria-label="Selecionar produtos desta página"></th><th>Produto</th><th>Categoria</th><th>Preço</th><th>Estoque</th><th>Status</th><th>Destaque</th><th>Ações</th></tr></thead><tbody id="productRows"></tbody></table></div><div class="empty product-empty admin-empty" id="productEmpty" hidden><span class="admin-empty-icon" aria-hidden="true">⌕</span><h2>Nenhum produto encontrado</h2><p>Ajuste os filtros ou cadastre um novo produto.</p><button id="emptyNewProduct" class="secondary" type="button">+ Novo produto</button></div><footer class="product-pagination" id="productPagination"></footer></div>
     <div class="product-filter-drawer" id="productFilterDrawer" hidden><button class="product-filter-backdrop" type="button" data-product-filters-close aria-label="Fechar filtros"></button><aside role="dialog" aria-modal="true" aria-labelledby="productFilterTitle"><header><div><small>CATÁLOGO</small><h2 id="productFilterTitle">Filtros avançados</h2></div><button type="button" data-product-filters-close aria-label="Fechar filtros">×</button></header><div class="product-filter-fields"><label>Categoria<select id="mobileCategoryFilter"><option value="">Todas as categorias</option>${categories.map(name => `<option value="${esc(name)}" ${productViewState.category === name ? 'selected' : ''}>${esc(name)}</option>`).join('')}</select></label><label>Status<select id="mobileStatusFilter"><option value="">Todos os status</option><option value="active" ${productViewState.status === 'active' ? 'selected' : ''}>Publicados</option><option value="inactive" ${productViewState.status === 'inactive' ? 'selected' : ''}>Inativos</option></select></label><label>Estoque<select id="mobileStockFilter"><option value="">Todo estoque</option><option value="out" ${productViewState.stock === 'out' ? 'selected' : ''}>Sem estoque</option><option value="low" ${productViewState.stock === 'low' ? 'selected' : ''}>Estoque baixo</option><option value="in" ${productViewState.stock === 'in' ? 'selected' : ''}>Em estoque</option></select></label><label>Ordenação<select id="mobileProductSort"><option value="newest" ${productViewState.sort === 'newest' ? 'selected' : ''}>Mais recentes</option><option value="name" ${productViewState.sort === 'name' ? 'selected' : ''}>Nome (A–Z)</option><option value="price-asc" ${productViewState.sort === 'price-asc' ? 'selected' : ''}>Menor preço</option><option value="price-desc" ${productViewState.sort === 'price-desc' ? 'selected' : ''}>Maior preço</option><option value="stock" ${productViewState.sort === 'stock' ? 'selected' : ''}>Menor estoque</option></select></label><label class="drawer-check"><input id="featuredOnly" type="checkbox" ${productViewState.featuredOnly ? 'checked' : ''}> Somente produtos em destaque</label><label class="drawer-check"><input id="promotionOnly" type="checkbox" ${productViewState.promotionOnly ? 'checked' : ''}> Somente produtos em promoção</label></div><footer><button class="secondary" id="clearProductFilters" type="button">Limpar filtros</button><button type="button" data-product-filters-close>Aplicar filtros</button></footer></aside></div>`;
 
     const filteredProducts = () => {
@@ -2924,7 +2959,7 @@
     if (error) throw error;
     if (revision !== viewRevision) return;
     const group = settingGroups[view];
-    $('#content').innerHTML = `<form id="settingsForm" class="card panel settings-form"><h2>${group.title}</h2><div class="form-grid" style="padding:0;max-height:none">${(await Promise.all(group.fields.map(field => fieldHtml(field, data)))).join('')}</div><div class="toolbar" style="margin-top:18px"><button type="submit">Salvar configurações</button></div></form>`;
+    $('#content').innerHTML = `<form id="settingsForm" class="card panel settings-form admin-settings-form"><header class="admin-section-header"><div><h2>${group.title}</h2><p>Revise os dados abaixo e salve para atualizar a loja.</p></div></header><div class="form-grid admin-settings-fields">${(await Promise.all(group.fields.map(field => fieldHtml(field, data)))).join('')}</div><footer class="admin-form-footer"><button class="primary-action" type="submit">Salvar configurações</button></footer></form>`;
     $('#settingsForm').onsubmit = async event => {
       event.preventDefault();
       if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
@@ -3034,7 +3069,8 @@
     $('#pageBadge').hidden = true;
     $('#panelSearch').value = '';
     $$('nav button').forEach(button => button.classList.toggle('active', button.dataset.view === view));
-    $('#content').innerHTML = '<div class="card empty" role="status">Carregando dados…</div>';
+    $('#content').dataset.view = view;
+    $('#content').innerHTML = `<div class="admin-loading" role="status" aria-label="Carregando ${esc(titles[view])}"><span class="sr-only">Carregando dados…</span><div class="admin-loading-cards" aria-hidden="true"><span class="admin-skeleton"></span><span class="admin-skeleton"></span><span class="admin-skeleton"></span></div><div class="admin-skeleton admin-loading-table" aria-hidden="true"><span></span><span></span><span></span><span></span></div></div>`;
     $('#refresh').disabled = true;
     try {
       if (view === 'dashboard') await dashboard(revision);
@@ -3050,7 +3086,8 @@
       else if (view === 'audit') await renderAudit(revision);
       else await renderSimple(view, revision);
     } catch (error) {
-      if (revision === viewRevision) $('#content').innerHTML = `<div class="card empty error" role="alert">Não foi possível carregar os dados. ${esc(explain(error))}</div>`;
+      if (revision === viewRevision) $('#content').innerHTML = `<div class="card empty error admin-empty" role="alert"><span class="admin-empty-icon" aria-hidden="true">!</span><h2>Não foi possível carregar ${esc(titles[view])}</h2><p>${esc(explain(error))}</p><button class="secondary" id="retryView" type="button">Tentar novamente</button></div>`;
+      if (revision === viewRevision) $('#retryView').onclick = () => render(view);
     } finally {
       if (revision === viewRevision) {
         enhanceTables($('#content'));

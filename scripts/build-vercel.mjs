@@ -9,6 +9,7 @@ const publicFiles = [
   'admin.html',
   'styles.css',
   'admin.css',
+  'admin-design-system.css',
   'app.js',
   'mobile-navigation.js',
   'category-icons.js',
