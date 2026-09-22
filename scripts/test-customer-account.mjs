@@ -31,6 +31,9 @@ assert.doesNotMatch(account, /localStorage\.setItem\([^)]*password/i);
 assert.match(reset, /updateUser\(\{password\}\)/);
 
 assert.match(checkout, /guestCheckoutEnabled/);
+for (const publicHandler of ['openAccount', 'openAdmin', 'openWhatsApp', 'scrollToTop']) {
+  assert.match(checkout, new RegExp(`function ${publicHandler}\\(`), `${publicHandler} must remain available to storefront handlers.`);
+}
 assert.match(checkout, /resumeCheckoutAfterAuth/);
 assert.match(checkout, /saveAddressFromCheckout/);
 assert.match(checkout, /window\.dispatchEvent\(new CustomEvent\('atacarejo:favorites-changed'/);
