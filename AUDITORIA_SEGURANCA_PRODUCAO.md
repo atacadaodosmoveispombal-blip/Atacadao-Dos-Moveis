@@ -8,12 +8,12 @@ O administrador executou `20260926_security_admin_gate.sql` em produção e envi
 
 O administrador executou `supabase/migrations/20260927_private_cost_and_view_events.sql` e informou sucesso. Consultas públicas de verificação retornaram: catálogo `200`, coluna `cost_price` `400`, tabela privada `404`, RPC antiga `401`, nova RPC com parâmetros nulos `204` e ranking administrativo sem login `401`. A consulta exata de produtos usada pelo novo frontend retornou `200`. A nova migração copia custos existentes para `atacarejo_private.product_costs` e confere a cópia na mesma transação antes de remover `products.cost_price`. Ainda faltam a execução da consulta resumida atualizada com acesso de administrador, o teste autenticado do painel e a confirmação do backup/restauração. O novo evento de analytics continua público e usa deduplicação por sessão; sessões forjadas ainda podem inflar a métrica, então é recomendável adicionar limitação de taxa na borda quando houver infraestrutura apropriada.
 
-O arquivo local `supabase/audits/production_readonly.sql` apareceu vazio durante esta etapa; a consulta resumida foi criada separadamente para preservar essa alteração local.
-## Conclusão
+O commit `3871e50` foi enviado ao GitHub e o deployment de produção foi concluído. `www.atacarejomoveis.com.br` serve o script novo; `atacarejomoveis.com.br` ainda serve o HTML antigo, mesmo com URL inédita. O arquivo local `supabase/audits/production_readonly.sql` apareceu vazio durante esta etapa; a consulta resumida foi criada separadamente para preservar essa alteração local.
+## Conclusão inicial (antes das migrações)
 
 **PRECISA CORREÇÃO antes da entrega ao cliente.** A escrita anônima testada em produtos, banners e promoções foi negada, mas o cadastro público de contas está habilitado e as migrations criam perfis `viewer` ativos. Além disso, o host principal ainda servia a versão anterior após o deploy de segurança, enquanto `www` servia o commit novo. A função de autorização e policies permitem que um `viewer` ativo leia dados administrativos. A coluna `cost_price` também é selecionável sem login. O acesso real de uma conta auto cadastrada e as operações UPDATE/DELETE precisam de verificação autorizada em ambiente de teste; não foram criadas contas nem alterados registros de produção.
 
-## Checklist
+## Checklist inicial (antes das migrações)
 
 | Área | Resultado | Evidência e ação |
 | --- | --- | --- |
@@ -34,14 +34,12 @@ O arquivo local `supabase/audits/production_readonly.sql` apareceu vazio durante
 | Variáveis e logs de produção | **PRECISA CORREÇÃO na verificação** | Não há credencial privada exigida pelo build estático e não foram encontradas variáveis privadas hardcoded. Não houve acesso autorizado ao painel Vercel/Supabase para listar variáveis de produção ou revisar logs; conferir nomes, escopo Production e eventos de erro no dashboard. |
 | Política de conteúdo | **PRECISA CORREÇÃO** | Cabeçalhos HSTS, `X-Content-Type-Options`, `X-Frame-Options`, Referrer e Permissions estão configurados. Falta CSP. O site usa scripts/handlers inline; aplicar CSP exige adaptar esses trechos e testar o PWA para não quebrar a navegação. |
 
-## Ordem recomendada para liberar a entrega
+## Próximos passos para liberar a entrega
 
-1. Fazer e **testar** backup do banco e cópia dos objetos do Storage; registrar responsáveis e ponto de restauração.
-2. Revisar perfis ativos, aplicar `supabase/migrations/20260926_security_admin_gate.sql` em ambiente de teste e depois em produção, validar o painel, e desativar **Allow new users to sign up** em Supabase Auth. Novos administradores devem ser convidados pelo Dashboard e ativados no painel.
-3. Isolar `cost_price` do acesso público; atualizar as consultas `select=*` do storefront antes de alterar grants. Corrigir a mutação de `products.view_count` pelo RPC anônimo.
-4. Executar `supabase/audits/production_readonly.sql`, comparar grants/policies reais e fazer testes de acesso com contas de cada função. Não usar dados de clientes na conta de teste.
-5. Corrigir a associação/alias do domínio apex ao deploy de produção e verificar que ele passa a servir o mesmo commit que `www`; revisar variáveis e logs nos painéis Vercel/Supabase, HTTPS e redirects.
-
+1. Confirmar que há backup restaurável do banco e dos objetos do Storage. Essa confirmação ainda não foi fornecida.
+2. Executar `supabase/audits/production_security_summary.sql` novamente no SQL Editor; as verificações de custo e RPC antiga devem passar. Testar o painel com `super_admin`, `editor` e uma conta não aprovada, sem modificar dados reais.
+3. No projeto correto da Vercel, conferir **Settings → Domains** para `atacarejomoveis.com.br`, comparar o registro A solicitado com os dois registros A atuais no DNS da UOL e associar o apex ao mesmo deployment de produção de `www`. Depois definir um redirecionamento canônico e testar os dois hosts.
+4. Conferir variáveis e logs de produção, revisar arquivos SVG já existentes no Storage e planejar uma CSP compatível com o PWA.
 ## Limites dos testes
 
 Os testes de produção foram de leitura, mais INSERTs com payload obrigatório inválido que o RLS rejeitou. Uma tentativa de testar PATCH em linhas reais com valores inválidos foi **rejeitada pela revisão automática de aprovação** porque poderia alterar dados caso alguma constraint não se comportasse como esperado. Nenhum PATCH ou DELETE foi executado. A confirmação de UPDATE/DELETE deve ocorrer em projeto de teste restaurado ou por inspeção administrativa das policies/grants.
