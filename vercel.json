@@ -12,19 +12,19 @@
     },
     {
       "source": "/ofertas",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/categorias",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/sacola",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/conta",
-      "destination": "/index.html"
+      "destination": "/"
     }
   ],
   "headers": [
