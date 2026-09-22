@@ -1,7 +1,14 @@
 # Auditoria de segurança e produção — Atacarejo dos Móveis
 
-Data: 21/09/2026. Escopo: repositório local, migrations, build estático, domínio HTTPS e chamadas **sem login** à API pública do Supabase. Nenhuma credencial privada ou dado comercial foi incluído neste relatório. Nenhuma migration foi executada no banco de produção.
+Data: 21/09/2026. Escopo: repositório local, migrations, build estático, domínio HTTPS e chamadas **sem login** à API pública do Supabase. Nenhuma credencial privada ou dado comercial foi incluído neste relatório. Na auditoria inicial, nenhuma migration havia sido executada no banco de produção; veja a atualização abaixo.
 
+## Atualização após a validação no SQL Editor
+
+O administrador executou `20260926_security_admin_gate.sql` em produção e enviou o resultado da consulta resumida. Nove verificações apareceram como **PASSOU**; duas permanecem em **PRECISA CORREÇÃO**: leitura pública de `cost_price` e execução anônima da RPC antiga de visualizações. Esta captura confirma os testes listados, mas não substitui testes de login com cada função nem comprova backup/restauração.
+
+O administrador executou `supabase/migrations/20260927_private_cost_and_view_events.sql` e informou sucesso. Consultas públicas de verificação retornaram: catálogo `200`, coluna `cost_price` `400`, tabela privada `404`, RPC antiga `401`, nova RPC com parâmetros nulos `204` e ranking administrativo sem login `401`. A consulta exata de produtos usada pelo novo frontend retornou `200`. A nova migração copia custos existentes para `atacarejo_private.product_costs` e confere a cópia na mesma transação antes de remover `products.cost_price`. Ainda faltam a execução da consulta resumida atualizada com acesso de administrador, o teste autenticado do painel e a confirmação do backup/restauração. O novo evento de analytics continua público e usa deduplicação por sessão; sessões forjadas ainda podem inflar a métrica, então é recomendável adicionar limitação de taxa na borda quando houver infraestrutura apropriada.
+
+O arquivo local `supabase/audits/production_readonly.sql` apareceu vazio durante esta etapa; a consulta resumida foi criada separadamente para preservar essa alteração local.
 ## Conclusão
 
 **PRECISA CORREÇÃO antes da entrega ao cliente.** A escrita anônima testada em produtos, banners e promoções foi negada, mas o cadastro público de contas está habilitado e as migrations criam perfis `viewer` ativos. Além disso, o host principal ainda servia a versão anterior após o deploy de segurança, enquanto `www` servia o commit novo. A função de autorização e policies permitem que um `viewer` ativo leia dados administrativos. A coluna `cost_price` também é selecionável sem login. O acesso real de uma conta auto cadastrada e as operações UPDATE/DELETE precisam de verificação autorizada em ambiente de teste; não foram criadas contas nem alterados registros de produção.

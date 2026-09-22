@@ -338,13 +338,14 @@
     return legacy;
   }
   async function loadStorefrontProducts() {
-    const withIcons = await cms.from('products').select('*,categories(name,search_keywords,icon_key),environments(name),brands(name),product_images(image_url,is_cover,sort_order)').eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
+    const publicProductFields = 'id,name,sku,short_description,description,category_id,price,promotional_price,stock_quantity,best_seller,featured,new_arrival,on_sale,og_image_url,installment_enabled,max_installments,dimensions,material,color,specifications,warranty,whatsapp_enabled,cart_enabled,free_city_shipping,free_assembly,is_campaign';
+    const withIcons = await cms.from('products').select(`${publicProductFields},categories(name,search_keywords,icon_key),environments(name),brands(name),product_images(image_url,is_cover,sort_order)`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
     if (!withIcons.error) return withIcons;
     if (withIcons.error.code !== '42703' && !/search_keywords|icon_key/i.test(withIcons.error.message || '')) return withIcons;
-    const modern = await cms.from('products').select('*,categories(name,search_keywords),environments(name),brands(name),product_images(image_url,is_cover,sort_order)').eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
+    const modern = await cms.from('products').select(`${publicProductFields},categories(name,search_keywords),environments(name),brands(name),product_images(image_url,is_cover,sort_order)`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
     if (!modern.error) return modern;
     if (modern.error.code !== '42703' && !/search_keywords/i.test(modern.error.message || '')) return modern;
-    return cms.from('products').select('*,categories(name),environments(name),brands(name),product_images(image_url,is_cover,sort_order)').eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
+    return cms.from('products').select(`${publicProductFields},categories(name),environments(name),brands(name),product_images(image_url,is_cover,sort_order)`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
   }
   async function loadStorefrontEnvironments() {
     const withIcons = await cms.from('environments').select('id,name,slug,description,image_url,icon_key,sort_order,active').eq('active', true).order('sort_order');
@@ -418,7 +419,7 @@
   const originalOpenProduct = window.openProduct;
   window.openProduct = id => {
     const product = products.find(item => item.id === id);
-    if (product?.dbId) cms.rpc('register_product_view', { target_product_id: product.dbId, visitor_session: sessionKey(), view_source: 'site' }).then(() => {});
+    if (product?.dbId) cms.rpc('record_product_view_event', { target_product_id: product.dbId, visitor_session: sessionKey() }).then(() => {});
     return originalOpenProduct(id);
   };
   function scheduleBoot() {

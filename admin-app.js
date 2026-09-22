@@ -365,7 +365,7 @@
     const [totals, auditResult, productResult] = await Promise.all([
       Promise.allSettled(metrics.map(item => item.load())),
       db.from('audit_logs').select('action,entity,record_id,user_id,created_at').order('created_at', { ascending: false }).limit(8),
-      db.from('products').select('id,name,sku,view_count,product_images(image_url,is_cover,sort_order)').is('deleted_at', null).order('view_count', { ascending: false }).limit(5)
+      db.rpc('top_viewed_products', { limit_count: 5 })
     ]);
     const people = await profilesMap((auditResult.data || []).map(item => item.user_id));
     if (revision !== viewRevision) return;
@@ -386,7 +386,7 @@
       return `<li><span class="dashboard-activity-icon ${tone}" aria-hidden="true">${dashboardIcon(item.entity === 'product_images' || item.entity === 'banners' ? 'banner' : item.action === 'delete' ? 'warning' : 'products')}</span><div><b>${esc(title)}</b><small>${esc(item.action)} em ${esc(item.entity)}</small></div><time>${esc(people[item.user_id] || 'Sistema')}<span>${dateTime(item.created_at)}</span></time></li>`;
     }).join('') || '<li class="dashboard-empty-state">Nenhuma alteração registrada.</li>';
     const productRows = (productResult.data || []).map((item, index) => {
-      const image = productCover(item);
+      const image = item.image_url;
       const views = Number(item.view_count || 0);
       return `<li><span class="dashboard-rank">${index + 1}</span>${image ? `<img src="${esc(image)}" alt="">` : '<span class="dashboard-product-placeholder" aria-hidden="true">▦</span>'}<div><b>${esc(item.name)}</b><small>SKU: ${esc(item.sku || 'não informado')}</small></div><strong>${views}<small>${views === 1 ? 'visualização' : 'visualizações'}</small></strong></li>`;
     }).join('') || '<li class="dashboard-empty-state">Nenhuma visualização registrada ainda.</li>';
@@ -2688,7 +2688,7 @@
     };
     const duplicateProduct = async source => {
       if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
-      const allowed = ['short_description','description','category_id','brand_id','environment_id','price','promotional_price','cost_price','stock_quantity','low_stock_threshold','featured','best_seller','new_arrival','on_sale','sort_order','warranty','dimensions','material','color','specifications','installment_enabled','max_installments','meta_title','meta_description','og_image_url','whatsapp_enabled','cart_enabled','free_city_shipping','free_assembly','is_campaign'];
+      const allowed = ['short_description','description','category_id','brand_id','environment_id','price','promotional_price','stock_quantity','low_stock_threshold','featured','best_seller','new_arrival','on_sale','sort_order','warranty','dimensions','material','color','specifications','installment_enabled','max_installments','meta_title','meta_description','og_image_url','whatsapp_enabled','cart_enabled','free_city_shipping','free_assembly','is_campaign'];
       const copy = Object.fromEntries(allowed.map(key => [key, source[key]]));
       copy.name = `${source.name} — cópia`;
       copy.slug = `${source.slug}-copia-${Date.now().toString().slice(-6)}`;
