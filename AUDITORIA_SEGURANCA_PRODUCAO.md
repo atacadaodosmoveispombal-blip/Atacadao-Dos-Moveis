@@ -4,7 +4,7 @@ Data: 21/09/2026. Escopo: repositório local, migrations, build estático, domí
 
 ## Conclusão
 
-**PRECISA CORREÇÃO antes da entrega ao cliente.** A escrita anônima testada em produtos, banners e promoções foi negada, mas o cadastro público de contas está habilitado e as migrations criam perfis `viewer` ativos. A função de autorização e policies permitem que um `viewer` ativo leia dados administrativos. A coluna `cost_price` também é selecionável sem login. O acesso real de uma conta auto cadastrada e as operações UPDATE/DELETE precisam de verificação autorizada em ambiente de teste; não foram criadas contas nem alterados registros de produção.
+**PRECISA CORREÇÃO antes da entrega ao cliente.** A escrita anônima testada em produtos, banners e promoções foi negada, mas o cadastro público de contas está habilitado e as migrations criam perfis `viewer` ativos. Além disso, o host principal ainda servia a versão anterior após o deploy de segurança, enquanto `www` servia o commit novo. A função de autorização e policies permitem que um `viewer` ativo leia dados administrativos. A coluna `cost_price` também é selecionável sem login. O acesso real de uma conta auto cadastrada e as operações UPDATE/DELETE precisam de verificação autorizada em ambiente de teste; não foram criadas contas nem alterados registros de produção.
 
 ## Checklist
 
@@ -21,9 +21,9 @@ Data: 21/09/2026. Escopo: repositório local, migrations, build estático, domí
 | Mensagens de erro | **PASSOU no código atualizado** | Erros desconhecidos agora mostram texto genérico; credenciais, stack trace e detalhes SQL não são exibidos na interface. |
 | Integridade e índices | **PASSOU no esquema versionado; PRECISA CORREÇÃO na checagem do banco vivo** | Migrations incluem FKs, unicidade de SKU/slug, restrições de preço/estoque/pedido e índices de catálogo, pedidos e relacionamentos. Conferir que todas foram aplicadas com a consulta somente leitura. |
 | Backup e restauração | **PRECISA CORREÇÃO** | Estratégia documentada em `BACKUP_RESTORE.md`, mas não houve comprovação de backup atual nem ensaio de restauração. O backup do banco não inclui bytes do Storage. |
-| Domínio e TLS | **PASSOU para HTTPS; PRECISA CORREÇÃO para redirecionamentos** | Apex e `www` responderam `200` com certificado válido. HSTS, `nosniff` e proteção de frame estão presentes. O acesso HTTP pela porta 80 não respondeu neste ambiente; validar redirecionamento com a equipe de DNS/Vercel. Definir `www` → apex para evitar duplicidade. |
+| Domínio e TLS | **PASSOU para HTTPS; PRECISA CORREÇÃO — alta no roteamento** | Apex e `www` responderam `200` com certificado válido. Após o deploy do commit `9f9f829`, `www` serviu Open Graph/robots novos, mas o apex continuou servindo HTML antigo e `robots.txt` 404. Ambos resolvem para infraestrutura Vercel; conferir a associação do domínio apex em Settings → Domains e a atribuição ao deploy de produção. O acesso HTTP pela porta 80 não respondeu neste ambiente; validar redirect. Depois definir um host canônico com redirecionamento. |
 | Build e arquivos privados | **PASSOU** | `npm run check`, `npm run build` e `git diff --check` passaram. O build copia arquivos públicos por lista. GET de `/.env.local`, `/.git/config` e migrations em produção retornou `404`. O servidor local foi fechado para arquivos fora da lista pública. |
-| 404 e SEO técnico | **PASSOU no código atualizado; validar publicação** | Foram adicionados `404.html`, `robots.txt`, `sitemap.xml`, canonical, Open Graph, Twitter Card e `noindex` no administrativo. Favicon já respondia `200`. Verificar respostas após deploy. |
+| 404 e SEO técnico | **PASSOU em `www`; PRECISA CORREÇÃO no apex** | Foram adicionados `404.html`, `robots.txt`, `sitemap.xml`, canonical, Open Graph, Twitter Card e `noindex` no administrativo. No deploy novo, `www` respondeu `200` para robots/sitemap e apresentou 404 personalizada. O apex ainda não refletia esses arquivos. Favicon responde `200` nos dois hosts. |
 | Variáveis e logs de produção | **PRECISA CORREÇÃO na verificação** | Não há credencial privada exigida pelo build estático e não foram encontradas variáveis privadas hardcoded. Não houve acesso autorizado ao painel Vercel/Supabase para listar variáveis de produção ou revisar logs; conferir nomes, escopo Production e eventos de erro no dashboard. |
 | Política de conteúdo | **PRECISA CORREÇÃO** | Cabeçalhos HSTS, `X-Content-Type-Options`, `X-Frame-Options`, Referrer e Permissions estão configurados. Falta CSP. O site usa scripts/handlers inline; aplicar CSP exige adaptar esses trechos e testar o PWA para não quebrar a navegação. |
 
@@ -33,7 +33,7 @@ Data: 21/09/2026. Escopo: repositório local, migrations, build estático, domí
 2. Revisar perfis ativos, aplicar `supabase/migrations/20260926_security_admin_gate.sql` em ambiente de teste e depois em produção, validar o painel, e desativar **Allow new users to sign up** em Supabase Auth. Novos administradores devem ser convidados pelo Dashboard e ativados no painel.
 3. Isolar `cost_price` do acesso público; atualizar as consultas `select=*` do storefront antes de alterar grants. Corrigir a mutação de `products.view_count` pelo RPC anônimo.
 4. Executar `supabase/audits/production_readonly.sql`, comparar grants/policies reais e fazer testes de acesso com contas de cada função. Não usar dados de clientes na conta de teste.
-5. Revisar variáveis e logs nos painéis Vercel/Supabase; validar 404, sitemap/robots, Open Graph, HTTPS e redirects após publicação.
+5. Corrigir a associação/alias do domínio apex ao deploy de produção e verificar que ele passa a servir o mesmo commit que `www`; revisar variáveis e logs nos painéis Vercel/Supabase, HTTPS e redirects.
 
 ## Limites dos testes
 
