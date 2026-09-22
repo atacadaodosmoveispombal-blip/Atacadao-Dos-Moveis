@@ -84,11 +84,13 @@ with checks (item, passed) as (
             and allowed_mime_types <@ array['image/jpeg', 'image/png', 'image/webp']::text[])
   union all
   select 'Preco de custo oculto do visitante',
-         case when exists (
-           select 1 from information_schema.columns
-           where table_schema = 'public' and table_name = 'products' and column_name = 'cost_price'
-         ) then not has_column_privilege('anon', 'public.products', 'cost_price', 'SELECT')
-         else true end
+         not exists (
+           select 1 from information_schema.columns c
+           where c.table_schema = 'public'
+             and c.table_name = 'products'
+             and c.column_name = 'cost_price'
+             and has_column_privilege('anon', 'public.products', c.column_name, 'SELECT')
+         )
   union all
   select 'RPC antiga de visualizacoes bloqueada ao visitante',
          not exists (
@@ -102,8 +104,7 @@ with checks (item, passed) as (
   union all
   select 'Evento publico de visualizacao nao altera produtos',
          coalesce(
-           pg_get_functiondef(to_regprocedure('public.record_product_view_event(uuid,uuid)'))
-             not ilike '%update public.products%',
+           not (pg_get_functiondef(to_regprocedure('public.record_product_view_event(uuid,uuid)')) ilike '%update public.products%'),
            false
          )
 )
