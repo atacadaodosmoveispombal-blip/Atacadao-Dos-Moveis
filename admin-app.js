@@ -449,6 +449,7 @@
     }
     if (type === 'file') return `<div class="field"><label for="f-${key}">${esc(label)}</label><input id="f-${key}" name="${key}" type="file" accept="image/jpeg,image/png,image/webp">${value ? `<img class="image-preview" src="${esc(value)}" alt="Imagem atual">` : ''}</div>`;
     if (type === 'multifile') return `<div class="field full"><label for="f-${key}">${esc(label)}</label><input id="f-${key}" name="${key}" type="file" accept="image/jpeg,image/png,image/webp" multiple></div><div id="existingGallery" class="multi-images"></div>`;
+    if (type === 'productmedia') return `<div class="field full product-media-uploader" aria-labelledby="productMediaUploaderTitle"><div class="product-media-uploader-copy"><b id="productMediaUploaderTitle">${esc(label)}</b><small>Combine fotos e vídeos e organize tudo antes de salvar.</small></div><div class="product-media-buttons"><label class="product-media-add">＋ Adicionar fotos<input id="f-${key}" name="${key}" type="file" accept="image/jpeg,image/png,image/webp" multiple></label><label class="product-media-add is-video">▶ Adicionar vídeo<input id="f-gallery-video" name="gallery_video" type="file" accept="video/mp4,video/webm" multiple></label></div><p>Fotos: JPG, PNG ou WebP, até 8 MB. Vídeos: MP4 ou WebM, até 50 MB. Máximo de 10 mídias por produto.</p></div><div id="existingGallery" class="multi-images product-media-grid"></div>`;
     const formatted = type === 'datetime-local' && value ? new Date(value).toISOString().slice(0, 16) : value;
     return `<div class="field"><label for="f-${key}">${esc(label)}</label><input id="f-${key}" name="${key}" type="${type === 'slug' ? 'text' : type}" value="${esc(formatted)}" ${required ? 'required' : ''} ${type === 'number' ? 'step="any"' : ''}></div>`;
   }
@@ -1451,22 +1452,29 @@
     if (productGallery && editorState?.view === 'products') editorState.existingGalleryCount = (data || []).length;
     const root = $('#existingGallery');
     if (!root) return;
-    root.innerHTML = (data || []).map((item, index, rows) => `<figure data-image-id="${item.id}"><img src="${esc(item.image_url)}" alt="Foto ${index + 1}"><figcaption>${productGallery && item.is_cover ? '<b>Imagem principal</b>' : `Foto ${index + 1}`}</figcaption><div class="gallery-actions">${productGallery && !item.is_cover ? `<button type="button" data-image-cover="${item.id}">Principal</button>` : ''}<button type="button" data-image-move="up" ${index === 0 ? 'disabled' : ''} aria-label="Mover foto para a esquerda">←</button><button type="button" data-image-move="down" ${index === rows.length - 1 ? 'disabled' : ''} aria-label="Mover foto para a direita">→</button><button type="button" class="danger" data-image-delete="${item.id}" aria-label="Excluir foto">×</button></div></figure>`).join('');
-    $$('[data-image-cover]', root).forEach(button => button.onclick = async () => {
+    root.innerHTML = (data || []).map((item, index, rows) => {
+      const type = productGallery && item.media_type === 'video' ? 'video' : 'image';
+      const preview = type === 'video'
+        ? `<div class="product-media-video-preview"><video src="${esc(item.image_url)}" poster="${esc(item.poster_url || '')}" preload="metadata" muted playsinline></video><span aria-hidden="true">▶</span></div>`
+        : `<img src="${esc(item.image_url)}" alt="Foto ${index + 1}">`;
+      const label = type === 'video' ? `VÍDEO ${index + 1}` : item.is_cover ? '<b>FOTO · CAPA</b>' : `FOTO ${index + 1}`;
+      return `<figure data-media-id="${item.id}" data-media-type="${type}">${preview}<figcaption>${label}</figcaption><div class="gallery-actions">${productGallery && type === 'image' && !item.is_cover ? `<button type="button" data-media-cover="${item.id}">Capa</button>` : ''}<button type="button" data-media-move="up" ${index === 0 ? 'disabled' : ''} aria-label="Mover mídia para a esquerda">←</button><button type="button" data-media-move="down" ${index === rows.length - 1 ? 'disabled' : ''} aria-label="Mover mídia para a direita">→</button><button type="button" class="danger" data-media-delete="${item.id}" aria-label="Excluir ${type === 'video' ? 'vídeo' : 'foto'}">×</button></div></figure>`;
+    }).join('');
+    $$('[data-media-cover]', root).forEach(button => button.onclick = async () => {
       const { error: clearError } = await db.from(table).update({ is_cover: false }).eq(foreignKey, parentId);
       if (clearError) return toast(explain(clearError));
-      const { error: coverError } = await db.from(table).update({ is_cover: true }).eq('id', button.dataset.imageCover);
+      const { error: coverError } = await db.from(table).update({ is_cover: true }).eq('id', button.dataset.mediaCover);
       if (coverError) return toast(explain(coverError));
       notifyStorefront('product_images'); toast('Imagem principal atualizada.'); await loadGallery(parentId, table, foreignKey);
     });
-    $$('[data-image-move]', root).forEach(button => button.onclick = async () => {
+    $$('[data-media-move]', root).forEach(button => button.onclick = async () => {
       const figure = button.closest('figure');
       const figures = $$('figure', root);
       const from = figures.indexOf(figure);
-      const to = button.dataset.imageMove === 'up' ? from - 1 : from + 1;
+      const to = button.dataset.mediaMove === 'up' ? from - 1 : from + 1;
       if (to < 0 || to >= figures.length) return;
-      const firstId = figures[from].dataset.imageId;
-      const secondId = figures[to].dataset.imageId;
+      const firstId = figures[from].dataset.mediaId;
+      const secondId = figures[to].dataset.mediaId;
       const updates = await Promise.all([
         db.from(table).update({ sort_order: to }).eq('id', firstId),
         db.from(table).update({ sort_order: from }).eq('id', secondId)
@@ -1475,17 +1483,19 @@
       if (moveError) return toast(explain(moveError));
       notifyStorefront(table); await loadGallery(parentId, table, foreignKey);
     });
-    $$('[data-image-delete]', root).forEach(button => button.onclick = () => runAction(button, async () => {
-      if (!await confirmAction({ title: 'Remover esta imagem?', message: 'A imagem será removida deste item. Esta ação não poderá ser desfeita.', confirmLabel: 'Remover', tone: 'danger' })) return;
-      const item = (data || []).find(image => image.id === button.dataset.imageDelete);
-      const { error: deleteError } = await db.from(table).delete().eq('id', button.dataset.imageDelete);
+    $$('[data-media-delete]', root).forEach(button => button.onclick = () => runAction(button, async () => {
+      const item = (data || []).find(media => media.id === button.dataset.mediaDelete);
+      const kind = productGallery && item?.media_type === 'video' ? 'vídeo' : 'imagem';
+      if (!await confirmAction({ title: `Remover este ${kind}?`, message: `O ${kind} será removido deste produto. Esta ação não poderá ser desfeita.`, confirmLabel: 'Remover', tone: 'danger' })) return;
+      const { error: deleteError } = await db.from(table).delete().eq('id', button.dataset.mediaDelete);
       if (deleteError) return toast(explain(deleteError), 'error');
-      if (item?.storage_path && /\/storage\/v1\/object\//.test(item.image_url || '')) await db.storage.from(bucket).remove([item.storage_path]);
+      const storedPaths = [item?.storage_path, item?.poster_storage_path].filter(Boolean);
+      if (storedPaths.length && /\/storage\/v1\/object\//.test(item.image_url || '')) await db.storage.from(bucket).remove(storedPaths);
       if (productGallery && item?.is_cover) {
-        const { data: next } = await db.from(table).select('id').eq(foreignKey, parentId).order('sort_order').limit(1).maybeSingle();
+        const { data: next } = await db.from(table).select('id').eq(foreignKey, parentId).eq('media_type', 'image').order('sort_order').limit(1).maybeSingle();
         if (next) await db.from(table).update({ is_cover: true }).eq('id', next.id);
       }
-      notifyStorefront(table); toast('Imagem removida.'); await loadGallery(parentId, table, foreignKey);
+      notifyStorefront(table); toast(`${kind.charAt(0).toUpperCase() + kind.slice(1)} removido.`); await loadGallery(parentId, table, foreignKey);
     }));
   }
   const imageUploadRules = {
@@ -1498,7 +1508,9 @@
     site: { maxDimension: 1920, quality: .86 }
   };
   const allowedImageTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+  const allowedVideoTypes = new Set(['video/mp4', 'video/webm']);
   const maxImageBytes = 8 * 1024 * 1024;
+  const maxVideoBytes = 50 * 1024 * 1024;
   async function optimizeImage(file, bucket) {
     const rules = imageUploadRules[bucket] || imageUploadRules.site;
     if (!allowedImageTypes.has(file.type)) throw new Error('Formato inválido. Envie uma imagem JPG, PNG ou WebP.');
@@ -1554,11 +1566,59 @@
     if (error) throw error;
     return { url: db.storage.from(bucket).getPublicUrl(path).data.publicUrl, path, bucket };
   }
+  async function createVideoPoster(file) {
+    const source = URL.createObjectURL(file);
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.muted = true;
+    video.playsInline = true;
+    video.src = source;
+    try {
+      await new Promise((resolve, reject) => {
+        video.onloadedmetadata = resolve;
+        video.onerror = () => reject(new Error('poster'));
+      });
+      if (Number.isFinite(video.duration) && video.duration > .1) {
+        video.currentTime = Math.min(.25, video.duration / 2);
+        await new Promise((resolve, reject) => {
+          video.onseeked = resolve;
+          video.onerror = () => reject(new Error('poster'));
+        });
+      }
+      const largest = Math.max(video.videoWidth, video.videoHeight);
+      if (!largest) return null;
+      const scale = Math.min(1, 960 / largest);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+      canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+      canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', .82));
+      return blob ? new File([blob], 'poster.webp', { type: 'image/webp' }) : null;
+    } finally {
+      video.removeAttribute('src');
+      video.load();
+      URL.revokeObjectURL(source);
+    }
+  }
+  async function uploadProductVideo(file, folder) {
+    if (!allowedVideoTypes.has(file.type)) throw new Error('Formato inválido. Envie um vídeo MP4 ou WebM.');
+    if (file.size > maxVideoBytes) throw new Error('O vídeo selecionado ultrapassa o tamanho máximo permitido de 50 MB.');
+    const extension = file.type === 'video/webm' ? 'webm' : 'mp4';
+    const path = `${folder}/videos/${crypto.randomUUID()}.${extension}`;
+    const { error } = await db.storage.from('products').upload(path, file, { cacheControl: '31536000', contentType: file.type, upsert: false });
+    if (error) throw error;
+    let poster = null;
+    try {
+      const posterFile = await createVideoPoster(file);
+      if (posterFile) poster = await upload('products', posterFile, `${folder}/posters`);
+    } catch (posterError) { console.warn('Não foi possível gerar o poster do vídeo.', posterError); }
+    return { url: db.storage.from('products').getPublicUrl(path).data.publicUrl, path, bucket: 'products', posterUrl: poster?.url || null, posterPath: poster?.path || null };
+  }
   function formValues(fields, form) {
     const values = {};
     fields.forEach(([key, , type]) => {
       const input = form.elements[key];
-      if (!input || ['file', 'multifile'].includes(type)) return;
+      if (!input || ['file', 'multifile', 'productmedia'].includes(type)) return;
       if (type === 'checkbox') values[key] = input.checked;
       else if (type === 'number') values[key] = input.value === '' ? null : Number(input.value);
       else if (type === 'datetime-local') values[key] = input.value ? new Date(input.value).toISOString() : null;
@@ -1576,25 +1636,28 @@
     const bucket = product ? 'products' : 'inspirations';
     const { count: total } = await db.from(table).select('id', { count: 'exact', head: true }).eq(foreignKey, parentId);
     const max = product ? 10 : 4;
-    if ((total || 0) + files.length > max) throw new Error(`Envie no máximo ${max} fotos.`);
+    if ((total || 0) + files.length > max) throw new Error(`Envie no máximo ${max} ${product ? 'mídias' : 'fotos'}.`);
     const created = [];
     let previousCoverId = null;
-    if (product && options.coverFile) {
+    if (product) {
       const { data: previousCover, error: previousCoverError } = await db.from(table).select('id').eq(foreignKey, parentId).eq('is_cover', true).limit(1).maybeSingle();
       if (previousCoverError) throw previousCoverError;
       previousCoverId = previousCover?.id || null;
     }
+    const coverFile = product && !previousCoverId ? (options.coverFile || files.find(file => allowedImageTypes.has(file.type)) || null) : options.coverFile;
     try {
       for (let index = 0; index < files.length; index++) {
-        const saved = await upload(bucket, files[index], parentId);
+        const file = files[index];
+        const mediaType = product && allowedVideoTypes.has(file.type) ? 'video' : 'image';
+        const saved = mediaType === 'video' ? await uploadProductVideo(file, parentId) : await upload(bucket, file, parentId);
         const row = { [foreignKey]: parentId, image_url: saved.url, storage_path: saved.path, sort_order: (total || 0) + index };
-        if (product) row.is_cover = !options.coverFile && (total || 0) + index === 0;
+        if (product) Object.assign(row, { media_type: mediaType, poster_url: saved.posterUrl || null, poster_storage_path: saved.posterPath || null, is_cover: false });
         const { data, error } = await db.from(table).insert(row).select('id').single();
-        if (error) { await db.storage.from(bucket).remove([saved.path]); throw error; }
-        created.push({ id: data.id, path: saved.path, file: files[index] });
+        if (error) { await db.storage.from(bucket).remove([saved.path, saved.posterPath].filter(Boolean)); throw error; }
+        created.push({ id: data.id, path: saved.path, posterPath: saved.posterPath || null, file, mediaType });
       }
-      if (product && options.coverFile) {
-        const target = created.find(item => item.file === options.coverFile);
+      if (product && coverFile) {
+        const target = created.find(item => item.file === coverFile && item.mediaType === 'image');
         if (target) {
           const { error: clearCoverError } = await db.from(table).update({ is_cover: false }).eq(foreignKey, parentId);
           if (clearCoverError) throw clearCoverError;
@@ -1609,7 +1672,7 @@
     } catch (error) {
       for (const item of created.reverse()) {
         await db.from(table).delete().eq('id', item.id);
-        await db.storage.from(bucket).remove([item.path]);
+        await db.storage.from(bucket).remove([item.path, item.posterPath].filter(Boolean));
       }
       throw error;
     }
@@ -2242,12 +2305,15 @@
       ['price', 'Preço normal', 'number', true], ['promotional_price', 'Preço promocional (opcional)', 'number'],
       ['installment_enabled', 'Permitir parcelamento', 'checkbox'], ['max_installments', 'Máximo de parcelas', 'number']
     ] },
-    { key: 'photos', label: 'Fotos', help: 'Envie até 10 fotos e escolha a imagem principal.', fields: [
-      ['gallery', 'Galeria do produto — até 10 fotos', 'multifile'],
+    { key: 'photos', label: 'Mídia', help: 'Adicione fotos e vídeos, organize a ordem e escolha a imagem de capa.', fields: [
+      ['gallery', 'Galeria de Mídia do Produto', 'productmedia'],
       ['og_image_url', 'Imagem de compartilhamento (opcional)', 'file']
     ] },
     { key: 'availability', label: 'Disponibilidade', help: 'Controle de quantidade e aviso de estoque baixo.', fields: [
       ['stock_quantity', 'Quantidade em estoque', 'number', true], ['low_stock_threshold', 'Avisar quando chegar a', 'number', true]
+    ] },
+    { key: 'variations', label: 'Cores', help: 'Selecione acabamentos e informe estoque e fotos de cada opção.', fields: [
+      ['variations_ui', 'Variações do produto']
     ] },
     { key: 'benefits', label: 'Benefícios / Selos', help: 'Escolha nenhum, um ou os dois benefícios.', fields: [
       ['benefits', 'Benefícios e Selos'], ['free_city_shipping', 'Frete grátis', 'checkbox'], ['free_assembly', 'Armação gratuita', 'checkbox']
@@ -2369,6 +2435,14 @@
       if (file.size > maxImageBytes) throw new Error(`“${file.name}” ultrapassa o limite de 8 MB.`);
     }
   }
+  function validatePendingProductMedia(files) {
+    for (const file of files) {
+      const image = allowedImageTypes.has(file.type);
+      if (!image && !allowedVideoTypes.has(file.type)) throw new Error(`“${file.name}” deve ser uma foto JPG, PNG ou WebP, ou um vídeo MP4 ou WebM.`);
+      if (image && file.size > maxImageBytes) throw new Error(`“${file.name}” ultrapassa o limite de 8 MB para fotos.`);
+      if (!image && file.size > maxVideoBytes) throw new Error('O vídeo selecionado ultrapassa o tamanho máximo permitido de 50 MB.');
+    }
+  }
   function renderPendingProductGallery() {
     const root = $('#pendingGalleryPreview');
     if (!root || editorState?.view !== 'products') return;
@@ -2376,14 +2450,19 @@
     editorState.previewObjectUrls = [];
     const files = editorState.pendingGalleryFiles || [];
     if (!files.length) {
-      root.innerHTML = '<p class="pending-gallery-empty">As novas fotos aparecerão aqui antes de salvar.</p>';
+      root.innerHTML = '<p class="pending-gallery-empty">As novas fotos e vídeos aparecerão aqui antes de salvar.</p>';
       return;
     }
     root.innerHTML = files.map((file, index) => {
       const url = URL.createObjectURL(file);
       editorState.previewObjectUrls.push(url);
+      const video = allowedVideoTypes.has(file.type);
       const cover = file === editorState.pendingCoverFile;
-      return `<figure data-pending-image="${index}"><img src="${esc(url)}" alt="Prévia de ${esc(file.name)}"><figcaption>${cover ? '<b>Imagem principal</b>' : `Nova foto ${index + 1}`}</figcaption><div class="gallery-actions">${cover ? '' : `<button type="button" data-pending-cover="${index}">Principal</button>`}<button type="button" data-pending-move="up" data-pending-index="${index}" ${index === 0 ? 'disabled' : ''} aria-label="Mover foto para a esquerda">←</button><button type="button" data-pending-move="down" data-pending-index="${index}" ${index === files.length - 1 ? 'disabled' : ''} aria-label="Mover foto para a direita">→</button><button type="button" class="danger" data-pending-delete="${index}" aria-label="Remover foto antes de salvar">×</button></div></figure>`;
+      const preview = video
+        ? `<div class="product-media-video-preview"><video src="${esc(url)}" controls preload="metadata" muted playsinline></video></div>`
+        : `<img src="${esc(url)}" alt="Prévia de ${esc(file.name)}">`;
+      const label = video ? `NOVO VÍDEO ${index + 1}` : cover ? '<b>NOVA FOTO · CAPA</b>' : `NOVA FOTO ${index + 1}`;
+      return `<figure data-pending-media="${index}" data-media-type="${video ? 'video' : 'image'}">${preview}<figcaption>${label}</figcaption><div class="gallery-actions">${!video && !cover ? `<button type="button" data-pending-cover="${index}">Capa</button>` : ''}<button type="button" data-pending-move="up" data-pending-index="${index}" ${index === 0 ? 'disabled' : ''} aria-label="Mover mídia para a esquerda">←</button><button type="button" data-pending-move="down" data-pending-index="${index}" ${index === files.length - 1 ? 'disabled' : ''} aria-label="Mover mídia para a direita">→</button><button type="button" class="danger" data-pending-delete="${index}" aria-label="Remover mídia antes de salvar">×</button></div></figure>`;
     }).join('');
     $$('[data-pending-cover]', root).forEach(button => button.onclick = () => {
       editorState.pendingCoverFile = files[Number(button.dataset.pendingCover)];
@@ -2401,28 +2480,279 @@
     });
     $$('[data-pending-delete]', root).forEach(button => button.onclick = () => {
       const [removed] = files.splice(Number(button.dataset.pendingDelete), 1);
-      if (removed === editorState.pendingCoverFile) editorState.pendingCoverFile = editorState.record ? null : files[0] || null;
+      if (removed === editorState.pendingCoverFile) editorState.pendingCoverFile = editorState.record ? null : files.find(file => allowedImageTypes.has(file.type)) || null;
       if (editorState.pendingCoverFile) setProductBenefitPreviewImage(editorState.pendingCoverFile);
       setProductEditorDirty();
       renderPendingProductGallery();
     });
   }
-  function addPendingProductImages(fileList) {
+  function addPendingProductMedia(fileList) {
     const incoming = [...(fileList || [])];
     if (!incoming.length || editorState?.view !== 'products') return;
-    try { validatePendingProductImages(incoming); }
+    try { validatePendingProductMedia(incoming); }
     catch (error) { toast(error.message, 'error'); return; }
     const files = editorState.pendingGalleryFiles || (editorState.pendingGalleryFiles = []);
     const known = new Set(files.map(productGalleryFileKey));
     incoming.forEach(file => { if (!known.has(productGalleryFileKey(file))) files.push(file); });
     if ((editorState.existingGalleryCount || 0) + files.length > 10) {
       files.splice(Math.max(0, 10 - (editorState.existingGalleryCount || 0)));
-      toast('A galeria aceita no máximo 10 fotos.', 'error');
+      toast('A galeria aceita no máximo 10 mídias.', 'error');
     }
-    if (!editorState.record && !editorState.pendingCoverFile) editorState.pendingCoverFile = files[0] || null;
-    setProductBenefitPreviewImage(editorState.pendingCoverFile || files[0]);
+    if (!editorState.record && !editorState.pendingCoverFile) editorState.pendingCoverFile = files.find(file => allowedImageTypes.has(file.type)) || null;
+    if (editorState.pendingCoverFile) setProductBenefitPreviewImage(editorState.pendingCoverFile);
     setProductEditorDirty();
     renderPendingProductGallery();
+  }
+  const fallbackProductColors = [
+    ['Branco','branco','#F7F5EF','#E3E6E8','solid'],['Off White','off-white','#EEE7D5','#D9CFB8','solid'],['Bege','bege','#D9C6A5','#BFA989','solid'],
+    ['Preto','preto','#202124','#08090A','solid'],['Cinza','cinza','#85898C','#62676B','solid'],['Marrom','marrom','#6B4423','#3F2717','solid'],
+    ['Freijó','freijo','#B9723B','#7C421F','wood'],['Carvalho','carvalho','#B99B78','#806342','wood'],['Nogueira','nogueira','#694028','#3F2418','wood'],
+    ['Imbuia','imbuia','#4A2B20','#281713','wood'],['Mel','mel','#C27B2B','#94541F','wood'],['Canela','canela','#A85526','#713617','wood'],
+    ['Azul','azul','#164A96','#0B2D65','solid'],['Verde','verde','#1C6B55','#104638','solid'],['Rosé','rose','#EAB8C4','#D691A3','solid']
+  ].map(([name,slug,hex,secondary_hex,type], index) => ({ id: `preset:${slug}`, name, slug, hex, secondary_hex, type, active: true, sort_order: (index + 1) * 10, persisted: false }));
+  const normalizedColorName = value => slugify(String(value || '').replace(/\//g, ' '));
+  async function loadProductColorCatalog() {
+    const result = await db.from('product_colors').select('*').order('sort_order').order('name');
+    if (!result.error) return { colors: result.data || [], available: true };
+    if (['42P01','PGRST205'].includes(result.error.code) || /product_colors|schema cache/i.test(result.error.message || '')) return { colors: fallbackProductColors.map(color => ({ ...color })), available: false };
+    throw result.error;
+  }
+  function catalogColor(id) { return (editorState?.colors || []).find(color => color.id === id) || null; }
+  function colorSwatchBackground(primary, secondary = null) {
+    const first = primary?.hex || '#ffffff', second = secondary?.hex || first;
+    const base = secondary ? `linear-gradient(90deg,${first} 0 50%,${second} 50% 100%)` : `linear-gradient(${first},${first})`;
+    const hasWood = primary?.type === 'wood' || secondary?.type === 'wood';
+    return `${hasWood ? 'repeating-linear-gradient(105deg,transparent 0 5px,rgba(70,35,12,.18) 6px 7px,transparent 8px 12px),' : ''}${base}`;
+  }
+  function newVariantDraft(source = {}) {
+    const explicitPrice = source.price ?? '';
+    const adjustment = source.price_adjustment ?? '';
+    return {
+      key: source.key || crypto.randomUUID(), id: source.id || null, name: source.name || source.color_name || '',
+      type: source.type || 'color', sku: source.sku || '', color_name: source.color_name || source.name || '',
+      color_id: source.color_id || null, combination_color_id: source.combination_color_id || null,
+      swatch_mode: source.swatch_mode || 'simple', color_hex: source.color_hex || '#ffffff',
+      secondary_color_hex: source.secondary_color_hex || '#f2f2f2', swatch_image: source.swatch_image || '',
+      swatch_storage_path: source.swatch_storage_path || '', price: explicitPrice, price_adjustment: adjustment,
+      priceMode: source.priceMode || (explicitPrice !== '' && explicitPrice != null ? 'specific' : (Number(adjustment || 0) ? 'adjustment' : 'main')),
+      stock: Number(source.stock || 0), low_stock_threshold: Number(source.low_stock_threshold || 0),
+      active: source.active !== false, default_variant: Boolean(source.default_variant), display_order: Number(source.display_order || 0),
+      variant_images: [...(source.variant_images || [])].sort((a, b) => Number(b.is_cover) - Number(a.is_cover) || Number(a.sort_order || 0) - Number(b.sort_order || 0)),
+      swatchFile: null, galleryFiles: [], removedImageIds: []
+    };
+  }
+  function draftCatalogColors(draft) {
+    let primary = catalogColor(draft.color_id), secondary = catalogColor(draft.combination_color_id);
+    if (!primary) {
+      const parts = String(draft.color_name || draft.name || '').split(/\s*[\/+]+\s*/);
+      primary = (editorState?.colors || []).find(color => normalizedColorName(color.name) === normalizedColorName(parts[0]));
+      if (!secondary && parts[1]) secondary = (editorState?.colors || []).find(color => normalizedColorName(color.name) === normalizedColorName(parts[1]));
+    }
+    return { primary, secondary };
+  }
+  function variantFromColors(primary, secondary = null) {
+    return newVariantDraft({
+      name: `${primary.name}${secondary ? ` / ${secondary.name}` : ''}`,
+      color_name: `${primary.name}${secondary ? ` / ${secondary.name}` : ''}`,
+      color_id: primary.id, combination_color_id: secondary?.id || null,
+      swatch_mode: secondary ? 'composite' : 'simple', color_hex: primary.hex,
+      secondary_color_hex: secondary?.hex || primary.secondary_hex || primary.hex,
+      stock: 0, active: true, default_variant: !(editorState?.variants || []).length,
+      display_order: (editorState?.variants || []).length
+    });
+  }
+  function variantSwatchPreview(draft) {
+    if (draft.swatchFile) {
+      const url = URL.createObjectURL(draft.swatchFile);
+      editorState.variantPreviewUrls.push(url);
+      return `style="background-image:url('${esc(url)}')"`;
+    }
+    if (draft.swatch_mode === 'image' && draft.swatch_image) return `style="background-image:url('${esc(draft.swatch_image)}')"`;
+    const { primary, secondary } = draftCatalogColors(draft);
+    if (primary) return `style="background:${colorSwatchBackground(primary, secondary)}"`;
+    const first = draft.color_hex || '#ffffff', second = draft.secondary_color_hex || first;
+    return draft.swatch_mode === 'composite' ? `style="background:linear-gradient(90deg,${first} 0 50%,${second} 50% 100%)"` : `style="background:${first}"`;
+  }
+  function productVariationsEditorHtml(record = {}) {
+    return `<section class="variation-editor"><div class="variation-enable-row"><div><h3>Cores disponíveis</h3><p>Selecione as cores disponíveis para este produto.</p></div><label class="product-switch variation-master"><input id="productHasVariants" name="variants_enabled" type="checkbox" ${record.variants_enabled ? 'checked' : ''}><span></span><em>Este produto possui cores</em></label></div><div id="variationWorkspace" ${record.variants_enabled ? '' : 'hidden'}><div id="productColorCatalog" class="product-color-catalog"></div><div class="color-builder-actions"><button id="showCustomColor" type="button">+ Adicionar outra cor</button><button id="showColorCombination" type="button">+ Criar combinação de duas cores</button></div><div id="customColorBuilder" class="color-builder" hidden><label>Nome da cor<input id="customColorName" maxlength="50" placeholder="Ex.: Champagne"></label><label>Acabamento<select id="customColorType"><option value="solid">Cor lisa</option><option value="wood">Madeira</option></select></label><label>Cor principal<input id="customColorHex" type="color" value="#d8c7a7"></label><label>Tom secundário<input id="customColorSecondary" type="color" value="#aa8861"></label><button id="confirmCustomColor" type="button">Adicionar cor</button></div><div id="combinationBuilder" class="color-builder combination-builder" hidden><label>Cor 1<select id="combinationColorOne"></select></label><label>Cor 2<select id="combinationColorTwo"></select></label><button id="confirmColorCombination" type="button">Adicionar combinação</button></div><div class="selected-colors-heading"><b id="selectedColorsCount">Cores selecionadas (0)</b><small>Informe apenas estoque e fotos. O restante é opcional.</small></div><div id="productVariantList" class="variant-admin-list"></div></div></section>`;
+  }
+  function syncVariantDraftsFromDom() {
+    if (editorState?.view !== 'products') return;
+    $$('[data-variant-card]').forEach(card => {
+      const draft = editorState.variants.find(item => item.key === card.dataset.variantCard);
+      if (!draft) return;
+      ['sku','price','price_adjustment','stock','low_stock_threshold','priceMode'].forEach(name => {
+        const input = card.querySelector(`[data-variant-field="${name}"]`);
+        if (!input) return;
+        draft[name] = ['stock','low_stock_threshold'].includes(name) ? Number(input.value || 0) : input.value;
+      });
+      draft.active = card.querySelector('[data-variant-field="active"]')?.checked !== false;
+      if (draft.priceMode === 'main') { draft.price = ''; draft.price_adjustment = ''; }
+      if (draft.priceMode === 'specific') draft.price_adjustment = '';
+      if (draft.priceMode === 'adjustment') draft.price = '';
+    });
+  }
+  function colorIsSelected(color) {
+    return (editorState?.variants || []).some(draft => { const colors = draftCatalogColors(draft); return !colors.secondary && colors.primary?.id === color.id; });
+  }
+  function renderColorCatalog() {
+    const root = $('#productColorCatalog');
+    if (!root) return;
+    const colors = (editorState.colors || []).filter(color => color.active !== false && color.type !== 'combination');
+    root.innerHTML = colors.map(color => `<button type="button" class="product-color-option ${colorIsSelected(color) ? 'is-selected' : ''}" data-color-option="${esc(color.id)}" aria-pressed="${colorIsSelected(color)}"><span style="background:${colorSwatchBackground(color)}"></span><b>${esc(color.name)}</b>${colorIsSelected(color) ? '<i>✓</i>' : ''}</button>`).join('');
+    const options = colors.map(color => `<option value="${esc(color.id)}">${esc(color.name)}</option>`).join('');
+    const first = $('#combinationColorOne'), second = $('#combinationColorTwo');
+    if (first) first.innerHTML = options;
+    if (second) { second.innerHTML = options; if (second.options.length > 1) second.selectedIndex = 1; }
+    if ($('#selectedColorsCount')) $('#selectedColorsCount').textContent = `Cores selecionadas (${editorState.variants.length})`;
+  }
+  function variantFallbackImage() {
+    const images = [...(editorState?.record?.product_images || [])].sort((a,b) => Number(b.is_cover) - Number(a.is_cover) || Number(a.sort_order || 0) - Number(b.sort_order || 0));
+    return images[0]?.image_url || '';
+  }
+  function renderVariantEditor() {
+    const root = $('#productVariantList');
+    if (!root || editorState?.view !== 'products') return;
+    (editorState.variantPreviewUrls || []).forEach(url => URL.revokeObjectURL(url));
+    editorState.variantPreviewUrls = [];
+    renderColorCatalog();
+    const variants = editorState.variants || [];
+    if (!variants.length) { root.innerHTML = '<div class="variant-empty"><b>Nenhuma cor selecionada</b><p>Toque nas opções acima. Cada cor vira uma variação automaticamente.</p></div>'; return; }
+    root.innerHTML = variants.map((draft, index) => {
+      const existingImages = draft.variant_images.filter(image => !draft.removedImageIds.includes(image.id));
+      const gallery = [...existingImages.map(image => ({ url: image.image_url, label: image.is_cover ? 'Principal' : 'Foto', id: image.id })), ...draft.galleryFiles.map((file, fileIndex) => { const url = URL.createObjectURL(file); editorState.variantPreviewUrls.push(url); return { url, label: `Nova ${fileIndex + 1}`, fileIndex }; })];
+      const fallback = variantFallbackImage(), cover = gallery[0]?.url || fallback;
+      return `<article class="variant-admin-card compact-variant-card" data-variant-card="${draft.key}"><header><span class="variant-admin-swatch" ${variantSwatchPreview(draft)}></span><div><b>${esc(draft.color_name || draft.name || `Cor ${index + 1}`)}</b><small>${draft.default_variant ? 'Cor padrão · ' : ''}${draft.active ? 'Disponível' : 'Indisponível'}</small></div><button class="variant-remove" type="button" data-variant-delete aria-label="Remover ${esc(draft.color_name || draft.name)}">×</button></header><div class="variant-compact-body"><div class="variant-cover-preview">${cover ? `<img src="${esc(cover)}" alt="Prévia de ${esc(draft.color_name || draft.name)}">` : '<span>Sem foto</span>'}${!gallery.length && fallback ? '<small>Galeria principal</small>' : ''}</div><label>Estoque<input data-variant-field="stock" type="number" min="0" step="1" value="${Number(draft.stock || 0)}"></label><label>Preço<select data-variant-field="priceMode"><option value="main" ${draft.priceMode === 'main' ? 'selected' : ''}>Usar preço principal</option><option value="specific" ${draft.priceMode === 'specific' ? 'selected' : ''}>Preço específico</option><option value="adjustment" ${draft.priceMode === 'adjustment' ? 'selected' : ''}>Acréscimo ao principal</option></select></label>${draft.priceMode === 'specific' ? `<label>Valor específico<input data-variant-field="price" type="number" min="0" step="0.01" value="${esc(draft.price)}" placeholder="R$ 0,00"></label>` : ''}${draft.priceMode === 'adjustment' ? `<label>Acréscimo<input data-variant-field="price_adjustment" type="number" min="0" step="0.01" value="${esc(draft.price_adjustment)}" placeholder="R$ 0,00"></label>` : ''}<label class="variant-gallery-add">+ Enviar fotos<input data-variant-gallery type="file" accept="image/jpeg,image/png,image/webp" multiple></label></div><div class="variant-gallery-grid compact-gallery">${gallery.map(image => `<figure><img src="${esc(image.url)}" alt=""><figcaption>${esc(image.label)}</figcaption><button type="button" ${image.id ? `data-variant-image-delete="${image.id}"` : `data-variant-new-image-delete="${image.fileIndex}"`}>×</button></figure>`).join('') || '<p>Nenhuma foto específica — será usada a galeria principal.</p>'}</div><details class="variant-advanced"><summary>Configurações avançadas</summary><div><label>SKU da variação<input data-variant-field="sku" value="${esc(draft.sku)}" placeholder="Gerado automaticamente ao salvar"></label><label>Alerta de estoque baixo<input data-variant-field="low_stock_threshold" type="number" min="0" step="1" value="${Number(draft.low_stock_threshold || 0)}"></label><label class="check-field"><input data-variant-field="active" type="checkbox" ${draft.active ? 'checked' : ''}> Disponível para venda</label><button type="button" data-variant-default ${draft.default_variant ? 'disabled' : ''}>${draft.default_variant ? 'Cor padrão atual' : 'Definir como padrão'}</button><small>Código da cor: ${esc(draft.color_id || 'legado')} ${draft.combination_color_id ? `+ ${esc(draft.combination_color_id)}` : ''}</small></div></details></article>`;
+    }).join('');
+  }
+  function bindVariantEditor() {
+    const toggle = $('#productHasVariants'), workspace = $('#variationWorkspace');
+    if (!toggle || !workspace) return;
+    toggle.onchange = () => { workspace.hidden = !toggle.checked; setProductEditorDirty(); };
+    workspace.addEventListener('change', event => {
+      const card = event.target.closest('[data-variant-card]'), draft = card && editorState.variants.find(item => item.key === card.dataset.variantCard);
+      if (!draft) return;
+      syncVariantDraftsFromDom();
+      if (event.target.matches('[data-variant-gallery]') && event.target.files?.length) { try { validatePendingProductImages([...event.target.files]); draft.galleryFiles.push(...event.target.files); } catch (error) { return toast(error.message, 'error'); } renderVariantEditor(); }
+      if (event.target.matches('[data-variant-field="priceMode"]')) renderVariantEditor();
+      setProductEditorDirty();
+    });
+    workspace.addEventListener('input', event => { if (event.target.matches('[data-variant-field]')) setProductEditorDirty(); });
+    workspace.addEventListener('click', event => {
+      const button = event.target.closest('button');
+      if (!button) return;
+      if (button.matches('[data-color-option]')) {
+        syncVariantDraftsFromDom(); const color = catalogColor(button.dataset.colorOption); if (!color) return;
+        const existing = editorState.variants.findIndex(draft => !draft.combination_color_id && draftCatalogColors(draft).primary?.id === color.id);
+        if (existing >= 0) editorState.variants.splice(existing, 1); else editorState.variants.push(variantFromColors(color));
+        if (editorState.variants.length && !editorState.variants.some(item => item.default_variant)) editorState.variants[0].default_variant = true;
+        renderVariantEditor(); setProductEditorDirty(); return;
+      }
+      if (button.id === 'showCustomColor') { $('#customColorBuilder').hidden = !$('#customColorBuilder').hidden; $('#combinationBuilder').hidden = true; return; }
+      if (button.id === 'showColorCombination') { $('#combinationBuilder').hidden = !$('#combinationBuilder').hidden; $('#customColorBuilder').hidden = true; return; }
+      if (button.id === 'confirmCustomColor') {
+        const name = $('#customColorName').value.trim(), slug = slugify(name), type = $('#customColorType').value;
+        if (!name) return toast('Informe o nome da nova cor.', 'error');
+        if (editorState.colors.some(color => color.slug === slug)) return toast('Essa cor já existe no catálogo.', 'error');
+        const color = { id: `local:${crypto.randomUUID()}`, name, slug, type, hex: $('#customColorHex').value, secondary_hex: $('#customColorSecondary').value, active: true, sort_order: editorState.colors.length * 10 + 10, persisted: false };
+        editorState.colors.push(color); editorState.variants.push(variantFromColors(color));
+        if (!editorState.variants.some(item => item.default_variant)) editorState.variants[0].default_variant = true;
+        renderVariantEditor(); setProductEditorDirty(); return;
+      }
+      if (button.id === 'confirmColorCombination') {
+        syncVariantDraftsFromDom(); const primary = catalogColor($('#combinationColorOne').value), secondary = catalogColor($('#combinationColorTwo').value);
+        if (!primary || !secondary) return toast('Selecione as duas cores da combinação.', 'error');
+        if (primary.id === secondary.id) return toast('Escolha duas cores diferentes.', 'error');
+        if (editorState.variants.some(draft => draft.color_id === primary.id && draft.combination_color_id === secondary.id)) return toast('Essa combinação já foi adicionada.', 'error');
+        editorState.variants.push(variantFromColors(primary, secondary));
+        if (!editorState.variants.some(item => item.default_variant)) editorState.variants[0].default_variant = true;
+        renderVariantEditor(); setProductEditorDirty(); return;
+      }
+      const card = button.closest('[data-variant-card]'), index = card ? editorState.variants.findIndex(item => item.key === card.dataset.variantCard) : -1;
+      if (index < 0) return; syncVariantDraftsFromDom(); const draft = editorState.variants[index];
+      if (button.matches('[data-variant-default]')) editorState.variants.forEach((item, itemIndex) => { item.default_variant = itemIndex === index; });
+      else if (button.matches('[data-variant-delete]')) editorState.variants.splice(index, 1);
+      else if (button.matches('[data-variant-image-delete]')) draft.removedImageIds.push(button.dataset.variantImageDelete);
+      else if (button.matches('[data-variant-new-image-delete]')) draft.galleryFiles.splice(Number(button.dataset.variantNewImageDelete), 1);
+      else return;
+      if (editorState.variants.length && !editorState.variants.some(item => item.default_variant)) editorState.variants[0].default_variant = true;
+      renderVariantEditor(); setProductEditorDirty();
+    });
+  }
+  function generatedVariantSku(draft, index) {
+    const productPart = slugify($('[name="sku"]')?.value || $('[name="name"]')?.value || 'produto').replace(/-/g, '').slice(0, 18).toUpperCase() || 'PRODUTO';
+    const colorPart = slugify(draft.color_name || draft.name || `cor-${index + 1}`).replace(/-/g, '').slice(0, 14).toUpperCase() || `COR${index + 1}`;
+    const uniquePart = String(draft.id || draft.key).replace(/-/g, '').slice(0, 6).toUpperCase();
+    return `${productPart}-${colorPart}-${uniquePart}`;
+  }
+  function validatedProductVariants() {
+    syncVariantDraftsFromDom();
+    const enabled = Boolean($('#productHasVariants')?.checked), variants = editorState?.variants || [];
+    if (!enabled) return { enabled: false, type: null, variants };
+    if (!variants.length) throw new Error('Selecione pelo menos uma cor ou desative as cores.');
+    const seen = new Set();
+    variants.forEach((draft, index) => {
+      draft.name = String(draft.color_name || draft.name || '').trim(); draft.color_name = draft.name; draft.display_order = index;
+      if (!draft.name) throw new Error(`Informe o nome da cor ${index + 1}.`);
+      if (!String(draft.sku || '').trim()) draft.sku = generatedVariantSku(draft, index);
+      const sku = draft.sku.trim().toLowerCase(); if (seen.has(sku)) throw new Error(`O SKU “${draft.sku}” está repetido.`); seen.add(sku);
+      if (!Number.isInteger(Number(draft.stock)) || Number(draft.stock) < 0) throw new Error(`Revise o estoque de “${draft.name}”.`);
+      if (draft.price !== '' && (!Number.isFinite(Number(draft.price)) || Number(draft.price) < 0)) throw new Error(`Revise o preço de “${draft.name}”.`);
+      if (draft.price_adjustment !== '' && (!Number.isFinite(Number(draft.price_adjustment)) || Number(draft.price_adjustment) < 0)) throw new Error(`Revise o acréscimo de “${draft.name}”.`);
+    });
+    if (!variants.some(item => item.default_variant)) variants[0].default_variant = true;
+    return { enabled: true, type: 'color', variants };
+  }
+  async function persistPendingVariantColors(settings) {
+    if (!settings.enabled) return;
+    settings.variants.forEach(draft => {
+      const { primary, secondary } = draftCatalogColors(draft);
+      if (!draft.color_id && primary) draft.color_id = primary.id;
+      if (!draft.combination_color_id && secondary) draft.combination_color_id = secondary.id;
+    });
+    const pendingIds = new Set(settings.variants.flatMap(draft => [draft.color_id, draft.combination_color_id]).filter(id => String(id || '').startsWith('local:') || String(id || '').startsWith('preset:')));
+    if (!pendingIds.size) return;
+    if (!editorState.colorsAvailable) throw new Error('Execute a migração 20261001_product_color_catalog.sql antes de cadastrar cores.');
+    for (const pendingId of pendingIds) {
+      const color = catalogColor(pendingId);
+      if (!color) continue;
+      const values = { name: color.name, slug: color.slug, hex: color.hex, secondary_hex: color.secondary_hex || null, type: color.type || 'solid', active: true, sort_order: Number(color.sort_order || 0) };
+      const { data, error } = await db.from('product_colors').upsert(values, { onConflict: 'slug' }).select().single();
+      if (error) throw error;
+      settings.variants.forEach(draft => {
+        if (draft.color_id === pendingId) draft.color_id = data.id;
+        if (draft.combination_color_id === pendingId) draft.combination_color_id = data.id;
+      });
+      Object.assign(color, data, { persisted: true });
+    }
+  }
+  async function saveProductVariants(productId, settings) {
+    if (!settings.enabled) return;
+    await persistPendingVariantColors(settings);
+    const { data: persisted, error: loadError } = await db.from('product_variants').select('id,swatch_image,swatch_storage_path,variant_images(id,image_url,storage_path,is_cover)').eq('product_id', productId);
+    if (loadError) throw loadError;
+    const keepIds = new Set(settings.variants.map(item => item.id).filter(Boolean));
+    for (const stale of (persisted || []).filter(item => !keepIds.has(item.id))) {
+      const paths = [...(stale.variant_images || []).map(image => image.storage_path), stale.swatch_storage_path].filter(Boolean);
+      const { error } = await db.from('product_variants').delete().eq('id', stale.id); if (error) throw error;
+      if (paths.length) await db.storage.from('products').remove(paths);
+    }
+    await db.from('product_variants').update({ default_variant: false }).eq('product_id', productId);
+    let defaultId = null;
+    for (const [index, draft] of settings.variants.entries()) {
+      let swatch = draft.swatch_image || null, swatchPath = draft.swatch_storage_path || null;
+      if (draft.swatchFile) { const saved = await upload('products', draft.swatchFile, `${productId}/variants`); swatch = saved.url; swatchPath = saved.path; }
+      const values = { product_id: productId, name: draft.name, type: 'color', sku: draft.sku.trim(), color_name: draft.color_name, swatch_mode: draft.swatch_mode, color_hex: draft.color_hex || null, secondary_color_hex: draft.swatch_mode === 'composite' ? draft.secondary_color_hex || null : null, swatch_image: draft.swatch_mode === 'image' ? swatch : null, swatch_storage_path: draft.swatch_mode === 'image' ? swatchPath : null, price: draft.price === '' ? null : Number(draft.price), price_adjustment: draft.price_adjustment === '' ? 0 : Number(draft.price_adjustment), stock: Number(draft.stock), low_stock_threshold: Number(draft.low_stock_threshold || 0), active: draft.active, default_variant: false, display_order: index };
+      if (editorState.colorsAvailable) { values.color_id = draft.color_id || null; values.combination_color_id = draft.combination_color_id || null; }
+      const result = draft.id ? await db.from('product_variants').update(values).eq('id', draft.id).select('id').single() : await db.from('product_variants').insert(values).select('id').single();
+      if (result.error) throw result.error; const variantId = result.data.id; if (draft.default_variant) defaultId = variantId;
+      if (draft.removedImageIds.length) { const removed = draft.variant_images.filter(image => draft.removedImageIds.includes(image.id)); const deletion = await db.from('variant_images').delete().in('id', draft.removedImageIds); if (deletion.error) throw deletion.error; const paths = removed.map(image => image.storage_path).filter(Boolean); if (paths.length) await db.storage.from('products').remove(paths); }
+      const remaining = draft.variant_images.filter(image => !draft.removedImageIds.includes(image.id));
+      for (const [fileIndex, file] of draft.galleryFiles.entries()) { const saved = await upload('products', file, `${productId}/variants/${variantId}`); const image = await db.from('variant_images').insert({ variant_id: variantId, image_url: saved.url, storage_path: saved.path, sort_order: remaining.length + fileIndex, is_cover: remaining.length === 0 && fileIndex === 0 }).select('id').single(); if (image.error) { await db.storage.from('products').remove([saved.path]); throw image.error; } }
+      if (!remaining.some(image => image.is_cover)) { const { data: first } = await db.from('variant_images').select('id').eq('variant_id', variantId).order('sort_order').limit(1).maybeSingle(); if (first) await db.from('variant_images').update({ is_cover: true }).eq('id', first.id); }
+      if (draft.swatchFile && draft.swatch_storage_path && draft.swatch_storage_path !== swatchPath) await db.storage.from('products').remove([draft.swatch_storage_path]);
+    }
+    if (defaultId) { const { error } = await db.from('product_variants').update({ default_variant: true }).eq('id', defaultId); if (error) throw error; }
   }
   async function productEditorMarkup(record) {
     const tabs = productEditorSections.map((section, index) => `<button type="button" role="tab" aria-selected="${index === 0}" tabindex="${index === 0 ? '0' : '-1'}" class="${index === 0 ? 'is-active' : ''}" data-product-tab="${section.key}">${esc(section.label)}</button>`).join('');
@@ -2431,6 +2761,7 @@
       const fields = [];
       for (const field of section.fields) {
         if (field[0] === 'benefits') fields.push(productBenefitsEditorHtml(record));
+        else if (field[0] === 'variations_ui') fields.push(productVariationsEditorHtml(record));
         else if (!['free_city_shipping', 'free_assembly'].includes(field[0])) fields.push(await fieldHtml(field, record));
       }
       panels.push(`<section class="product-editor-panel" role="tabpanel" data-product-panel="${section.key}" ${index === 0 ? '' : 'hidden'}><header><div><h3>${esc(section.label)}</h3><p>${esc(section.help)}</p></div><span>${index + 1} de ${productEditorSections.length}</span></header><div class="product-section-fields">${fields.join('')}</div></section>`);
@@ -2457,18 +2788,22 @@
       dimensions_text: record.dimensions?.description || '',
       specifications_text: formatSpecificationsText(record.specifications)
     } : { ...commerceDefaults, specifications_text: '' };
+    const colorCatalog = await loadProductColorCatalog();
     // Keep the defaults only for rendering a new product. The persistence
     // layer must receive a null record so it executes INSERT instead of
     // attempting PATCH /products?id=eq.undefined.
     editorState = {
       view: 'products', record: record ? editRecord : null, activeTab: 'basic', dirty: false, saving: false,
       existingGalleryCount: record?.product_images?.length || 0, pendingGalleryFiles: [], pendingCoverFile: null,
-      previewObjectUrls: []
+      previewObjectUrls: [], variantPreviewUrls: [], colors: colorCatalog.colors, colorsAvailable: colorCatalog.available,
+      variants: [...(record?.product_variants || [])].sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0)).map(newVariantDraft)
     };
     $('#editorDialog').classList.add('product-editor-dialog');
     $('#dialogEyebrow').textContent = 'CATÁLOGO';
     $('#dialogTitle').textContent = record ? 'Editar produto' : 'Novo produto';
     $('#editorFields').innerHTML = await productEditorMarkup(editRecord);
+    renderVariantEditor();
+    bindVariantEditor();
     const environmentSelect = $('[name="environment_id"]');
     const categorySelect = $('[name="category_id"]');
     if (environmentSelect && categorySelect) {
@@ -2485,7 +2820,7 @@
       syncSubcategories(false);
       environmentSelect.addEventListener('change', () => { syncSubcategories(true); setProductEditorDirty(); });
     }
-    $('#existingGallery')?.insertAdjacentHTML('afterend', '<div class="pending-gallery-heading"><b>Novas fotos</b><small>Prévia antes de salvar</small></div><div id="pendingGalleryPreview" class="multi-images pending-gallery-preview"></div>');
+    $('#existingGallery')?.insertAdjacentHTML('afterend', '<div class="pending-gallery-heading"><b>Novas mídias</b><small>Prévia antes de salvar</small></div><div id="pendingGalleryPreview" class="multi-images pending-gallery-preview product-media-grid"></div>');
     renderPendingProductGallery();
     $('#editorForm>footer .editor-footer-spacer')?.insertAdjacentHTML('beforebegin', '<span id="productUnsavedStatus" class="product-unsaved-status" role="status">Sem alterações pendentes</span>');
     $$('[data-product-tab]').forEach(button => {
@@ -2514,7 +2849,8 @@
       if (previewName) previewName.textContent = event.target.value.trim() || 'Nome do produto';
     });
     $$('[name="free_city_shipping"], [name="free_assembly"]').forEach(input => input.addEventListener('change', syncProductBenefitPreview));
-    $('[name="gallery"]')?.addEventListener('change', event => { addPendingProductImages(event.target.files); event.target.value = ''; });
+    $('[name="gallery"]')?.addEventListener('change', event => { addPendingProductMedia(event.target.files); event.target.value = ''; });
+    $('[name="gallery_video"]')?.addEventListener('change', event => { addPendingProductMedia(event.target.files); event.target.value = ''; });
     $('[name="og_image_url"]')?.addEventListener('change', event => {
       const file = event.target.files?.[0];
       if (!file) return;
@@ -2553,21 +2889,28 @@
         return toast('Quantidade, estoque mínimo e ordem devem usar números inteiros positivos.', 'error');
       }
     }
+    let variantSettings;
+    try { variantSettings = validatedProductVariants(); }
+    catch (error) { activateProductEditorTab('variations'); return toast(error.message, 'error'); }
     const record = editorState?.record || null;
     const button = $('#saveEditor');
     button.disabled = true;
     button.textContent = 'Salvando…';
     if (editorState) editorState.saving = true;
-    setProductEditorDirty(true, editorState?.pendingGalleryFiles?.length ? 'Salvando e enviando fotos…' : 'Salvando alterações…');
+    setProductEditorDirty(true, editorState?.pendingGalleryFiles?.length ? 'Salvando e enviando mídias…' : 'Salvando alterações…');
     let uploadedOgImage = null;
     let persisted = false;
     let createdProductId = null;
     let completed = false;
     try {
+      await persistPendingVariantColors(variantSettings);
       const values = formValues(productFields.filter(field => !['section', 'benefits'].includes(field[0])), form);
       values.dimensions = values.dimensions_text ? { description: values.dimensions_text } : {};
       values.specifications = parseSpecificationsText(values.specifications_text);
       values.sku = values.sku || null;
+      values.variants_enabled = variantSettings.enabled;
+      values.variation_type = variantSettings.type;
+      if (variantSettings.enabled) values.stock_quantity = variantSettings.variants.filter(item => item.active).reduce((total, item) => total + Number(item.stock || 0), 0);
       delete values.dimensions_text;
       delete values.specifications_text;
       const ogFile = form.elements.og_image_url?.files?.[0];
@@ -2583,6 +2926,7 @@
       await saveGallery(result.data.id, form.elements.gallery, 'products', {
         files: editorState?.pendingGalleryFiles || [], coverFile: editorState?.pendingCoverFile || null
       });
+      await saveProductVariants(result.data.id, variantSettings);
       completed = true;
       if (editorState) editorState.dirty = false;
       notifyStorefront('products'); $('#editorDialog').close(); toast('Produto salvo e sincronizado com o catálogo.'); render('products');
@@ -2592,7 +2936,10 @@
         if (!rollbackError && uploadedOgImage) await db.storage.from(uploadedOgImage.bucket).remove([uploadedOgImage.path]);
       } else if (uploadedOgImage && !persisted) await db.storage.from(uploadedOgImage.bucket).remove([uploadedOgImage.path]);
       if (error?.code === '23502' && /sku/i.test(error?.message || error?.details || '')) toast('Execute a migration 20260922_complete_product_editor.sql no Supabase para permitir produtos sem SKU.', 'error');
-      else if (error?.code === '42703' || /whatsapp_enabled|cart_enabled|free_city_shipping|free_assembly|is_campaign/i.test(error?.message || '')) toast('Execute a migration 20260920_product_commerce_cards.sql no Supabase antes de salvar estes campos.', 'error');
+      else if (/media_type|poster_url|poster_storage_path/i.test(error?.message || '')) toast('Execute a migração 20261002_product_media_gallery.sql no Supabase antes de enviar vídeos.', 'error');
+      else if (/product_colors|color_id|combination_color_id/i.test(error?.message || '')) toast('Execute a migração 20261001_product_color_catalog.sql no Supabase antes de cadastrar cores.', 'error');
+      else if (/product_variants|variant_images|variants_enabled|variation_type/i.test(error?.message || '')) toast('Execute a migração 20260930_product_variants.sql no Supabase antes de salvar variações.', 'error');
+      else if (/whatsapp_enabled|cart_enabled|free_city_shipping|free_assembly|is_campaign/i.test(error?.message || '')) toast('Execute a migration 20260920_product_commerce_cards.sql no Supabase antes de salvar estes campos.', 'error');
       else toast(explain(error), 'error');
       if (editorState) { editorState.saving = false; setProductEditorDirty(true); }
     }
@@ -2604,7 +2951,7 @@
     return { key: 'in', label: 'Em estoque' };
   }
   function productCover(row) {
-    return [...(row.product_images || [])].sort((a, b) => Number(b.is_cover) - Number(a.is_cover) || Number(a.sort_order) - Number(b.sort_order))[0]?.image_url;
+    return [...(row.product_images || [])].filter(item => item.media_type !== 'video').sort((a, b) => Number(b.is_cover) - Number(a.is_cover) || Number(a.sort_order) - Number(b.sort_order))[0]?.image_url;
   }
   function productRow(row) {
     const image = productCover(row);
@@ -2640,7 +2987,11 @@
     return `<button type="button" data-product-page="${Math.max(1, current - 1)}" ${current === 1 ? 'disabled' : ''} aria-label="Página anterior">‹</button>${pages.map(page => page === '…' ? '<span>…</span>' : `<button type="button" data-product-page="${page}" class="${page === current ? 'current' : ''}" ${page === current ? 'aria-current="page"' : ''}>${page}</button>`).join('')}<button type="button" data-product-page="${Math.min(total, current + 1)}" ${current === total ? 'disabled' : ''} aria-label="Próxima página">›</button>`;
   }
   async function renderProducts(revision) {
-    const { data, error } = await db.from('products').select('*,categories(name),product_images(id,image_url,storage_path,alt_text,is_cover,sort_order)').is('deleted_at', null).order('created_at', { ascending: false }).limit(1000);
+    let { data, error } = await db.from('products').select('*,categories(name),product_images(*),product_variants(*,variant_images(id,image_url,storage_path,alt_text,is_cover,sort_order))').is('deleted_at', null).order('created_at', { ascending: false }).limit(1000);
+    if (error && (/product_variants|variants_enabled|variation_type|relationship/i.test(error.message || '') || ['42703','42P01','PGRST200','PGRST205'].includes(error.code))) {
+      const legacy = await db.from('products').select('*,categories(name),product_images(*)').is('deleted_at', null).order('created_at', { ascending: false }).limit(1000);
+      data = legacy.data; error = legacy.error;
+    }
     if (error) throw error;
     if (revision !== viewRevision) return;
     const rows = data || [];
@@ -2699,7 +3050,7 @@
       const { data: duplicate, error: duplicateError } = await db.from('products').insert(copy).select().single();
       if (duplicateError) return toast(explain(duplicateError), 'error');
       if (source.product_images?.length) {
-        const imageCopies = source.product_images.map(image => ({ product_id: duplicate.id, image_url: image.image_url, storage_path: `references/${duplicate.id}/${crypto.randomUUID()}`, alt_text: image.alt_text, is_cover: image.is_cover, sort_order: image.sort_order }));
+        const imageCopies = source.product_images.map(image => ({ product_id: duplicate.id, image_url: image.image_url, storage_path: `references/${duplicate.id}/${crypto.randomUUID()}`, alt_text: image.alt_text, media_type: image.media_type || 'image', poster_url: image.poster_url || null, poster_storage_path: image.poster_url ? `references/${duplicate.id}/posters/${crypto.randomUUID()}` : null, is_cover: image.media_type === 'video' ? false : image.is_cover, sort_order: image.sort_order }));
         const { error: imageError } = await db.from('product_images').insert(imageCopies);
         if (imageError) toast(`Produto duplicado, mas as fotos não foram copiadas: ${explain(imageError)}`, 'error');
       }
@@ -2814,29 +3165,31 @@
 
   async function renderStock(revision) {
     const [productsResult, historyResult] = await Promise.all([
-      db.from('products').select('id,name,sku,stock_quantity,low_stock_threshold').is('deleted_at', null).order('name'),
+      db.from('products').select('id,name,sku,stock_quantity,low_stock_threshold,variants_enabled,product_variants(id,name,sku,stock,low_stock_threshold,active,display_order)').is('deleted_at', null).order('name'),
       db.from('stock_history').select('id,product_id,previous_quantity,new_quantity,change_quantity,reason,user_id,created_at').order('created_at', { ascending: false }).limit(100)
     ]);
     if (productsResult.error) throw productsResult.error;
     if (historyResult.error) throw historyResult.error;
     if (revision !== viewRevision) return;
     const productNames = Object.fromEntries((productsResult.data || []).map(item => [item.id, item.name]));
-    $('#content').innerHTML = `<div class="toolbar"><input id="searchList" placeholder="Buscar produto…"><select id="stockFilter"><option value="">Todos</option><option>Sem estoque</option><option>Estoque baixo</option></select></div><div class="card table-wrap"><table class="data-table"><thead><tr><th>Produto</th><th>SKU</th><th>Quantidade</th><th>Mínimo</th><th>Situação</th><th>Ação</th></tr></thead><tbody>${(productsResult.data || []).map(stockRow).join('')}</tbody></table></div><details class="card history"><summary>Histórico de movimentações (${(historyResult.data || []).length})</summary><div class="table-wrap"><table class="data-table"><thead><tr><th>Data</th><th>Produto</th><th>Anterior</th><th>Novo</th><th>Alteração</th><th>Motivo</th></tr></thead><tbody>${(historyResult.data || []).map(row => `<tr><td>${dateTime(row.created_at)}</td><td>${esc(productNames[row.product_id] || row.product_id)}</td><td>${row.previous_quantity}</td><td>${row.new_quantity}</td><td>${row.change_quantity > 0 ? '+' : ''}${row.change_quantity}</td><td>${esc(row.reason)}</td></tr>`).join('')}</tbody></table></div></details>`;
+    const stockRows = (productsResult.data || []).flatMap(product => product.variants_enabled && product.product_variants?.length ? [...product.product_variants].sort((a,b) => Number(a.display_order)-Number(b.display_order)).map(variant => ({ ...variant, product_name: product.name, is_variant: true, stock_quantity: variant.stock })) : [product]);
+    $('#content').innerHTML = `<div class="toolbar"><input id="searchList" placeholder="Buscar produto ou cor…"><select id="stockFilter"><option value="">Todos</option><option>Sem estoque</option><option>Estoque baixo</option></select></div><div class="card table-wrap"><table class="data-table"><thead><tr><th>Produto / variação</th><th>SKU</th><th>Quantidade</th><th>Mínimo</th><th>Situação</th><th>Ação</th></tr></thead><tbody>${stockRows.map(stockRow).join('')}</tbody></table></div><details class="card history"><summary>Histórico de movimentações (${(historyResult.data || []).length})</summary><div class="table-wrap"><table class="data-table"><thead><tr><th>Data</th><th>Produto</th><th>Anterior</th><th>Novo</th><th>Alteração</th><th>Motivo</th></tr></thead><tbody>${(historyResult.data || []).map(row => `<tr><td>${dateTime(row.created_at)}</td><td>${esc(productNames[row.product_id] || row.product_id)}</td><td>${row.previous_quantity}</td><td>${row.new_quantity}</td><td>${row.change_quantity > 0 ? '+' : ''}${row.change_quantity}</td><td>${esc(row.reason)}</td></tr>`).join('')}</tbody></table></div></details>`;
     bindSearch();
     $('#stockFilter').onchange = event => $$('tbody tr').forEach(row => { if (row.dataset.stock) row.hidden = event.target.value && row.dataset.stock !== event.target.value; });
     $$('[data-stock-save]').forEach(button => button.onclick = () => runAction(button, async () => {
       if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
       const id = button.dataset.stockSave;
-      const values = { stock_quantity: Number($(`[data-stock-qty="${id}"]`).value), low_stock_threshold: Number($(`[data-stock-min="${id}"]`).value) };
-      const { error } = await db.from('products').update(values).eq('id', id);
+      const variant = button.dataset.stockVariant === 'true';
+      const values = variant ? { stock: Number($(`[data-stock-qty="${id}"]`).value), low_stock_threshold: Number($(`[data-stock-min="${id}"]`).value) } : { stock_quantity: Number($(`[data-stock-qty="${id}"]`).value), low_stock_threshold: Number($(`[data-stock-min="${id}"]`).value) };
+      const { error } = await db.from(variant ? 'product_variants' : 'products').update(values).eq('id', id);
       if (error) return toast(explain(error), 'error');
-      notifyStorefront('products'); toast('Estoque atualizado e histórico registrado.'); render('stock');
+      notifyStorefront(variant ? 'product_variants' : 'products'); toast(variant ? 'Estoque da cor atualizado.' : 'Estoque atualizado e histórico registrado.'); render('stock');
     }));
   }
   function stockRow(row) {
     const label = row.stock_quantity === 0 ? 'Sem estoque' : row.stock_quantity <= row.low_stock_threshold ? 'Estoque baixo' : 'Disponível';
-    const action = ActionMenu({ id: `stock-${row.id}`, label: row.name, primary: { label: 'Salvar', icon: 'save', attributes: { 'data-stock-save': row.id } } });
-    return `<tr data-stock="${label}"><td><b>${esc(row.name)}</b></td><td>${row.sku ? esc(row.sku) : '—'}</td><td><input style="width:90px" type="number" min="0" value="${row.stock_quantity}" data-stock-qty="${row.id}"></td><td><input style="width:90px" type="number" min="0" value="${row.low_stock_threshold}" data-stock-min="${row.id}"></td><td><span class="badge ${label === 'Sem estoque' ? 'off' : label === 'Estoque baixo' ? 'warn' : ''}">${label}</span></td><td class="action-cell">${action}</td></tr>`;
+    const action = ActionMenu({ id: `stock-${row.id}`, label: row.name, primary: { label: 'Salvar', icon: 'save', attributes: { 'data-stock-save': row.id, 'data-stock-variant': String(Boolean(row.is_variant)) } } });
+    return `<tr data-stock="${label}"><td><b>${esc(row.product_name || row.name)}</b>${row.is_variant ? `<small class="stock-variant-label">Cor: ${esc(row.name)}${row.active ? '' : ' · inativa'}</small>` : ''}</td><td>${row.sku ? esc(row.sku) : '—'}</td><td><input style="width:90px" type="number" min="0" value="${row.stock_quantity}" data-stock-qty="${row.id}"></td><td><input style="width:90px" type="number" min="0" value="${row.low_stock_threshold}" data-stock-min="${row.id}"></td><td><span class="badge ${label === 'Sem estoque' ? 'off' : label === 'Estoque baixo' ? 'warn' : ''}">${label}</span></td><td class="action-cell">${action}</td></tr>`;
   }
 
   async function renderLeads(revision) {
@@ -2892,7 +3245,7 @@
     const items = order.order_items || [];
     const events = [...(order.order_events || [])].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
     const transitions = allowedOrderTransitions(order);
-    dialog.innerHTML = `<div class="order-detail-shell"><header><div><small>PEDIDO</small><h2>${esc(order.order_number)}</h2><span class="badge ${orderStatusTone(order.status)}">${esc(ORDER_STATUS_LABELS[order.status] || order.status)}</span></div><button class="icon-close" type="button" data-order-close aria-label="Fechar">×</button></header><div class="order-detail-grid"><section><h3>Cliente</h3><p><b>${esc(order.customer_name)}</b><br>${esc(order.customer_email)}<br>${esc(order.customer_phone)}${order.customer_cpf ? `<br>CPF: ${esc(order.customer_cpf)}` : ''}</p></section><section><h3>Entrega</h3><p>${esc(orderAddress(order))}</p></section><section><h3>Pagamento</h3><p><b>${order.payment_method === 'pix' ? 'PIX' : 'Cartão de crédito'}</b><br>${esc(PAYMENT_STATUS_LABELS[order.payment_status] || order.payment_status)}${order.gateway_transaction_id ? `<br>Transação: ${esc(order.gateway_transaction_id)}` : ''}</p></section></div><section class="order-items"><h3>Itens do pedido</h3>${items.map(item => `<div><img src="${esc(item.product_image_url || 'assets/logo.png')}" alt=""><span><b>${esc(item.product_name)}</b><small>${item.quantity} × ${brl(item.unit_price)}</small></span><strong>${brl(item.line_total)}</strong></div>`).join('') || '<p>Nenhum item registrado.</p>'}</section><section class="order-money"><span>Subtotal <b>${brl(order.subtotal)}</b></span><span>Descontos <b>− ${brl(order.discount_total)}</b></span><span>Frete <b>${brl(order.shipping_total)}</b></span><strong>Total <b>${brl(order.total)}</b></strong></section><section class="order-timeline"><h3>Histórico</h3>${events.map(event => `<div><i></i><span><b>${esc(event.title)}</b><small>${dateTime(event.created_at)}${event.description ? ` · ${esc(event.description)}` : ''}</small></span></div>`).join('') || '<p>O histórico aparecerá conforme o pedido avançar.</p>'}</section><footer>${transitions.map(([status, label]) => `<button type="button" data-order-next="${status}" class="${status === 'cancelled' ? 'secondary' : ''}">${esc(label)}</button>`).join('')}<button class="secondary" type="button" data-order-close>Fechar</button></footer><p class="payment-safety-note">O pagamento não pode ser aprovado manualmente. Essa confirmação será feita somente pelo webhook autenticado do gateway.</p></div>`;
+    dialog.innerHTML = `<div class="order-detail-shell"><header><div><small>PEDIDO</small><h2>${esc(order.order_number)}</h2><span class="badge ${orderStatusTone(order.status)}">${esc(ORDER_STATUS_LABELS[order.status] || order.status)}</span></div><button class="icon-close" type="button" data-order-close aria-label="Fechar">×</button></header><div class="order-detail-grid"><section><h3>Cliente</h3><p><b>${esc(order.customer_name)}</b><br>${esc(order.customer_email)}<br>${esc(order.customer_phone)}${order.customer_cpf ? `<br>CPF: ${esc(order.customer_cpf)}` : ''}</p></section><section><h3>Entrega</h3><p>${esc(orderAddress(order))}</p></section><section><h3>Pagamento</h3><p><b>${order.payment_method === 'pix' ? 'PIX' : 'Cartão de crédito'}</b><br>${esc(PAYMENT_STATUS_LABELS[order.payment_status] || order.payment_status)}${order.gateway_transaction_id ? `<br>Transação: ${esc(order.gateway_transaction_id)}` : ''}</p></section></div><section class="order-items"><h3>Itens do pedido</h3>${items.map(item => `<div><img src="${esc(item.product_image_url || 'assets/logo.png')}" alt=""><span><b>${esc(item.product_name)}</b>${item.variant_name ? `<small>Cor: <b>${esc(item.variant_name)}</b>${item.variant_sku ? ` · SKU: ${esc(item.variant_sku)}` : ''}</small>` : item.product_sku ? `<small>SKU: ${esc(item.product_sku)}</small>` : ''}<small>${item.quantity} × ${brl(item.unit_price)}</small></span><strong>${brl(item.line_total)}</strong></div>`).join('') || '<p>Nenhum item registrado.</p>'}</section><section class="order-money"><span>Subtotal <b>${brl(order.subtotal)}</b></span><span>Descontos <b>− ${brl(order.discount_total)}</b></span><span>Frete <b>${brl(order.shipping_total)}</b></span><strong>Total <b>${brl(order.total)}</b></strong></section><section class="order-timeline"><h3>Histórico</h3>${events.map(event => `<div><i></i><span><b>${esc(event.title)}</b><small>${dateTime(event.created_at)}${event.description ? ` · ${esc(event.description)}` : ''}</small></span></div>`).join('') || '<p>O histórico aparecerá conforme o pedido avançar.</p>'}</section><footer>${transitions.map(([status, label]) => `<button type="button" data-order-next="${status}" class="${status === 'cancelled' ? 'secondary' : ''}">${esc(label)}</button>`).join('')}<button class="secondary" type="button" data-order-close>Fechar</button></footer><p class="payment-safety-note">O pagamento não pode ser aprovado manualmente. Essa confirmação será feita somente pelo webhook autenticado do gateway.</p></div>`;
     $$('[data-order-close]', dialog).forEach(button => button.onclick = () => dialog.close());
     $$('[data-order-next]', dialog).forEach(button => button.onclick = () => runAction(button, async () => {
       if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
