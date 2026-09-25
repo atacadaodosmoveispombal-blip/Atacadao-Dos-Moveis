@@ -3,7 +3,15 @@
 
   const url = 'https://ejcmuygnfrmytdqlyhjr.supabase.co';
   const key = 'sb_publishable__J4jaeMvdcVL9EguRpCApw_nV2ymCUP';
-  if (!window.supabase?.createClient) return;
+  if (!window.supabase?.createClient) {
+    // Nunca mantenha o catálogo demonstrativo quando o cliente do banco não
+    // estiver disponível. Produtos, preço e estoque devem ter uma única
+    // fonte: o catálogo publicado no Supabase.
+    products.splice(0, products.length);
+    render();
+    console.warn('Não foi possível iniciar o catálogo do Supabase.');
+    return;
+  }
   const cms = window.supabase.createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
   window.atacarejoDb = cms;
   const imageFallback = 'assets/logo.png';
@@ -44,7 +52,7 @@
   }
 
   function storefrontProductImage(product) {
-    const images = [...(product?.product_images || [])].sort((a, b) => Number(Boolean(b.is_cover)) - Number(Boolean(a.is_cover)) || Number(a.sort_order || 0) - Number(b.sort_order || 0));
+    const images = [...(product?.product_images || [])].filter(item => item.media_type !== 'video').sort((a, b) => Number(Boolean(b.is_cover)) - Number(Boolean(a.is_cover)) || Number(a.sort_order || 0) - Number(b.sort_order || 0));
     return images[0]?.image_url || '';
   }
   function campaignVisualProductRows(banner, productRows, promotions) {
@@ -298,26 +306,41 @@
     return 100000 + (hash >>> 0);
   }
   function mapProduct(row, index, campaignPromotions = []) {
-    const orderedImages = [...(row.product_images || [])].sort((a, b) => Number(b.is_cover) - Number(a.is_cover) || a.sort_order - b.sort_order);
+    const orderedMedia = [...(row.product_images || [])].sort((a, b) => Number(b.is_cover) - Number(a.is_cover) || Number(a.sort_order || 0) - Number(b.sort_order || 0));
+    const orderedImages = orderedMedia.filter(item => item.media_type !== 'video');
+    const baseMedia = orderedMedia.map(item => ({ type: item.media_type === 'video' ? 'video' : 'image', url: item.image_url, poster: item.poster_url || '' }));
     const regularCandidate = Number(row.price);
     const regularPrice = Number.isFinite(regularCandidate) && regularCandidate > 0 ? regularCandidate : null;
     const sellingCandidate = campaignPromotions.length ? campaignPrice(row, campaignPromotions) : Number(row.promotional_price ?? row.price);
     const sellingPrice = regularPrice && Number.isFinite(sellingCandidate) && sellingCandidate > 0 && sellingCandidate <= regularPrice ? sellingCandidate : regularPrice;
     const discount = regularPrice && sellingPrice < regularPrice ? Math.round((1 - sellingPrice / regularPrice) * 100) : 0;
     const installments = Number(row.max_installments);
+    const variants = [...(row.product_variants || [])].filter(item => item.active !== false).sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0)).map(item => {
+      const images = [...(item.variant_images || [])].sort((a, b) => Number(b.is_cover) - Number(a.is_cover) || Number(a.sort_order || 0) - Number(b.sort_order || 0));
+      const primaryColor = item.primary_color || null, secondaryColor = item.secondary_color || null;
+      const explicitPrice = Number(item.price);
+      const adjustment = Number(item.price_adjustment || 0);
+      const price = item.price != null && Number.isFinite(explicitPrice) ? explicitPrice : (sellingPrice == null ? null : sellingPrice + adjustment);
+      const old = item.price != null && Number.isFinite(explicitPrice) ? null : (regularPrice == null ? null : regularPrice + adjustment);
+      const catalogName = [primaryColor?.name, secondaryColor?.name].filter(Boolean).join(' / ');
+      return { id: item.id, name: item.name || item.color_name || catalogName || 'Variação', type: item.type || 'color', sku: item.sku || '', colorName: item.color_name || catalogName || item.name || '', colorHex: primaryColor?.hex || item.color_hex || '', secondaryColorHex: secondaryColor?.hex || item.secondary_color_hex || '', swatchMode: secondaryColor ? 'composite' : (item.swatch_mode || 'simple'), swatchImage: item.swatch_image || '', swatchType: primaryColor?.type || 'solid', secondarySwatchType: secondaryColor?.type || '', price, old: old > price ? old : null, stock: Number(item.stock || 0), active: item.active !== false, isDefault: Boolean(item.default_variant), order: Number(item.display_order || 0), img: images[0]?.image_url || '', images: images.slice(1).map(image => image.image_url) };
+    });
+    const defaultVariant = row.variants_enabled && variants.length ? (variants.find(item => item.isDefault) || variants[0]) : null;
     return {
       id: stableProductId(row.id), dbId: row.id, n: row.name, cat: row.categories?.name || 'Móveis',
       environment: row.environments?.name || '', subcategory: row.categories?.name || '', categoryIconKey: row.categories?.icon_key || '', brand: row.brands?.name || '', keywords: row.categories?.search_keywords || '',
-      price: sellingPrice, old: sellingPrice < regularPrice ? regularPrice : null, discount,
-      img: orderedImages[0]?.image_url || row.og_image_url || imageFallback,
-      images: orderedImages.slice(1).map(image => image.image_url), best: row.best_seller ? 1 : 0,
+      price: defaultVariant?.price ?? sellingPrice, old: defaultVariant?.old ?? (sellingPrice < regularPrice ? regularPrice : null), discount,
+      img: defaultVariant?.img || orderedImages[0]?.image_url || row.og_image_url || imageFallback,
+      images: defaultVariant?.img ? defaultVariant.images : orderedImages.slice(1).map(image => image.image_url),
+      media: defaultVariant?.img ? [defaultVariant.img, ...defaultVariant.images].map(url => ({ type: 'image', url })).concat(baseMedia.filter(item => item.type === 'video')) : baseMedia,
+      baseImg: orderedImages[0]?.image_url || row.og_image_url || imageFallback, baseImages: orderedImages.slice(1).map(image => image.image_url), baseMedia, hasVideo: baseMedia.some(item => item.type === 'video'), best: row.best_seller ? 1 : 0,
       badge: campaignPromotions.length && sellingPrice < regularPrice ? 'Campanha' : row.new_arrival ? 'Novidade' : row.on_sale ? 'Oferta' : row.featured ? 'Destaque' : '',
       description: row.short_description || row.description || '', fullDescription: row.description || row.short_description || '',
       specifications: row.specifications && typeof row.specifications === 'object' ? row.specifications : {},
       dimensions: row.dimensions?.description || '', material: row.material || '', color: row.color || '', warranty: row.warranty || '',
       installmentCount: row.installment_enabled && Number.isInteger(installments) && installments > 0 && sellingPrice ? installments : null,
-      installmentValue: row.installment_enabled && Number.isInteger(installments) && installments > 0 && sellingPrice ? sellingPrice / installments : null, sku: row.sku || '',
-      stock: row.stock_quantity, campaign: Boolean(row.is_campaign || campaignPromotions.length),
+      installmentValue: row.installment_enabled && Number.isInteger(installments) && installments > 0 && (defaultVariant?.price ?? sellingPrice) ? (defaultVariant?.price ?? sellingPrice) / installments : null, sku: defaultVariant?.sku || row.sku || '', baseSku: row.sku || '',
+      stock: defaultVariant?.stock ?? row.stock_quantity, baseStock: Number(row.stock_quantity || 0), basePrice: sellingPrice, baseOld: sellingPrice < regularPrice ? regularPrice : null, variantsEnabled: Boolean(row.variants_enabled && variants.length), variationType: row.variation_type || '', variants, campaign: Boolean(row.is_campaign || campaignPromotions.length),
       whatsappEnabled: row.whatsapp_enabled !== false, cartEnabled: row.cart_enabled !== false,
       freeCityShipping: Boolean(row.free_city_shipping), freeAssembly: Boolean(row.free_assembly)
     };
@@ -338,14 +361,21 @@
     return legacy;
   }
   async function loadStorefrontProducts() {
-    const publicProductFields = 'id,name,sku,short_description,description,category_id,price,promotional_price,stock_quantity,best_seller,featured,new_arrival,on_sale,og_image_url,installment_enabled,max_installments,dimensions,material,color,specifications,warranty,whatsapp_enabled,cart_enabled,free_city_shipping,free_assembly,is_campaign';
-    const withIcons = await cms.from('products').select(`${publicProductFields},categories(name,search_keywords,icon_key),environments(name),brands(name),product_images(image_url,is_cover,sort_order)`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
+    const publicProductFields = 'id,name,sku,short_description,description,category_id,price,promotional_price,stock_quantity,best_seller,featured,new_arrival,on_sale,og_image_url,installment_enabled,max_installments,dimensions,material,color,specifications,warranty,whatsapp_enabled,cart_enabled,free_city_shipping,free_assembly,is_campaign,variants_enabled,variation_type';
+    const variantRelation = 'product_variants(id,name,type,sku,color_name,color_hex,secondary_color_hex,swatch_mode,swatch_image,price,price_adjustment,stock,active,default_variant,display_order,variant_images(image_url,is_cover,sort_order))';
+    const catalogVariantRelation = 'product_variants(id,name,type,sku,color_name,color_hex,secondary_color_hex,swatch_mode,swatch_image,price,price_adjustment,stock,active,default_variant,display_order,color_id,combination_color_id,primary_color:product_colors!product_variants_color_id_fkey(name,hex,secondary_hex,type),secondary_color:product_colors!product_variants_combination_color_id_fkey(name,hex,secondary_hex,type),variant_images(image_url,is_cover,sort_order))';
+    const withCatalog = await cms.from('products').select(`${publicProductFields},categories(name,search_keywords,icon_key),environments(name),brands(name),product_images(image_url,media_type,poster_url,is_cover,sort_order),${catalogVariantRelation}`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
+    if (!withCatalog.error) return withCatalog;
+    const withVariants = await cms.from('products').select(`${publicProductFields},categories(name,search_keywords,icon_key),environments(name),brands(name),product_images(image_url,media_type,poster_url,is_cover,sort_order),${variantRelation}`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
+    if (!withVariants.error) return withVariants;
+    const legacyProductFields = publicProductFields.replace(',variants_enabled,variation_type', '');
+    const withIcons = await cms.from('products').select(`${legacyProductFields},categories(name,search_keywords,icon_key),environments(name),brands(name),product_images(image_url,media_type,poster_url,is_cover,sort_order)`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
     if (!withIcons.error) return withIcons;
     if (withIcons.error.code !== '42703' && !/search_keywords|icon_key/i.test(withIcons.error.message || '')) return withIcons;
-    const modern = await cms.from('products').select(`${publicProductFields},categories(name,search_keywords),environments(name),brands(name),product_images(image_url,is_cover,sort_order)`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
+    const modern = await cms.from('products').select(`${legacyProductFields},categories(name,search_keywords),environments(name),brands(name),product_images(image_url,media_type,poster_url,is_cover,sort_order)`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
     if (!modern.error) return modern;
     if (modern.error.code !== '42703' && !/search_keywords/i.test(modern.error.message || '')) return modern;
-    return cms.from('products').select(`${publicProductFields},categories(name),environments(name),brands(name),product_images(image_url,is_cover,sort_order)`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
+    return cms.from('products').select(`${legacyProductFields},categories(name),environments(name),brands(name),product_images(image_url,media_type,poster_url,is_cover,sort_order)`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
   }
   async function loadStorefrontEnvironments() {
     const withIcons = await cms.from('environments').select('id,name,slug,description,image_url,icon_key,sort_order,active').eq('active', true).order('sort_order');
@@ -359,6 +389,12 @@
   async function boot() {
     const revision = ++bootRevision;
     const now = new Date().toISOString();
+
+    // Remove imediatamente o catálogo demonstrativo definido no app.js. A
+    // vitrine só é preenchida novamente pela resposta do mesmo banco usado
+    // pelo painel administrativo.
+    products.splice(0, products.length);
+    render();
     const [productResult, categoryResult, environmentResult, bannerResult, promotionResult, sectionResult, settingResult, inspirationResult, onlineSalesResult] = await Promise.all([
       loadStorefrontProducts(),
       loadStorefrontCategories(),
@@ -370,8 +406,10 @@
       cms.from('inspirations').select('*,environments(name),inspiration_images(image_url,sort_order)').eq('active', true).order('sort_order'),
       loadOnlineSalesSettings()
     ]);
-    const failed = [productResult, categoryResult, environmentResult, bannerResult, promotionResult, sectionResult, settingResult, inspirationResult, onlineSalesResult].find(result => result.error);
-    if (failed) throw failed.error;
+    // Uma falha de conteúdo complementar não pode impedir a carga do
+    // catálogo. Somente a consulta de produtos define se a vitrine pode ser
+    // montada; os demais blocos assumem dados vazios até a próxima atualização.
+    if (productResult.error) throw productResult.error;
     if (revision !== bootRevision) return;
     applySettings(settingResult.data);
     window.applyOnlineSalesSettings?.(onlineSalesResult.data || {});
@@ -430,7 +468,7 @@
   sync?.addEventListener('message', scheduleBoot);
   window.addEventListener('storage', event => { if (event.key === 'atacarejo-cms-sync') scheduleBoot(); });
   const realtime = cms.channel('storefront-cms');
-  ['products','product_images','categories','environments','banners','promotions','promotion_products','site_sections','store_settings','online_sales_settings','inspirations','inspiration_images'].forEach(table => {
+  ['products','product_images','product_variants','variant_images','product_colors','categories','environments','brands','banners','promotions','promotion_products','site_sections','store_settings','online_sales_settings','inspirations','inspiration_images'].forEach(table => {
     realtime.on('postgres_changes', { event: '*', schema: 'public', table }, scheduleBoot);
   });
   realtime.subscribe();
