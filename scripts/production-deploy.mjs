@@ -17,10 +17,12 @@ const branch = runGit(['branch', '--show-current']);
 const commit = runGit(['rev-parse', 'HEAD']);
 const officialCommit = runGit(['rev-parse', `origin/${contract.productionBranch}`]);
 const dirtyTracked = runGit(['status', '--porcelain', '--untracked-files=no']);
+const pendingMigrations = contract.database?.pendingMigrations || [];
 
 if (branch !== contract.productionBranch) throw new Error(`Deploy bloqueado: branch atual '${branch}', esperado '${contract.productionBranch}'.`);
 if (commit !== officialCommit) throw new Error(`Deploy bloqueado: HEAD ${commit} difere de origin/${contract.productionBranch} ${officialCommit}.`);
 if (dirtyTracked) throw new Error('Deploy bloqueado: existem alterações rastreadas sem commit.');
+if (pendingMigrations.length) throw new Error(`Deploy bloqueado: migrations ainda não confirmadas em produção: ${pendingMigrations.join(', ')}.`);
 
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';

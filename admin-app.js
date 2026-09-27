@@ -3028,9 +3028,6 @@
       ['gallery', 'Galeria de Mídia do Produto', 'productmedia'],
       ['og_image_url', 'Imagem de compartilhamento (opcional)', 'file']
     ] },
-    { key: 'availability', label: 'Disponibilidade', help: 'Controle de quantidade e aviso de estoque baixo.', fields: [
-      ['stock_quantity', 'Quantidade em estoque', 'number', true], ['low_stock_threshold', 'Avisar quando chegar a', 'number', true]
-    ] },
     { key: 'variations', label: 'Cores', help: 'Selecione acabamentos e informe estoque e fotos de cada opção.', fields: [
       ['variations_ui', 'Variações do produto']
     ] },
@@ -4029,19 +4026,19 @@
   }
   function productVariationsEditorHtml(record = {}) {
     const legacyWarning = record.id && !record.origin_color_id ? '<div class="origin-color-warning" role="alert"><b>Produto antigo sem cor de origem</b><span>Confirme manualmente a cor real mostrada nas fotos principais antes de salvar. Nenhuma cor foi atribuída automaticamente.</span></div>' : '';
-    return `<section class="variation-editor"><input id="productHasVariants" name="variants_enabled" type="checkbox" checked hidden><div class="origin-color-panel"><div><small>COR PRINCIPAL / COR DE ORIGEM</small><h3>Qual é a cor real das fotos da aba Mídia?</h3><p>A capa e toda a galeria principal pertencem a esta cor. Essa escolha é obrigatória e não será substituída pelas variações.</p></div><label>Cor de origem *<select id="productOriginColor" required>${productOriginColorOptions(editorState?.originColorId)}</select></label>${legacyWarning}</div><div id="variationWorkspace"><div class="variation-enable-row"><div><h3>Outras cores do produto</h3><p>Selecione somente cores adicionais. As fotos enviadas abaixo permanecem secundárias e vinculadas à variação.</p></div></div><div id="productColorCatalog" class="product-color-catalog"></div><div class="color-builder-actions"><button id="showCustomColor" type="button">+ Adicionar outra cor</button><button id="showColorCombination" type="button">+ Criar combinação de duas cores</button></div><div id="customColorBuilder" class="color-builder" hidden><label>Nome da cor<input id="customColorName" maxlength="50" placeholder="Ex.: Champagne"></label><label>Acabamento<select id="customColorType"><option value="solid">Cor lisa</option><option value="wood">Madeira</option></select></label><label>Cor principal<input id="customColorHex" type="color" value="#d8c7a7"></label><label>Tom secundário<input id="customColorSecondary" type="color" value="#aa8861"></label><button id="confirmCustomColor" type="button">Adicionar cor</button></div><div id="combinationBuilder" class="color-builder combination-builder" hidden><label>Cor 1<select id="combinationColorOne"></select></label><label>Cor 2<select id="combinationColorTwo"></select></label><button id="confirmColorCombination" type="button">Adicionar combinação</button></div><div class="selected-colors-heading"><b id="selectedColorsCount">Cores do produto (0)</b><small>A cor de origem usa a galeria principal; as demais usam fotos próprias opcionais.</small></div><div id="productVariantList" class="variant-admin-list"></div></div></section>`;
+    return `<section class="variation-editor"><input id="productHasVariants" name="variants_enabled" type="checkbox" checked hidden><div class="origin-color-panel"><div><small>COR PRINCIPAL / COR DE ORIGEM</small><h3>Qual é a cor real das fotos da aba Mídia?</h3><p>A capa e toda a galeria principal pertencem a esta cor. Essa escolha é obrigatória e não será substituída pelas variações.</p></div><label>Cor de origem *<select id="productOriginColor" required>${productOriginColorOptions(editorState?.originColorId)}</select></label>${legacyWarning}</div><aside class="variant-stock-summary" aria-live="polite"><div><small>ESTOQUE TOTAL DO PRODUTO</small><b><output id="productVariantStockTotal">0</output> unidade(s)</b></div><p>Calculado automaticamente pela soma do estoque de todas as cores.</p></aside><div id="variationWorkspace"><div class="variation-enable-row"><div><h3>Outras cores do produto</h3><p>Selecione somente cores adicionais. As fotos enviadas abaixo permanecem secundárias e vinculadas à variação.</p></div></div><div id="productColorCatalog" class="product-color-catalog"></div><div class="color-builder-actions"><button id="showCustomColor" type="button">+ Adicionar outra cor</button><button id="showColorCombination" type="button">+ Criar combinação de duas cores</button></div><div id="customColorBuilder" class="color-builder" hidden><label>Nome da cor<input id="customColorName" maxlength="50" placeholder="Ex.: Champagne"></label><label>Acabamento<select id="customColorType"><option value="solid">Cor lisa</option><option value="wood">Madeira</option></select></label><label>Cor principal<input id="customColorHex" type="color" value="#d8c7a7"></label><label>Tom secundário<input id="customColorSecondary" type="color" value="#aa8861"></label><button id="confirmCustomColor" type="button">Adicionar cor</button></div><div id="combinationBuilder" class="color-builder combination-builder" hidden><label>Cor 1<select id="combinationColorOne"></select></label><label>Cor 2<select id="combinationColorTwo"></select></label><button id="confirmColorCombination" type="button">Adicionar combinação</button></div><div class="selected-colors-heading"><b id="selectedColorsCount">Cores do produto (0)</b><small>A cor de origem usa a galeria principal; as demais usam fotos próprias opcionais.</small></div><div id="productVariantList" class="variant-admin-list"></div></div></section>`;
   }
   function syncVariantDraftsFromDom() {
     if (editorState?.view !== 'products') return;
     $$('[data-variant-card]').forEach(card => {
       const draft = editorState.variants.find(item => item.key === card.dataset.variantCard);
       if (!draft) return;
-      ['sku','price','price_adjustment','stock','low_stock_threshold','priceMode'].forEach(name => {
+      ['sku','price','price_adjustment','stock','priceMode'].forEach(name => {
         const input = card.querySelector(`[data-variant-field="${name}"]`);
         if (!input) return;
-        draft[name] = ['stock','low_stock_threshold'].includes(name) ? Number(input.value || 0) : input.value;
+        draft[name] = name === 'stock' ? Number(input.value || 0) : input.value;
       });
-      draft.active = card.querySelector('[data-variant-field="active"]')?.checked !== false;
+      draft.active = true;
       if (draft.priceMode === 'main') { draft.price = ''; draft.price_adjustment = ''; }
       if (draft.priceMode === 'specific') draft.price_adjustment = '';
       if (draft.priceMode === 'adjustment') draft.price = '';
@@ -4065,6 +4062,12 @@
     const images = [...(editorState?.record?.product_images || [])].sort((a,b) => Number(b.is_cover) - Number(a.is_cover) || Number(a.sort_order || 0) - Number(b.sort_order || 0));
     return images[0]?.image_url || '';
   }
+  function updateVariantStockSummary() {
+    const total = (editorState?.variants || []).reduce((sum, draft) => sum + Math.max(0, Number(draft.stock || 0)), 0);
+    const output = $('#productVariantStockTotal');
+    if (output) output.textContent = String(total);
+    return total;
+  }
   function renderVariantEditor() {
     const root = $('#productVariantList');
     if (!root || editorState?.view !== 'products') return;
@@ -4077,7 +4080,8 @@
       const existingImages = draft.variant_images.filter(image => !draft.removedImageIds.includes(image.id));
       const gallery = [...existingImages.map((image, imageIndex) => ({ url: image.image_url, label: `Foto da cor ${imageIndex + 1}`, id: image.id })), ...draft.galleryFiles.map((file, fileIndex) => { const url = URL.createObjectURL(file); editorState.variantPreviewUrls.push(url); return { url, label: `Nova foto da cor ${existingImages.length + fileIndex + 1}`, fileIndex }; })];
       const fallback = variantFallbackImage(), cover = gallery[0]?.url || fallback;
-      return `<article class="variant-admin-card compact-variant-card" data-variant-card="${draft.key}"><header><span class="variant-admin-swatch" ${variantSwatchPreview(draft)}></span><div><b>${esc(draft.color_name || draft.name || `Cor ${index + 1}`)}</b><small>${draft.default_variant ? 'Cor padrão · ' : ''}${draft.active ? 'Disponível' : 'Indisponível'}</small></div><button class="variant-remove" type="button" data-variant-delete aria-label="Remover ${esc(draft.color_name || draft.name)}">×</button></header><div class="variant-compact-body"><div class="variant-cover-preview">${cover ? `<img src="${esc(cover)}" alt="Prévia de ${esc(draft.color_name || draft.name)}">` : '<span>Sem foto</span>'}${!gallery.length && fallback ? '<small>Galeria principal</small>' : ''}</div><label>Estoque<input data-variant-field="stock" type="number" min="0" step="1" value="${Number(draft.stock || 0)}"></label><label>Preço<select data-variant-field="priceMode"><option value="main" ${draft.priceMode === 'main' ? 'selected' : ''}>Usar preço principal</option><option value="specific" ${draft.priceMode === 'specific' ? 'selected' : ''}>Preço específico</option><option value="adjustment" ${draft.priceMode === 'adjustment' ? 'selected' : ''}>Acréscimo ao principal</option></select></label>${draft.priceMode === 'specific' ? `<label>Valor específico<input data-variant-field="price" type="number" min="0" step="0.01" value="${esc(draft.price)}" placeholder="R$ 0,00"></label>` : ''}${draft.priceMode === 'adjustment' ? `<label>Acréscimo<input data-variant-field="price_adjustment" type="number" min="0" step="0.01" value="${esc(draft.price_adjustment)}" placeholder="R$ 0,00"></label>` : ''}<label class="variant-gallery-add">+ Enviar fotos<input data-variant-gallery type="file" accept="image/jpeg,image/png,image/webp" multiple></label></div><div class="variant-gallery-grid compact-gallery">${gallery.map(image => `<figure><img src="${esc(image.url)}" alt=""><figcaption>${esc(image.label)}</figcaption><button type="button" ${image.id ? `data-variant-image-delete="${image.id}"` : `data-variant-new-image-delete="${image.fileIndex}"`}>×</button></figure>`).join('') || '<p>Nenhuma foto específica — será usada a galeria principal.</p>'}</div><details class="variant-advanced"><summary>Configurações avançadas</summary><div><label>SKU da variação<input data-variant-field="sku" value="${esc(draft.sku)}" placeholder="Gerado automaticamente ao salvar"></label><label>Alerta de estoque baixo<input data-variant-field="low_stock_threshold" type="number" min="0" step="1" value="${Number(draft.low_stock_threshold || 0)}"></label><label class="check-field"><input data-variant-field="active" type="checkbox" ${draft.active ? 'checked' : ''}> Disponível para venda</label><button type="button" data-variant-default ${draft.default_variant ? 'disabled' : ''}>${draft.default_variant ? 'Cor padrão atual' : 'Definir como padrão'}</button><small>Código da cor: ${esc(draft.color_id || 'legado')} ${draft.combination_color_id ? `+ ${esc(draft.combination_color_id)}` : ''}</small></div></details></article>`;
+      const available = Number(draft.stock || 0) > 0;
+      return `<article class="variant-admin-card compact-variant-card ${available ? '' : 'is-out-of-stock'}" data-variant-card="${draft.key}"><header><span class="variant-admin-swatch" ${variantSwatchPreview(draft)}></span><div><b>${esc(draft.color_name || draft.name || `Cor ${index + 1}`)}</b><small>${draft.default_variant ? 'Cor padrão · ' : ''}${available ? `${Number(draft.stock)} em estoque` : 'Indisponível — estoque 0'}</small></div><button class="variant-remove" type="button" data-variant-delete aria-label="Remover ${esc(draft.color_name || draft.name)}">×</button></header><div class="variant-compact-body"><div class="variant-cover-preview">${cover ? `<img src="${esc(cover)}" alt="Prévia de ${esc(draft.color_name || draft.name)}">` : '<span>Sem foto</span>'}${!gallery.length && fallback ? '<small>Galeria principal</small>' : ''}</div><label class="variant-stock-field">Estoque<input data-variant-field="stock" type="number" min="0" step="1" value="${Number(draft.stock || 0)}"></label><label>Preço<select data-variant-field="priceMode"><option value="main" ${draft.priceMode === 'main' ? 'selected' : ''}>Usar preço principal</option><option value="specific" ${draft.priceMode === 'specific' ? 'selected' : ''}>Preço específico</option><option value="adjustment" ${draft.priceMode === 'adjustment' ? 'selected' : ''}>Acréscimo ao principal</option></select></label>${draft.priceMode === 'specific' ? `<label>Valor específico<input data-variant-field="price" type="number" min="0" step="0.01" value="${esc(draft.price)}" placeholder="R$ 0,00"></label>` : ''}${draft.priceMode === 'adjustment' ? `<label>Acréscimo<input data-variant-field="price_adjustment" type="number" min="0" step="0.01" value="${esc(draft.price_adjustment)}" placeholder="R$ 0,00"></label>` : ''}<label class="variant-gallery-add">+ Enviar fotos<input data-variant-gallery type="file" accept="image/jpeg,image/png,image/webp" multiple></label></div><div class="variant-gallery-grid compact-gallery">${gallery.map(image => `<figure><img src="${esc(image.url)}" alt=""><figcaption>${esc(image.label)}</figcaption><button type="button" ${image.id ? `data-variant-image-delete="${image.id}"` : `data-variant-new-image-delete="${image.fileIndex}"`}>×</button></figure>`).join('') || '<p>Nenhuma foto específica — será usada a galeria principal.</p>'}</div><details class="variant-advanced"><summary>Configurações avançadas</summary><div><label>SKU da variação<input data-variant-field="sku" value="${esc(draft.sku)}" placeholder="Gerado automaticamente ao salvar"></label><button type="button" data-variant-default ${draft.default_variant ? 'disabled' : ''}>${draft.default_variant ? 'Cor padrão atual' : 'Definir como padrão'}</button><small>Código da cor: ${esc(draft.color_id || 'legado')} ${draft.combination_color_id ? `+ ${esc(draft.combination_color_id)}` : ''}</small></div></details></article>`;
     }).join('');
     variants.forEach(draft => {
       if (!isOriginVariant(draft)) return;
@@ -4087,12 +4091,12 @@
       card.querySelector('[data-variant-delete]')?.remove();
       card.querySelector('.variant-gallery-add')?.remove();
       card.querySelector('[data-variant-default]')?.remove();
-      const activeInput = card.querySelector('[data-variant-field="active"]'); if (activeInput) { activeInput.checked = true; activeInput.disabled = true; }
       const status = card.querySelector('header small');
-      if (status) status.textContent = `Cor de origem · Galeria principal · ${draft.active ? 'Disponível' : 'Indisponível'}`;
+      if (status) status.textContent = `Cor de origem · Galeria principal · ${Number(draft.stock || 0) > 0 ? `${Number(draft.stock)} em estoque` : 'Indisponível — estoque 0'}`;
       card.querySelector('header')?.insertAdjacentHTML('beforeend', '<span class="origin-variant-lock">ORIGEM</span>');
       card.querySelector('.variant-gallery-grid')?.insertAdjacentHTML('afterbegin', '<p class="origin-gallery-note"><b>Galeria principal / capa</b><br>As fotos desta cor são gerenciadas exclusivamente na aba Mídia.</p>');
     });
+    updateVariantStockSummary();
   }
   function bindVariantEditor() {
     const toggle = $('#productHasVariants'), workspace = $('#variationWorkspace');
@@ -4116,7 +4120,7 @@
       if (event.target.matches('[data-variant-field="priceMode"]')) renderVariantEditor();
       setProductEditorDirty();
     });
-    workspace.addEventListener('input', event => { if (event.target.matches('[data-variant-field]')) setProductEditorDirty(); });
+    workspace.addEventListener('input', event => { if (event.target.matches('[data-variant-field]')) { syncVariantDraftsFromDom(); updateVariantStockSummary(); setProductEditorDirty(); } });
     workspace.addEventListener('click', event => {
       const button = event.target.closest('button');
       if (!button) return;
@@ -4180,6 +4184,7 @@
       draft.name = String(draft.color_name || draft.name || '').trim(); draft.color_name = draft.name; draft.display_order = index;
       if (!draft.name) throw new Error(`Informe o nome da cor ${index + 1}.`);
       if (!String(draft.sku || '').trim()) draft.sku = generatedVariantSku(draft, index);
+      draft.active = true;
       const sku = draft.sku.trim().toLowerCase(); if (seen.has(sku)) throw new Error(`O SKU “${draft.sku}” está repetido.`); seen.add(sku);
       if (!Number.isInteger(Number(draft.stock)) || Number(draft.stock) < 0) throw new Error(`Revise o estoque de “${draft.name}”.`);
       if (draft.price !== '' && (!Number.isFinite(Number(draft.price)) || Number(draft.price) < 0)) throw new Error(`Revise o preço de “${draft.name}”.`);
@@ -4287,7 +4292,11 @@
       variants: [...(record?.product_variants || [])].sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0)).map(newVariantDraft),
       productOptions: normaliseProductOptionGroups(record?.product_option_groups || [])
     };
-    if (editorState.originColorId) ensureOriginVariant();
+    if (editorState.originColorId) {
+      const hadPersistedVariants = editorState.variants.length > 0;
+      const origin = ensureOriginVariant();
+      if (!hadPersistedVariants && origin) origin.stock = Number(record?.stock_quantity || 0);
+    }
     $('#editorDialog').classList.add('product-editor-dialog');
     $('#dialogEyebrow').textContent = 'CATÁLOGO';
     $('#dialogTitle').textContent = record ? 'Editar produto' : 'Novo produto';
@@ -4328,8 +4337,7 @@
     });
     const numericRules = {
       price: { min: '0.01', step: '0.01' }, promotional_price: { min: '0.01', step: '0.01' },
-      max_installments: { min: '1', max: '24', step: '1' }, stock_quantity: { min: '0', step: '1' },
-      low_stock_threshold: { min: '0', step: '1' }, sort_order: { min: '0', step: '1' }
+      max_installments: { min: '1', max: '24', step: '1' }, sort_order: { min: '0', step: '1' }
     };
     Object.entries(numericRules).forEach(([name, rules]) => {
       const input = $(`[name="${name}"]`);
@@ -4380,11 +4388,11 @@
       activateProductEditorTab('price'); form.elements.promotional_price.focus();
       return toast('O preço promocional deve ser maior que zero e menor que o preço normal.', 'error');
     }
-    for (const name of ['stock_quantity', 'low_stock_threshold', 'sort_order']) {
+    for (const name of ['sort_order']) {
       const input = form.elements[name];
       if (input?.value !== '' && (!Number.isInteger(Number(input.value)) || Number(input.value) < 0)) {
-        activateProductEditorTab(name === 'sort_order' ? 'publication' : 'availability'); input.focus();
-        return toast('Quantidade, estoque mínimo e ordem devem usar números inteiros positivos.', 'error');
+        activateProductEditorTab('publication'); input.focus();
+        return toast('A ordem deve usar um número inteiro positivo.', 'error');
       }
     }
     let variantSettings;
@@ -4412,7 +4420,8 @@
       values.origin_color_id = variantSettings.originColorId;
       values.variants_enabled = variantSettings.enabled;
       values.variation_type = variantSettings.type;
-      if (variantSettings.enabled) values.stock_quantity = variantSettings.variants.filter(item => item.active).reduce((total, item) => total + Number(item.stock || 0), 0);
+      values.stock_quantity = variantSettings.variants.reduce((total, item) => total + Number(item.stock || 0), 0);
+      values.low_stock_threshold = Math.min(...variantSettings.variants.map(item => Number(item.low_stock_threshold || 0)));
       delete values.specifications_text;
       const ogFile = form.elements.og_image_url?.files?.[0];
       if (ogFile) { uploadedOgImage = await upload('products', ogFile, 'sharing'); values.og_image_url = uploadedOgImage.url; }
@@ -4461,6 +4470,7 @@
     return {
       color_id: source.color_id || null,
       combination_color_id: source.combination_color_id || null,
+      stock: source.stock ?? 0,
       imageItems: [],
       imageNames
     };
@@ -4472,9 +4482,10 @@
     const imageNames = Array.isArray(source.imageNames) ? source.imageNames.filter(Boolean) : (source.imageName ? [source.imageName] : []);
     return {
       key: source.key || crypto.randomUUID(), name: source.name || '', price: source.price ?? '', promotional_price: source.promotional_price ?? '',
-      altura: source.altura ?? '', largura: source.largura ?? '', profundidade: source.profundidade ?? '', stock_quantity: source.stock_quantity ?? '',
+      altura: source.altura ?? '', largura: source.largura ?? '', profundidade: source.profundidade ?? '',
       imageItems: [], imageNames, coverKey: null,
       originColorId: source.originColorId || '',
+      originStock: source.originStock ?? source.stock_quantity ?? 0,
       colorSelections: Array.isArray(source.colorSelections) ? source.colorSelections.map(newMassColorSelection) : [],
       productOptions: normaliseProductOptionGroups(source.productOptions || []),
       status: 'pending', createdId: null, errors: [], overrides: { ...(source.overrides || {}) }
@@ -4488,23 +4499,24 @@
   function readMassProductDraft() {
     try {
       const draft = JSON.parse(localStorage.getItem(MASS_PRODUCT_DRAFT_KEY) || 'null');
-      return [1, 2, 3, 4, 5].includes(draft?.version) && Array.isArray(draft.rows) && draft.rows.length ? draft : null;
+      return [1, 2, 3, 4, 5, 6].includes(draft?.version) && Array.isArray(draft.rows) && draft.rows.length ? draft : null;
     } catch { return null; }
   }
   function massProductDraftSnapshot() {
     const mass = editorState?.mass;
     if (!mass) return null;
     return {
-      version: 5, savedAt: new Date().toISOString(), base: mass.base,
+      version: 6, savedAt: new Date().toISOString(), base: mass.base,
       colors: (editorState.colors || []).filter(color => String(color.id || '').startsWith('local:')).map(color => ({ ...color })),
       rows: mass.rows.filter(row => row.status !== 'success').map(row => ({
         key: row.key, name: row.name, price: row.price, promotional_price: row.promotional_price,
-        altura: row.altura, largura: row.largura, profundidade: row.profundidade, stock_quantity: row.stock_quantity,
-        imageNames: row.imageItems.length ? row.imageItems.map(item => item.name) : row.imageNames, originColorId: row.originColorId,
+        altura: row.altura, largura: row.largura, profundidade: row.profundidade,
+        imageNames: row.imageItems.length ? row.imageItems.map(item => item.name) : row.imageNames, originColorId: row.originColorId, originStock: row.originStock,
         coverIndex: 0,
         colorSelections: row.colorSelections.map(selection => ({
           color_id: selection.color_id,
           combination_color_id: selection.combination_color_id || null,
+          stock: selection.stock,
           imageNames: selection.imageItems?.length ? selection.imageItems.map(item => item.name) : (selection.imageNames || [])
         })),
         productOptions: row.productOptions.map(group => ({
@@ -4552,7 +4564,6 @@
     const common = massEffectiveValues(row, mass.base);
     const price = parseProductDimension(row.price);
     const promotional = row.promotional_price === '' ? null : parseProductDimension(row.promotional_price);
-    const stock = row.stock_quantity === '' ? null : Number(row.stock_quantity);
     if (!row.name.trim()) errors.push('Falta nome');
     if (price === null || price <= 0) errors.push('Falta preço');
     if (promotional !== null && (promotional <= 0 || promotional >= price)) errors.push('Preço promocional inválido');
@@ -4564,7 +4575,9 @@
     if (colorPhotosToReselect) errors.push(`Selecione novamente as fotos de ${massColorSelectionLabel(colorPhotosToReselect)}`);
     if (row.colorSelections.some(selection => (selection.imageItems || []).length > 8)) errors.push('Máximo de 8 fotos por cor');
     try { selectedProductOptionPayload(row.productOptions || []); } catch (error) { errors.push(error.message); }
-    if (!Number.isInteger(stock) || stock < 0) errors.push('Estoque inválido');
+    if (row.originStock === '' || !Number.isInteger(Number(row.originStock)) || Number(row.originStock) < 0) errors.push('Estoque da cor de origem inválido');
+    const invalidColorStock = row.colorSelections.find(selection => selection.stock === '' || !Number.isInteger(Number(selection.stock)) || Number(selection.stock) < 0);
+    if (invalidColorStock) errors.push(`Estoque de ${massColorSelectionLabel(invalidColorStock)} inválido`);
     if (!common.environment_id) errors.push('Falta ambiente');
     if (!common.category_id) errors.push('Falta subcategoria');
     for (const [key, label] of [['altura', 'Altura'], ['largura', 'Largura'], ['profundidade', 'Profundidade']]) {
@@ -4600,7 +4613,8 @@
     const selections = row.colorSelections || [];
     const origin = catalogColor(row.originColorId);
     if (!origin) return `<button type="button" class="mass-color-picker is-empty" data-mass-colors-open="${esc(row.key)}"><span>＋</span><b>Cor de origem *</b></button>`;
-    return `<button type="button" class="mass-color-picker" data-mass-colors-open="${esc(row.key)}" title="${esc([origin.name, ...selections.map(selection => massColorSelectionLabel(selection))].join(', '))}"><span class="mass-color-picker-swatch" style="background:${colorSwatchBackground(origin)}"></span><b>${esc(origin.name)}</b><small>ORIGEM${selections.length ? ` +${selections.length}` : ''}</small></button>`;
+    const totalStock = Number(row.originStock || 0) + selections.reduce((sum, selection) => sum + Number(selection.stock || 0), 0);
+    return `<button type="button" class="mass-color-picker" data-mass-colors-open="${esc(row.key)}" title="${esc([origin.name, ...selections.map(selection => massColorSelectionLabel(selection))].join(', '))}"><span class="mass-color-picker-swatch" style="background:${colorSwatchBackground(origin)}"></span><b>${esc(origin.name)}</b><small>ORIGEM${selections.length ? ` +${selections.length}` : ''} · Estoque ${totalStock}</small></button>`;
   }
   function massImageCellMarkup(row, index) {
     const items = row.imageItems || [], cover = items[0];
@@ -4641,7 +4655,7 @@
   function massProductBaseMarkup(mass) {
     return `<section class="mass-product-base card"><header><div><h3>Informações aplicadas a todos</h3><p>Os dados abaixo serão herdados pelas linhas. Você poderá editar cada produto individualmente depois.</p></div><span id="massBaseCount">${mass.rows.length} linhas</span></header><div class="mass-product-base-grid"><label>Ambiente<select data-mass-base="environment_id">${massSelectOptions(mass.environments, mass.base.environment_id, 'Selecione o ambiente', item => item.active !== false)}</select></label><label>Subcategoria<select data-mass-base="category_id">${massSelectOptions(mass.categories, mass.base.category_id, 'Selecione a subcategoria', item => !mass.base.environment_id || String(item.environment_id) === String(mass.base.environment_id))}</select></label><label>Material<select data-mass-base="material">${massCharacteristicOptions(mass.base.material, [['MDF', 'MDF'], ['MDP', 'MDP']])}</select></label><label>Espelho<select data-mass-base="mirror_feature">${massCharacteristicOptions(mass.base.mirror_feature, [['with', 'Com espelho'], ['without', 'Sem espelho']])}</select></label><label>Ripado<select data-mass-base="ribbed_feature">${massCharacteristicOptions(mass.base.ribbed_feature, [['with', 'Com ripado'], ['without', 'Sem ripado']])}</select></label><label>Garantia<input data-mass-base="warranty" value="${esc(mass.base.warranty)}" placeholder="Ex.: 3 meses"></label><label class="mass-description-default">Descrição padrão <small>Opcional. Será herdada pelas linhas sem descrição personalizada.</small><textarea data-mass-base="description" rows="3" placeholder="Descrição completa aplicada inicialmente a todos os produtos.">${esc(mass.base.description || '')}</textarea></label><label class="mass-check"><input type="checkbox" data-mass-base="free_city_shipping" ${mass.base.free_city_shipping ? 'checked' : ''}> Frete grátis</label><label class="mass-check"><input type="checkbox" data-mass-base="free_assembly" ${mass.base.free_assembly ? 'checked' : ''}> Armação gratuita</label><label class="mass-check"><input type="checkbox" data-mass-base="on_sale" ${mass.base.on_sale ? 'checked' : ''}> Produto em promoção</label><label class="mass-check"><input type="checkbox" data-mass-base="featured" ${mass.base.featured ? 'checked' : ''}> Produto em destaque</label></div></section>`;
   }
-  const massBulkFields = [['price', 'Preço normal'], ['promotional_price', 'Preço promocional'], ['stock_quantity', 'Estoque'], ['environment_id', 'Ambiente'], ['category_id', 'Subcategoria'], ['material', 'Material'], ['mirror_feature', 'Espelho'], ['ribbed_feature', 'Ripado'], ['warranty', 'Garantia'], ['free_city_shipping', 'Frete grátis'], ['free_assembly', 'Armação gratuita'], ['on_sale', 'Promoção'], ['featured', 'Destaque']];
+  const massBulkFields = [['price', 'Preço normal'], ['promotional_price', 'Preço promocional'], ['environment_id', 'Ambiente'], ['category_id', 'Subcategoria'], ['material', 'Material'], ['mirror_feature', 'Espelho'], ['ribbed_feature', 'Ripado'], ['warranty', 'Garantia'], ['free_city_shipping', 'Frete grátis'], ['free_assembly', 'Armação gratuita'], ['on_sale', 'Promoção'], ['featured', 'Destaque']];
   function massBulkInputMarkup(mass, field) {
     if (field === 'environment_id') return `<select data-mass-bulk-value>${massSelectOptions(mass.environments, '', 'Selecione o ambiente', item => item.active !== false)}</select>`;
     if (field === 'category_id') return `<select data-mass-bulk-value>${massSelectOptions(mass.categories, '', 'Selecione a subcategoria')}</select>`;
@@ -4649,7 +4663,7 @@
     if (field === 'mirror_feature') return '<select data-mass-bulk-value><option value="">Não informar</option><option value="with">Com espelho</option><option value="without">Sem espelho</option></select>';
     if (field === 'ribbed_feature') return '<select data-mass-bulk-value><option value="">Não informar</option><option value="with">Com ripado</option><option value="without">Sem ripado</option></select>';
     if (['free_city_shipping', 'free_assembly', 'on_sale', 'featured'].includes(field)) return '<select data-mass-bulk-value><option value="">Escolha</option><option value="true">Ativar</option><option value="false">Desativar</option></select>';
-    const number = ['price', 'promotional_price', 'stock_quantity'].includes(field);
+    const number = ['price', 'promotional_price'].includes(field);
     return `<input data-mass-bulk-value type="${number ? 'number' : 'text'}" ${number ? 'min="0" step="any"' : ''} placeholder="Informe o valor">`;
   }
   function massProductBulkMarkup(mass) {
@@ -4663,10 +4677,10 @@
   }
   function massProductRowMarkup(row, index, mass) {
     row.errors = massProductErrors(row, mass);
-    return `<tr data-mass-row="${esc(row.key)}" class="${row.errors.length ? 'has-errors' : ''} ${row.status === 'success' ? 'is-success' : ''}"><td class="mass-select-cell"><input type="checkbox" data-mass-select="${esc(row.key)}" ${mass.selected.has(row.key) ? 'checked' : ''} ${row.status === 'success' ? 'disabled' : ''} aria-label="Selecionar linha ${index + 1}"></td><td class="mass-image-cell">${massImageCellMarkup(row, index)}</td><td class="mass-name-cell"><input data-mass-field="name" value="${esc(row.name)}" placeholder="Nome do produto" ${row.status === 'success' ? 'disabled' : ''}>${massDescriptionButtonMarkup(row, mass)}<small data-mass-row-errors>${esc(row.errors.join(' · '))}</small></td><td class="mass-color-cell">${massColorCellMarkup(row)}</td><td class="mass-characteristics-column">${massCharacteristicsCellMarkup(row, mass)}</td><td class="mass-options-cell">${massOptionsCellMarkup(row)}</td><td><input data-mass-field="price" type="number" min="0.01" step="0.01" value="${esc(row.price)}" placeholder="0,00" ${row.status === 'success' ? 'disabled' : ''}></td><td><input data-mass-field="promotional_price" type="number" min="0" step="0.01" value="${esc(row.promotional_price)}" placeholder="Opcional" ${row.status === 'success' ? 'disabled' : ''}></td><td><input data-mass-field="altura" type="number" min="0" step="any" value="${esc(row.altura)}" placeholder="cm" ${row.status === 'success' ? 'disabled' : ''}></td><td><input data-mass-field="largura" type="number" min="0" step="any" value="${esc(row.largura)}" placeholder="cm" ${row.status === 'success' ? 'disabled' : ''}></td><td><input data-mass-field="profundidade" type="number" min="0" step="any" value="${esc(row.profundidade)}" placeholder="cm" ${row.status === 'success' ? 'disabled' : ''}></td><td><input data-mass-field="stock_quantity" type="number" min="0" step="1" value="${esc(row.stock_quantity)}" placeholder="0" ${row.status === 'success' ? 'disabled' : ''}></td><td class="mass-actions">${massRowStatusMarkup(row, row.errors)}<button type="button" class="small-action" data-mass-duplicate="${esc(row.key)}">Duplicar</button><button type="button" class="small-action danger" data-mass-remove="${esc(row.key)}" ${mass.rows.length === 1 || row.status === 'success' ? 'disabled' : ''}>Remover</button></td></tr>`;
+    return `<tr data-mass-row="${esc(row.key)}" class="${row.errors.length ? 'has-errors' : ''} ${row.status === 'success' ? 'is-success' : ''}"><td class="mass-select-cell"><input type="checkbox" data-mass-select="${esc(row.key)}" ${mass.selected.has(row.key) ? 'checked' : ''} ${row.status === 'success' ? 'disabled' : ''} aria-label="Selecionar linha ${index + 1}"></td><td class="mass-image-cell">${massImageCellMarkup(row, index)}</td><td class="mass-name-cell"><input data-mass-field="name" value="${esc(row.name)}" placeholder="Nome do produto" ${row.status === 'success' ? 'disabled' : ''}>${massDescriptionButtonMarkup(row, mass)}<small data-mass-row-errors>${esc(row.errors.join(' · '))}</small></td><td class="mass-color-cell">${massColorCellMarkup(row)}</td><td class="mass-characteristics-column">${massCharacteristicsCellMarkup(row, mass)}</td><td class="mass-options-cell">${massOptionsCellMarkup(row)}</td><td><input data-mass-field="price" type="number" min="0.01" step="0.01" value="${esc(row.price)}" placeholder="0,00" ${row.status === 'success' ? 'disabled' : ''}></td><td><input data-mass-field="promotional_price" type="number" min="0" step="0.01" value="${esc(row.promotional_price)}" placeholder="Opcional" ${row.status === 'success' ? 'disabled' : ''}></td><td><input data-mass-field="altura" type="number" min="0" step="any" value="${esc(row.altura)}" placeholder="cm" ${row.status === 'success' ? 'disabled' : ''}></td><td><input data-mass-field="largura" type="number" min="0" step="any" value="${esc(row.largura)}" placeholder="cm" ${row.status === 'success' ? 'disabled' : ''}></td><td><input data-mass-field="profundidade" type="number" min="0" step="any" value="${esc(row.profundidade)}" placeholder="cm" ${row.status === 'success' ? 'disabled' : ''}></td><td class="mass-actions">${massRowStatusMarkup(row, row.errors)}<button type="button" class="small-action" data-mass-duplicate="${esc(row.key)}">Duplicar</button><button type="button" class="small-action danger" data-mass-remove="${esc(row.key)}" ${mass.rows.length === 1 || row.status === 'success' ? 'disabled' : ''}>Remover</button></td></tr>`;
   }
   function massProductRowsMarkup(mass) {
-    return `<section class="mass-product-grid card"><div class="mass-product-grid-toolbar"><div><b>Produtos</b><small>Uma linha representa um produto.</small></div><div class="mass-add-lines"><label>Quantidade<input id="massLineCount" type="number" min="1" max="100" value="10"></label><button type="button" class="secondary" id="massAddLine">+ Adicionar linha</button><button type="button" class="secondary" id="massAddManyLines">Criar linhas</button></div></div><div class="mass-product-table-wrap"><table class="mass-product-table"><thead><tr><th><input id="massSelectAll" type="checkbox" aria-label="Selecionar todas"></th><th>Fotos</th><th>Nome do produto</th><th>Cor</th><th>Características</th><th>Opções</th><th>Preço normal</th><th>Preço promocional</th><th>Altura</th><th>Largura</th><th>Profundidade</th><th>Estoque</th><th>Ações</th></tr></thead><tbody id="massProductRows">${mass.rows.map((row, index) => massProductRowMarkup(row, index, mass)).join('')}</tbody></table></div><div class="mass-product-summary" id="massProductSummary"></div></section>`;
+    return `<section class="mass-product-grid card"><div class="mass-product-grid-toolbar"><div><b>Produtos</b><small>Uma linha representa um produto. O estoque é informado dentro de Cores.</small></div><div class="mass-add-lines"><label>Quantidade<input id="massLineCount" type="number" min="1" max="100" value="10"></label><button type="button" class="secondary" id="massAddLine">+ Adicionar linha</button><button type="button" class="secondary" id="massAddManyLines">Criar linhas</button></div></div><div class="mass-product-table-wrap"><table class="mass-product-table"><thead><tr><th><input id="massSelectAll" type="checkbox" aria-label="Selecionar todas"></th><th>Fotos</th><th>Nome do produto</th><th>Cor e estoque</th><th>Características</th><th>Opções</th><th>Preço normal</th><th>Preço promocional</th><th>Altura</th><th>Largura</th><th>Profundidade</th><th>Ações</th></tr></thead><tbody id="massProductRows">${mass.rows.map((row, index) => massProductRowMarkup(row, index, mass)).join('')}</tbody></table></div><div class="mass-product-summary" id="massProductSummary"></div></section>`;
   }
   function massProductEditorMarkup(mass) {
     return `<div class="mass-product-workspace">${massProductBaseMarkup(mass)}${massProductBulkMarkup(mass)}${massProductRowsMarkup(mass)}<p class="mass-product-note">Os produtos são criados como rascunhos. Fotos usam a galeria principal, cores usam as variações existentes e medidas usam o mesmo JSONB do cadastro individual.</p>${massProductManagersMarkup()}</div>`;
@@ -4754,14 +4768,15 @@
     }).join('');
     const colorOptions = colors.map(color => `<option value="${esc(color.id)}">${esc(color.name)}</option>`).join('');
     const originOptions = `<option value="">Selecione a cor real das fotos principais</option>${colors.map(color => `<option value="${esc(color.id)}" ${String(color.id) === String(row.originColorId || '') ? 'selected' : ''}>${esc(color.name)}</option>`).join('')}`;
-    const selected = row.colorSelections.length ? `<div class="mass-selected-colors">${row.colorSelections.map(selection => { const { primary, secondary } = massColorSelectionDetails(selection); return `<span><i style="background:${colorSwatchBackground(primary, secondary)}"></i><b>${esc(massColorSelectionLabel(selection))}</b><button type="button" data-mass-color-remove="${esc(massColorSelectionKey(selection))}" aria-label="Remover ${esc(massColorSelectionLabel(selection))}">×</button></span>`; }).join('')}</div>` : '<p class="mass-color-empty">Nenhuma cor adicional. O produto terá somente a cor de origem.</p>';
+    const selected = row.colorSelections.length ? `<div class="mass-selected-colors">${row.colorSelections.map(selection => { const { primary, secondary } = massColorSelectionDetails(selection); return `<span><i style="background:${colorSwatchBackground(primary, secondary)}"></i><b>${esc(massColorSelectionLabel(selection))}</b><small>${Number(selection.stock || 0)} un.</small><button type="button" data-mass-color-remove="${esc(massColorSelectionKey(selection))}" aria-label="Remover ${esc(massColorSelectionLabel(selection))}">×</button></span>`; }).join('')}</div>` : '<p class="mass-color-empty">Nenhuma cor adicional. O produto terá somente a cor de origem.</p>';
     const colorPhotos = row.colorSelections.length ? row.colorSelections.map(selection => {
       const key = massColorSelectionKey(selection), label = massColorSelectionLabel(selection), { primary, secondary } = massColorSelectionDetails(selection);
       const items = selection.imageItems || [];
       const previews = items.length ? items.map(item => `<figure><img src="${esc(item.url)}" alt="Foto de ${esc(label)}"><button type="button" data-mass-color-photo-remove="${esc(item.key)}" data-selection-key="${esc(key)}" aria-label="Excluir ${esc(item.name)}">×</button><figcaption title="${esc(item.name)}">${esc(item.name)}</figcaption></figure>`).join('') : `<p>${selection.imageNames?.length ? 'Selecione novamente as fotos desta cor.' : 'Nenhuma foto adicionada para esta cor.'}</p>`;
-      return `<article class="mass-color-photo-card"><header><span style="background:${colorSwatchBackground(primary, secondary)}"></span><div><b>${esc(label)}</b><small>${items.length} de 8 fotos · sempre secundárias</small></div><label>+ Enviar fotos<input type="file" accept="image/jpeg,image/png,image/webp" multiple data-mass-color-photo-input="${esc(key)}" hidden></label></header><div class="mass-color-photo-grid">${previews}</div></article>`;
+      return `<article class="mass-color-photo-card ${Number(selection.stock || 0) > 0 ? '' : 'is-out-of-stock'}"><header><span style="background:${colorSwatchBackground(primary, secondary)}"></span><div><b>${esc(label)}</b><small>${items.length} de 8 fotos · sempre secundárias</small></div><label class="mass-color-stock-field">Estoque<input type="number" min="0" step="1" required value="${esc(selection.stock)}" data-mass-color-stock="${esc(key)}"></label><label>+ Enviar fotos<input type="file" accept="image/jpeg,image/png,image/webp" multiple data-mass-color-photo-input="${esc(key)}" hidden></label></header><div class="mass-color-photo-grid">${previews}</div></article>`;
     }).join('') : '<p class="mass-color-empty">Selecione uma ou mais cores para adicionar as fotos de cada variação.</p>';
-    root.innerHTML = `<section class="mass-origin-color"><header><b>COR PRINCIPAL / COR DE ORIGEM *</b><small>As fotos principais desta linha pertencem a esta cor.</small></header><label>Cor de origem<select id="massOriginColor" required>${originOptions}</select></label><p>A capa e a galeria principal nunca serão substituídas pelas fotos das outras cores.</p></section><section class="mass-selected-colors-wrap"><header><b>Outras cores (${row.colorSelections.length})</b></header>${selected}</section><section class="mass-color-catalog"><header><b>Cores adicionais</b><small>Selecione uma ou várias, se existirem.</small></header><div>${options}</div></section><div class="mass-color-actions"><button type="button" class="secondary" id="massShowColorCombination">+ Combinação</button><button type="button" class="secondary" id="massShowNewColor">+ Nova cor</button></div><section id="massColorCombinationBuilder" class="mass-color-builder" hidden><label>Cor 1<select id="massCombinationOne">${colorOptions}</select></label><label>Cor 2<select id="massCombinationTwo">${colorOptions}</select></label><button type="button" id="massAddColorCombination">Adicionar combinação</button></section><section id="massNewColorBuilder" class="mass-color-builder" hidden><label>Nome<input id="massNewColorName" maxlength="50" placeholder="Ex.: Champagne"></label><label>Acabamento<select id="massNewColorType"><option value="solid">Cor lisa</option><option value="wood">Madeira</option></select></label><label>Cor principal<input id="massNewColorHex" type="color" value="#d8c7a7"></label><label>Tom secundário<input id="massNewColorSecondary" type="color" value="#aa8861"></label><button type="button" id="massCreateColor">Criar e selecionar</button></section><section class="mass-color-photos"><header><div><b>Fotos das cores adicionais</b><small>São sempre secundárias e vinculadas somente à respectiva variação.</small></div></header><div>${colorPhotos}</div></section>`;
+    const totalStock = Number(row.originStock || 0) + row.colorSelections.reduce((sum, selection) => sum + Number(selection.stock || 0), 0);
+    root.innerHTML = `<section class="mass-origin-color"><header><b>COR PRINCIPAL / COR DE ORIGEM *</b><small>As fotos principais desta linha pertencem a esta cor.</small></header><label>Cor de origem<select id="massOriginColor" required>${originOptions}</select></label><label class="mass-origin-stock-field">Estoque da cor de origem<input id="massOriginStock" type="number" min="0" step="1" required value="${esc(row.originStock)}"></label><p>A capa e a galeria principal nunca serão substituídas pelas fotos das outras cores.</p></section><aside class="mass-color-stock-total"><small>ESTOQUE TOTAL</small><b><output id="massColorStockTotal">${totalStock}</output> unidade(s)</b><span>Soma automática de todas as cores.</span></aside><section class="mass-selected-colors-wrap"><header><b>Outras cores (${row.colorSelections.length})</b></header>${selected}</section><section class="mass-color-catalog"><header><b>Cores adicionais</b><small>Selecione uma ou várias, se existirem.</small></header><div>${options}</div></section><div class="mass-color-actions"><button type="button" class="secondary" id="massShowColorCombination">+ Combinação</button><button type="button" class="secondary" id="massShowNewColor">+ Nova cor</button></div><section id="massColorCombinationBuilder" class="mass-color-builder" hidden><label>Cor 1<select id="massCombinationOne">${colorOptions}</select></label><label>Cor 2<select id="massCombinationTwo">${colorOptions}</select></label><button type="button" id="massAddColorCombination">Adicionar combinação</button></section><section id="massNewColorBuilder" class="mass-color-builder" hidden><label>Nome<input id="massNewColorName" maxlength="50" placeholder="Ex.: Champagne"></label><label>Acabamento<select id="massNewColorType"><option value="solid">Cor lisa</option><option value="wood">Madeira</option></select></label><label>Cor principal<input id="massNewColorHex" type="color" value="#d8c7a7"></label><label>Tom secundário<input id="massNewColorSecondary" type="color" value="#aa8861"></label><button type="button" id="massCreateColor">Criar e selecionar</button></section><section class="mass-color-photos"><header><div><b>Estoque e fotos das cores adicionais</b><small>Cada quantidade e cada foto pertencem somente à respectiva variação.</small></div></header><div>${colorPhotos}</div></section>`;
     const second = $('#massCombinationTwo');
     if (second?.options.length > 1) second.selectedIndex = 1;
     $('#massColorManagerTitle').textContent = row.name.trim() || 'Cores do produto';
@@ -4898,7 +4913,7 @@
     let value = input.value;
     if (['free_city_shipping', 'free_assembly', 'on_sale', 'featured'].includes(field)) value = value === 'true';
     mass.rows.filter(row => mass.selected.has(row.key) && row.status !== 'success').forEach(row => {
-      if (['price', 'promotional_price', 'stock_quantity'].includes(field)) row[field] = value;
+      if (['price', 'promotional_price'].includes(field)) row[field] = value;
       else {
         row.overrides[field] = value;
         if (field === 'category_id') row.overrides.environment_id = mass.categories.find(item => String(item.id) === String(value))?.environment_id || row.overrides.environment_id;
@@ -4926,6 +4941,23 @@
       mass.selected.clear(); renderMassRows();
     };
     workspace.addEventListener('input', event => {
+      if (event.target.id === 'massOriginStock') {
+        const row = activeMassRow('activeColorRowKey'); if (!row) return;
+        row.originStock = event.target.value; row.status = 'pending'; row.errors = [];
+        const total = Number(row.originStock || 0) + row.colorSelections.reduce((sum, selection) => sum + Number(selection.stock || 0), 0);
+        if ($('#massColorStockTotal')) $('#massColorStockTotal').textContent = String(total);
+        markMassProductDirty(); return;
+      }
+      const colorStockKey = event.target.dataset.massColorStock;
+      if (colorStockKey) {
+        const row = activeMassRow('activeColorRowKey');
+        const selection = row?.colorSelections.find(item => massColorSelectionKey(item) === colorStockKey);
+        if (!row || !selection) return;
+        selection.stock = event.target.value; row.status = 'pending'; row.errors = [];
+        const total = Number(row.originStock || 0) + row.colorSelections.reduce((sum, item) => sum + Number(item.stock || 0), 0);
+        if ($('#massColorStockTotal')) $('#massColorStockTotal').textContent = String(total);
+        markMassProductDirty(); return;
+      }
       const optionGroupName = event.target.dataset.massOptionGroupName;
       if (optionGroupName) {
         const row = activeMassRow('activeOptionsRowKey'), group = optionGroupByKey(row?.productOptions, optionGroupName);
@@ -5173,10 +5205,11 @@
     const origin = catalogColor(row.originColorId);
     const colorText = [origin?.name, ...row.colorSelections.map(selection => massColorSelectionLabel(selection, ' / '))].filter(Boolean).join(', ');
     const hasColors = Boolean(origin);
+    const stockTotal = Number(row.originStock || 0) + row.colorSelections.reduce((sum, selection) => sum + Number(selection.stock || 0), 0);
     return {
       name: row.name.trim(), slug: slugify(row.name), sku: null,
       short_description: '', description: common.description || '', category_id: common.category_id || null, environment_id: common.environment_id || null, brand_id: null,
-      price: parseProductDimension(row.price), promotional_price: promotional, stock_quantity: Number(row.stock_quantity), low_stock_threshold: 5,
+      price: parseProductDimension(row.price), promotional_price: promotional, stock_quantity: stockTotal, low_stock_threshold: 0,
       featured: Boolean(common.featured), best_seller: false, new_arrival: false, on_sale: Boolean(common.on_sale || promotional), sort_order: 0,
       active: false, warranty: common.warranty || '', dimensions: massProductDimensions(row), material: common.material || '',
       mirror_feature: common.mirror_feature || null, ribbed_feature: common.ribbed_feature || null, color: colorText, specifications: {},
@@ -5196,7 +5229,7 @@
         name, color_name: name, color_id: primary.id, combination_color_id: secondary?.id || null,
         swatch_mode: secondary ? 'composite' : 'simple', color_hex: primary.hex,
         secondary_color_hex: secondary?.hex || primary.secondary_hex || primary.hex,
-        stock: Number(row.stock_quantity || 0), active: true, default_variant: index === 0, display_order: index
+        stock: Number(index === 0 ? row.originStock || 0 : selection.stock || 0), active: true, default_variant: index === 0, display_order: index
       });
       draft.galleryFiles = index === 0 ? [] : (selection.imageItems || []).map(item => item.file);
       const productPart = slugify(row.name || 'produto').replace(/-/g, '').slice(0, 18).toUpperCase() || 'PRODUTO';

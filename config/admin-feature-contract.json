@@ -13,13 +13,17 @@
       "cor de origem obrigatória com galeria principal vinculada",
       "Hero com imagem ou vídeo",
       "editor visual simplificado da Home",
-      "cadastro simplificado de nova categoria"
+      "cadastro simplificado de nova categoria",
+      "estoque exclusivamente por cor com total derivado"
     ]
   },
   "database": {
     "executionMode": "manual-incremental-only",
     "lastVerifiedAt": "2026-09-27",
     "lastVerifiedSchema": "20261010_product_origin_color.sql",
+    "pendingMigrations": [
+      "20261011_stock_by_color_source_of_truth.sql"
+    ],
     "appliedMigrations": [
       "20261005_product_dimensions_numeric.sql",
       "20261006_product_dimensions_image.sql",
@@ -69,6 +73,17 @@
     {
       "name": "estoque",
       "checks": [{ "file": "admin-app.js", "contains": ["function stockRow(", "stock_quantity", "product_variants"] }]
+    },
+    {
+      "name": "estoque exclusivamente por cor",
+      "checks": [
+        { "file": "admin-app.js", "contains": ["variant-stock-summary", "id=\"productVariantStockTotal\"", "data-variant-field=\"stock\"", "values.stock_quantity = variantSettings.variants.reduce", "id=\"massOriginStock\"", "data-mass-color-stock"] },
+        { "file": "storefront-cms.js", "contains": ["const variantStockTotal = variants.reduce", "stock: row.variants_enabled && variants.length ? variantStockTotal"] },
+        { "file": "app.js", "contains": ["aria-disabled=\"${Number(variant.stock)<=0}\"", "Number(variant.stock)<=0?'disabled':''"] },
+        { "file": "scripts/verify-cms.mjs", "contains": ["estoques públicos por cor legíveis", "estoque total derivado exclusivamente das cores"] },
+        { "file": "supabase/migrations/20261011_stock_by_color_source_of_truth.sql", "contains": ["preserved_stock", "derive_product_stock_from_colors", "sync_product_variant_stock", "Zero means unavailable"] },
+        { "file": "scripts/test-stock-by-color.mjs", "contains": ["estoque por cor como fonte única"] }
+      ]
     },
     {
       "name": "promoções",
