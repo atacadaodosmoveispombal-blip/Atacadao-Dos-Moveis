@@ -70,11 +70,12 @@ const bannerOrderOk = activeBanners.every((item, index) => index === 0 || Number
 console.log(`${bannerOrderOk ? 'OK' : 'PENDENTE'} ordem dos banners públicos`);
 failed ||= !bannerOrderOk;
 
-const [environments, categories, products, media] = await Promise.all([
+const [environments, categories, products, media, variants] = await Promise.all([
   verifyQuery('ambientes ativos legíveis', 'environments?select=id,name,slug,active&active=eq.true&order=sort_order', rows => rows.length > 0),
   verifyQuery('categorias ativas legíveis', 'categories?select=id,name,slug,environment_id,active&active=eq.true&order=sort_order', rows => rows.length > 0),
-  verifyQuery('produtos públicos legíveis', 'products?select=id,name,slug,category_id,environment_id,price,promotional_price,stock_quantity,active,deleted_at&active=eq.true&deleted_at=is.null&limit=1000', rows => rows.length > 0),
-  verifyQuery('mídias dos produtos legíveis', 'product_images?select=id,product_id,image_url,storage_path,media_type,poster_url,poster_storage_path,is_cover,sort_order&limit=1000')
+  verifyQuery('produtos públicos legíveis', 'products?select=id,name,slug,category_id,environment_id,price,promotional_price,stock_quantity,variants_enabled,origin_color_id,active,deleted_at&active=eq.true&deleted_at=is.null&limit=1000', rows => rows.length > 0),
+  verifyQuery('mídias dos produtos legíveis', 'product_images?select=id,product_id,image_url,storage_path,media_type,poster_url,poster_storage_path,is_cover,sort_order&limit=1000'),
+  verifyQuery('estoques públicos por cor legíveis', 'product_variants?select=id,product_id,color_id,combination_color_id,stock,active&limit=5000')
 ]);
 
 function verifyIntegrity(label, issues) {
@@ -118,6 +119,12 @@ for (const item of media) {
   list.push(item);
   mediaByProduct.set(item.product_id, list);
 }
+const variantsByProduct = new Map();
+for (const variant of variants) {
+  const list = variantsByProduct.get(variant.product_id) || [];
+  list.push(variant);
+  variantsByProduct.set(variant.product_id, list);
+}
 
 verifyIntegrity('slugs únicos dos ambientes', duplicateValues(environments, 'slug').map(value => `slug duplicado ${value}`));
 verifyIntegrity('slugs únicos das categorias por ambiente', duplicateCategorySlugs(categories).map(value => `ambiente/slug duplicado ${value}`));
@@ -143,6 +150,18 @@ verifyIntegrity('integridade dos produtos públicos', products.flatMap(product =
   if (promotional != null && (!Number.isFinite(promotional) || promotional <= 0 || promotional >= price)) issues.push(`${product.name || product.id}: preço promocional inválido`);
   const stock = Number(product.stock_quantity);
   if (!Number.isInteger(stock) || stock < 0) issues.push(`${product.name || product.id}: estoque inválido`);
+  return issues;
+}));
+
+verifyIntegrity('estoque total derivado exclusivamente das cores', products.flatMap(product => {
+  if (!product.variants_enabled) return [];
+  const productVariants = variantsByProduct.get(product.id) || [];
+  const issues = [];
+  if (!product.origin_color_id) issues.push(`${product.name}: sem cor de origem`);
+  if (!productVariants.some(variant => String(variant.color_id) === String(product.origin_color_id) && !variant.combination_color_id)) issues.push(`${product.name}: cor de origem sem estoque próprio`);
+  const total = productVariants.reduce((sum, variant) => sum + Number(variant.stock || 0), 0);
+  if (total !== Number(product.stock_quantity || 0)) issues.push(`${product.name}: total ${product.stock_quantity} difere da soma por cor ${total}`);
+  if (productVariants.some(variant => !Number.isInteger(Number(variant.stock)) || Number(variant.stock) < 0)) issues.push(`${product.name}: estoque de cor inválido`);
   return issues;
 }));
 
