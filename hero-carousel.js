@@ -13,6 +13,7 @@
   const imageDuration = 6500;
   const defaultSlides = [...root.querySelectorAll('[data-hero-slide]')].map(slide => slide.cloneNode(true));
   let slides = [];
+  let slideItems = [];
   let dots = [];
   let active = 0;
   let timer = 0;
@@ -125,6 +126,7 @@
       else dot.removeAttribute('aria-current');
     });
     preload((active + 1) % slides.length);
+    root.dispatchEvent(new CustomEvent('atacarejo:hero-slide-change', { detail: slideItems[active] || null }));
     startActiveMedia();
   }
 
@@ -205,6 +207,7 @@
     stop();
     slideContainer.replaceChildren(...defaultSlides.map(slide => slide.cloneNode(true)));
     const items = defaultSlides.map((slide, index) => ({ internalTitle: slide.querySelector('figcaption strong')?.textContent || `slide ${index + 1}` }));
+    slideItems = items;
     rebuildDots(items);
     root.dataset.cmsBanner = 'false';
     active = 0;
@@ -216,6 +219,7 @@
     const valid = (items || []).filter(item => item?.desktopUrl);
     if (!valid.length) { restoreDefaults(); return; }
     stop();
+    slideItems = valid;
     slideContainer.replaceChildren(...valid.map(buildSlide));
     rebuildDots(valid);
     root.dataset.cmsBanner = 'true';
@@ -264,7 +268,8 @@
   };
 
   refreshCollections();
-  rebuildDots(defaultSlides.map((slide, index) => ({ internalTitle: slide.querySelector('figcaption strong')?.textContent || `slide ${index + 1}` })));
+  slideItems = defaultSlides.map((slide, index) => ({ internalTitle: slide.querySelector('figcaption strong')?.textContent || `slide ${index + 1}` }));
+  rebuildDots(slideItems);
   refreshCollections();
   show(0);
 })();

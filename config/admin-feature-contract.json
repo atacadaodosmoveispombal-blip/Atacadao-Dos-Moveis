@@ -11,7 +11,8 @@
       "opções do produto e integração com WhatsApp",
       "características informativas de material, espelho e ripado",
       "cor de origem obrigatória com galeria principal vinculada",
-      "Hero com imagem ou vídeo"
+      "Hero com imagem ou vídeo",
+      "editor visual simplificado da Home"
     ]
   },
   "database": {
@@ -122,6 +123,15 @@
         { "file": "admin-app.js", "contains": ["Hero da Home", "video_desktop_url", "video_mobile_url", "poster_url"] },
         { "file": "hero-carousel.js", "contains": ["playsInline", "addEventListener('ended'"] },
         { "file": "styles.css", "contains": [".hero-slide img,.hero-slide video", "object-fit:cover"] }
+      ]
+    },
+    {
+      "name": "editor visual simplificado da Home",
+      "checks": [
+        { "file": "admin.html", "contains": ["data-view=\"banners\">▣ Editar Home"] },
+        { "file": "admin-app.js", "contains": ["async function renderVisualHomeEditor(", "async function saveVisualHomeSlide(", "async function saveHomeHighlight(", "CARROSSEL DO TOPO", "DESTAQUES DA HOME"] },
+        { "file": "storefront-cms.js", "contains": ["function applyAmbientSection(", "--ambient-mobile-image"] },
+        { "file": "scripts/test-visual-home-editor.mjs", "contains": ["editor visual da Home"] }
       ]
     },
     {

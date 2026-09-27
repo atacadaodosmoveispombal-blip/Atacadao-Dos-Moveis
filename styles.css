@@ -271,6 +271,11 @@ html,body{overflow-x:hidden}.hero-art{min-width:0}.nav{overflow-x:auto;scrollbar
   }
 }
 
+/* Conteúdo visual do destaque da Home, mantendo o layout existente. */
+.ambient-image{position:relative;overflow:hidden;background-image:var(--ambient-desktop-image,url('assets/hero-sofa.png'));background-position:center;background-size:cover;background-repeat:no-repeat}
+.ambient-image>video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+@media(max-width:720px){.ambient-image{background-image:var(--ambient-mobile-image,var(--ambient-desktop-image,url('assets/hero-sofa.png')))}}
+
 @media(max-width:340px){
   .nav .categories-menu{max-width:158px}
   .nav a:last-child:before{content:'Ver todos'}
