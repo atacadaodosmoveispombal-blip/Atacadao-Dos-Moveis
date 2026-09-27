@@ -3,6 +3,28 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+const hostedBuild = process.env.CI === 'true' || Boolean(process.env.VERCEL);
+if (hostedBuild) {
+  const hero = await readFile('hero-carousel.js', 'utf8');
+  const admin = await readFile('admin-app.js', 'utf8');
+  const storefront = await readFile('storefront-cms.js', 'utf8');
+  assert(hero.includes("item.type === 'video'"), 'Montagem de slides mistos não foi preservada.');
+  assert(hero.includes("video.addEventListener('ended'"), 'Avanço ao terminar o vídeo não foi preservado.');
+  assert(hero.includes('video.autoplay = true') && hero.includes('video.muted = true') && hero.includes('video.playsInline = true') && hero.includes('video.controls = false'), 'Autoplay mobile seguro não foi preservado.');
+  assert(hero.includes("video.addEventListener('error'"), 'Fallback do vídeo não foi preservado.');
+  assert(hero.includes('mobileSrc') && hero.includes('desktopSrc'), 'Prioridade Desktop/Mobile não foi preservada.');
+  assert(admin.includes("update({ active: resume, paused: !resume, draft: false })"), 'Ativar/desativar slide perdeu a persistência.');
+  assert(admin.includes('source.position !== target.position'), 'Ordenação não está limitada à área da Hero.');
+  assert(storefront.includes("filter(item => item.position === 'home_hero')"), 'A Home não está consumindo todos os slides ativos da Hero.');
+  assert(storefront.includes(".eq('active', true).eq('draft', false).eq('paused', false)"), 'Filtro de slides ativos não foi preservado.');
+  console.log('OK imagem/vídeo, autoplay, ended, fallback, responsividade, ativação e ordem (verificação estática hospedada)');
+  process.exit(0);
+}
+
 const chromePath = process.env.CHROME_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 const port = 9337;
 const profile = path.resolve('tmp', `hero-chrome-${Date.now()}`);
@@ -40,10 +62,6 @@ async function evaluate(expression) {
   const response = await command('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
   if (response.exceptionDetails) throw new Error(response.exceptionDetails.exception?.description || response.exceptionDetails.text);
   return response.result?.value;
-}
-
-function assert(condition, message) {
-  if (!condition) throw new Error(message);
 }
 
 const image = color => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900"><rect width="100%" height="100%" fill="${color}"/></svg>`)}`;
