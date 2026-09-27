@@ -1,0 +1,4 @@
+supabase/migrations/*.sql text eol=lf
+config/*.json text eol=lf
+scripts/*.mjs text eol=lf
+.github/workflows/*.yml text eol=lf

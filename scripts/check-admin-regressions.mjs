@@ -44,14 +44,8 @@ for (const [name, expectedHash] of Object.entries(migrationBaseline)) {
     errors.push(`migration histórica removida: ${name}`);
     continue;
   }
-  const bytes = readFileSync(file);
-  const source = bytes.toString('utf8');
-  const acceptedHashes = new Set([
-    sha256(bytes),
-    sha256(source.replace(/\r\n/g, '\n')),
-    sha256(source.replace(/\r?\n/g, '\r\n'))
-  ]);
-  if (!acceptedHashes.has(expectedHash)) errors.push(`migration histórica alterada: ${name}`);
+  const canonicalSource = readFileSync(file, 'utf8').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  if (sha256(canonicalSource) !== expectedHash) errors.push(`migration histórica alterada: ${name}`);
 }
 
 let migrationNames;
