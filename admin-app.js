@@ -9,7 +9,7 @@
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const titles = {
     dashboard: 'Visão geral', products: 'Produtos', categories: 'Subcategorias', environments: 'Ambientes',
-    brands: 'Marcas', stock: 'Estoque', promotions: 'Promoções', coupons: 'Cupons', banners: 'Campanhas e Banners',
+    brands: 'Marcas', stock: 'Estoque', promotions: 'Promoções', coupons: 'Cupons', banners: 'Editar Home',
     sections: 'Página inicial', inspirations: 'Inspirações', leads: 'Leads / Orçamentos', store: 'Loja e WhatsApp', assistant: 'Assistente Virtual',
     orders: 'Pedidos', 'online-sales': 'Vendas online',
     seo: 'SEO', users: 'Usuários ADM', settings: 'Configurações', audit: 'Auditoria'
@@ -23,7 +23,7 @@
     stock: ['▤', 'Acompanhe e atualize o estoque da loja.'],
     promotions: ['%', 'Crie campanhas e ofertas para o catálogo.'],
     coupons: ['◇', 'Configure cupons e regras de desconto.'],
-    banners: ['▣', 'Escolha um modelo e publique sua campanha em poucos cliques.'],
+    banners: ['▣', 'Troque as imagens, vídeos e textos que aparecem na página inicial.'],
     sections: ['☷', 'Organize o conteúdo da página inicial.'],
     inspirations: ['◎', 'Publique ambientes e ideias para os clientes.'],
     leads: ['✉', 'Acompanhe contatos e solicitações de orçamento.'],
@@ -489,7 +489,7 @@
     return `<div class="field"><label for="f-${key}">${esc(label)}</label><input id="f-${key}" name="${key}" type="${type === 'slug' ? 'text' : type}" value="${esc(formatted)}" ${required ? 'required' : ''} ${type === 'number' ? 'step="any"' : ''}></div>`;
   }
   function resetEditorChrome() {
-    $('#editorDialog').classList.remove('category-editor-dialog', 'banner-editor-dialog', 'quick-campaign-dialog', 'product-editor-dialog', 'mass-product-dialog');
+    $('#editorDialog').classList.remove('category-editor-dialog', 'banner-editor-dialog', 'quick-campaign-dialog', 'product-editor-dialog', 'mass-product-dialog', 'visual-home-dialog');
     $('#editorForm>header').classList.remove('quick-library-header');
     $('#editorForm>header .quick-library-heading-subtitle')?.remove();
     $('#editorForm>header .quick-library-heading-search')?.remove();
@@ -2112,6 +2112,466 @@
         const error = results.find(result => result.error)?.error;
         if (error) return toast(explain(error));
         notifyStorefront('categories'); toast('Ordem das subcategorias atualizada.'); render('categories');
+      });
+    });
+  }
+  const defaultHomeHeroSlides = [
+    { internal_title: 'Sala de estar', image_desktop_url: 'assets/editorial-room-clean.png?v=caption-removed-1' },
+    { internal_title: 'Sala de jantar', image_desktop_url: 'https://images.unsplash.com/photo-1618220179428-22790b461013?auto=format&fit=crop&w=1600&q=82' },
+    { internal_title: 'Cozinha', image_desktop_url: 'https://images.unsplash.com/photo-1556911220-bff31c812dba?auto=format&fit=crop&w=1600&q=82' },
+    { internal_title: 'Quarto', image_desktop_url: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1600&q=82' },
+    { internal_title: 'Ambiente completo', image_desktop_url: 'https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=1600&q=82' }
+  ].map((item, index) => ({ ...item, id: `default-${index + 1}`, title: 'Sua casa com mais conforto e economia.', subtitle: 'Móveis para combinar com a sua casa, seu estilo e seu bolso.', button_text: 'Explorar produtos', button_url: '#catalogo', media_type: 'image', active: true, sort_order: (index + 1) * 10, isDefaultHomeSlide: true }));
+  const homeDestinationChoices = [
+    ['offers', 'Ofertas'], ['catalog', 'Catálogo'], ['sala', 'Sala'], ['quarto', 'Quarto'],
+    ['cozinha', 'Cozinha'], ['escritorio', 'Escritório'], ['infantil', 'Infantil'], ['eletros', 'Eletros'],
+    ['product', 'Produto específico'], ['whatsapp', 'WhatsApp'], ['custom', 'Link personalizado']
+  ];
+  const homeDestinationUrls = {
+    offers: '#ofertas', catalog: '#catalogo', sala: '?environment=sala', quarto: '?environment=quarto',
+    cozinha: '?environment=cozinha', escritorio: '?environment=escritorio', infantil: '?environment=infantil',
+    eletros: '?environment=eletros', whatsapp: 'whatsapp'
+  };
+  function homeDestinationFromUrl(url = '') {
+    const value = String(url || '').trim();
+    const fixed = Object.entries(homeDestinationUrls).find(([, target]) => target === value);
+    if (fixed) return { key: fixed[0], target: '' };
+    const product = value.match(/[?&]product=([^&#]+)/);
+    if (product) return { key: 'product', target: decodeURIComponent(product[1]) };
+    return { key: 'custom', target: value };
+  }
+  function homeDestinationOptions(selected) {
+    return homeDestinationChoices.map(([value, label]) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${label}</option>`).join('');
+  }
+  function homeDestinationUrl(form) {
+    const key = form.elements.home_destination.value;
+    if (key === 'product') return form.elements.home_product_id.value ? `?product=${encodeURIComponent(form.elements.home_product_id.value)}` : '';
+    if (key === 'custom') return form.elements.home_custom_url.value.trim();
+    return homeDestinationUrls[key] || '#catalogo';
+  }
+  function bindHomeDestination(root = $('#editorFields')) {
+    const select = $('[name="home_destination"]', root);
+    const productWrap = $('[data-home-product-destination]', root);
+    const customWrap = $('[data-home-custom-destination]', root);
+    if (!select) return;
+    const sync = () => {
+      if (productWrap) productWrap.hidden = select.value !== 'product';
+      if (customWrap) customWrap.hidden = select.value !== 'custom';
+    };
+    select.onchange = sync;
+    sync();
+  }
+  function homePreviewMedia(row = {}) {
+    return row.media_type === 'video' ? row.poster_url || row.image_desktop_url || '' : row.image_desktop_url || row.image_mobile_url || '';
+  }
+  function bindVisualHomeFile(inputName, boxId, stateKey, kind = 'image') {
+    const input = $(`[name="${inputName}"]`);
+    const box = $(`#${boxId}`);
+    if (!input || !box) return;
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const url = URL.createObjectURL(file);
+      editorState.previewObjectUrls ||= [];
+      editorState.previewObjectUrls.push(url);
+      editorState[stateKey] = url;
+      box.innerHTML = kind === 'video'
+        ? `<video src="${esc(url)}" muted playsinline autoplay loop></video>`
+        : `<img src="${esc(url)}" alt="Prévia do arquivo selecionado">`;
+      syncBannerPreview();
+    };
+  }
+  async function openVisualHomeSlideEditor(record = null, position = 'home_hero') {
+    if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.');
+    resetEditorChrome();
+    const productResult = await db.from('products').select('id,name,sku').is('deleted_at', null).eq('active', true).order('name');
+    if (productResult.error) return toast(explain(productResult.error));
+    const products = productResult.data || [];
+    const isHero = position === 'home_hero';
+    const destination = homeDestinationFromUrl(record?.button_url);
+    editorState = {
+      view: 'home-slide', record, homePosition: position, products,
+      bannerPreviewMode: 'desktop', previewObjectUrls: [],
+      desktopPreviewUrl: record?.image_desktop_url || '', mobilePreviewUrl: record?.image_mobile_url || '',
+      desktopVideoPreviewUrl: record?.video_desktop_url || '', mobileVideoPreviewUrl: record?.video_mobile_url || '',
+      posterPreviewUrl: record?.poster_url || ''
+    };
+    $('#editorDialog').classList.add('banner-editor-dialog', 'visual-home-dialog');
+    $('#dialogEyebrow').textContent = record ? 'EDITANDO NA HOME' : 'NOVO SLIDE';
+    $('#dialogTitle').textContent = isHero ? (record ? 'Editar slide do carrossel' : 'Adicionar slide ao carrossel') : 'Editar destaque da Home';
+    $('#saveEditor').textContent = 'Salvar na Home';
+    $('#editorFields').innerHTML = `<div class="visual-home-editor-layout">
+      <div class="visual-home-editor-fields">
+        <section class="visual-home-form-card"><h3>${isHero ? 'Slide do carrossel' : 'Destaque da Home'}</h3><p>Altere somente o que o cliente verá na página inicial.</p>
+          <label>Nome para identificar no painel<input name="internal_title" type="text" value="${esc(record?.internal_title || record?.title || '')}" placeholder="Ex.: Sala de estar"></label>
+          <label>Escolha o formato<select name="media_type"><option value="image" ${record?.media_type !== 'video' ? 'selected' : ''}>Usar foto</option><option value="video" ${record?.media_type === 'video' ? 'selected' : ''}>Usar vídeo</option></select></label>
+          <div class="visual-home-upload-grid" data-home-image-fields>
+            <label><b>Foto para computador</b><span class="visual-home-upload" id="visualDesktopImage">${record?.image_desktop_url ? `<img src="${esc(record.image_desktop_url)}" alt="Foto atual">` : '<i>＋</i><strong>Trocar foto</strong>'}</span><input name="image_desktop_url" type="file" accept="image/jpeg,image/png,image/webp"><small>Recomendado: 1600 × 650 px · JPG, JPEG, PNG ou WEBP</small></label>
+            <label><b>Foto para celular</b><span class="visual-home-upload" id="visualMobileImage">${record?.image_mobile_url ? `<img src="${esc(record.image_mobile_url)}" alt="Foto mobile atual">` : '<i>＋</i><strong>Adicionar foto opcional</strong>'}</span><input name="image_mobile_url" type="file" accept="image/jpeg,image/png,image/webp"><small>Opcional. Se ficar vazio, a foto do computador será usada.</small></label>
+          </div>
+          <div class="visual-home-upload-grid" data-home-video-fields hidden>
+            <label><b>Vídeo para computador</b><span class="visual-home-upload" id="visualDesktopVideo">${record?.video_desktop_url ? `<video src="${esc(record.video_desktop_url)}" poster="${esc(record.poster_url || '')}" muted playsinline></video>` : '<i>▶</i><strong>Escolher vídeo</strong>'}</span><input name="video_desktop_url" type="file" accept="video/mp4,video/webm"><small>MP4 ou WEBM · horizontal, curto e otimizado · até 50 MB</small></label>
+            <label><b>Vídeo para celular</b><span class="visual-home-upload" id="visualMobileVideo">${record?.video_mobile_url ? `<video src="${esc(record.video_mobile_url)}" poster="${esc(record.poster_url || '')}" muted playsinline></video>` : '<i>＋</i><strong>Adicionar vídeo opcional</strong>'}</span><input name="video_mobile_url" type="file" accept="video/mp4,video/webm"><small>Opcional. Se ficar vazio, o vídeo do computador será usado.</small></label>
+            <label><b>Imagem de capa do vídeo</b><span class="visual-home-upload" id="visualPosterImage">${record?.poster_url ? `<img src="${esc(record.poster_url)}" alt="Capa atual">` : '<i>＋</i><strong>Escolher imagem de capa</strong>'}</span><input name="poster_url" type="file" accept="image/jpeg,image/png,image/webp"><small>Mostrada enquanto o vídeo carrega ou se ele falhar.</small></label>
+          </div>
+        </section>
+        <section class="visual-home-form-card"><h3>Textos e botão</h3>
+          <label>Título<input name="title" type="text" required value="${esc(record?.title || '')}" placeholder="Digite o título"></label>
+          <label>Texto<textarea name="subtitle" placeholder="Digite uma frase curta">${esc(record?.subtitle || '')}</textarea></label>
+          <label>Texto do botão<input name="button_text" type="text" value="${esc(record?.button_text || '')}" placeholder="Ex.: Ver ofertas"></label>
+          <label>Destino do botão<select name="home_destination">${homeDestinationOptions(destination.key)}</select></label>
+          <label data-home-product-destination hidden>Escolha o produto<select name="home_product_id"><option value="">Selecione</option>${products.map(product => `<option value="${product.id}" ${String(product.id) === destination.target ? 'selected' : ''}>${esc(product.name)}${product.sku ? ` · ${esc(product.sku)}` : ''}</option>`).join('')}</select></label>
+          <label data-home-custom-destination hidden>Link personalizado<input name="home_custom_url" type="text" value="${esc(destination.key === 'custom' ? destination.target : '')}" placeholder="https://... ou #secao"></label>
+          <label class="visual-home-check"><input name="active" type="checkbox" ${record?.active !== false ? 'checked' : ''}><span>Mostrar na Home</span></label>
+        </section>
+      </div>
+      <aside class="banner-live-preview visual-home-live-preview"><div class="banner-preview-heading"><div><span>PRÉVIA AO VIVO</span><b id="bannerPreviewPosition">${isHero ? 'Carrossel do topo' : 'Destaque da Home'}</b></div><div class="banner-device-tabs"><button class="is-active" type="button" data-banner-device="desktop">Computador</button><button type="button" data-banner-device="mobile">Celular</button></div></div><div class="banner-preview-canvas desktop" id="bannerPreviewCanvas"><div class="banner-preview-stage" id="bannerPreviewStage" data-alignment="left"><video id="bannerPreviewVideo" muted playsinline loop hidden></video><div><strong id="bannerPreviewTitle">${esc(record?.title || 'Seu título aparece aqui')}</strong><p id="bannerPreviewSubtitle">${esc(record?.subtitle || 'O texto será atualizado enquanto você digita.')}</p><button id="bannerPreviewButton" type="button">${esc(record?.button_text || 'Ver mais')} →</button></div></div></div><p>A prévia acompanha suas alterações sem mudar o desenho atual da Home.</p></aside>
+      <input name="position" type="hidden" value="${esc(position)}"><input name="alignment" type="hidden" value="${esc(record?.alignment || 'left')}">
+    </div>`;
+    bindHomeDestination();
+    const mediaType = $('[name="media_type"]');
+    const syncMediaFields = () => {
+      $('[data-home-image-fields]').hidden = mediaType.value !== 'image';
+      $('[data-home-video-fields]').hidden = mediaType.value !== 'video';
+      syncBannerPreview();
+    };
+    mediaType.onchange = syncMediaFields;
+    bindVisualHomeFile('image_desktop_url', 'visualDesktopImage', 'desktopPreviewUrl');
+    bindVisualHomeFile('image_mobile_url', 'visualMobileImage', 'mobilePreviewUrl');
+    bindVisualHomeFile('video_desktop_url', 'visualDesktopVideo', 'desktopVideoPreviewUrl', 'video');
+    bindVisualHomeFile('video_mobile_url', 'visualMobileVideo', 'mobileVideoPreviewUrl', 'video');
+    bindVisualHomeFile('poster_url', 'visualPosterImage', 'posterPreviewUrl');
+    $$('[data-banner-device]').forEach(button => button.onclick = () => {
+      $$('[data-banner-device]').forEach(item => item.classList.toggle('is-active', item === button));
+      editorState.bannerPreviewMode = button.dataset.bannerDevice;
+      $('#bannerPreviewCanvas').className = `banner-preview-canvas ${button.dataset.bannerDevice}`;
+      syncBannerPreview();
+    });
+    $('#editorForm').oninput = event => { if (!event.target.matches('[type="file"]')) syncBannerPreview(); };
+    syncMediaFields();
+    syncBannerPreview();
+    $('#editorDialog').showModal();
+  }
+  async function saveVisualHomeSlide(event) {
+    event.preventDefault();
+    if (!editorState || !event.currentTarget.reportValidity()) return;
+    const form = event.currentTarget;
+    const { record, homePosition } = editorState;
+    const button = $('#saveEditor');
+    const uploaded = [];
+    let persisted = false;
+    button.disabled = true;
+    button.textContent = 'Salvando…';
+    try {
+      if (!record && homePosition === 'home_hero') {
+        const { count, error } = await db.from('banners').select('id', { count: 'exact', head: true }).eq('position', 'home_hero');
+        if (error) throw error;
+        if ((count || 0) >= 8) throw new Error('O carrossel pode ter no máximo 8 slides.');
+      }
+      const mediaType = form.elements.media_type.value;
+      const desktopImageFile = form.elements.image_desktop_url.files?.[0] || null;
+      const mobileImageFile = form.elements.image_mobile_url.files?.[0] || null;
+      const desktopVideoFile = form.elements.video_desktop_url.files?.[0] || null;
+      const mobileVideoFile = form.elements.video_mobile_url.files?.[0] || null;
+      const posterFile = form.elements.poster_url.files?.[0] || null;
+      if (mediaType === 'image' && !desktopImageFile && !record?.image_desktop_url && !record?.image_mobile_url) throw new Error('Escolha uma foto para computador.');
+      if (mediaType === 'video' && !desktopVideoFile && !record?.video_desktop_url) throw new Error('Escolha um vídeo para computador.');
+      if (mediaType === 'video' && !posterFile && !record?.poster_url) throw new Error('Escolha uma imagem de capa para o vídeo.');
+      let sortOrder = Number(record?.sort_order || 0);
+      if (!record) {
+        const { data: last, error } = await db.from('banners').select('sort_order').eq('position', homePosition).order('sort_order', { ascending: false }).limit(1).maybeSingle();
+        if (error) throw error;
+        sortOrder = Number(last?.sort_order || 0) + 10;
+      }
+      const values = {
+        title: form.elements.title.value.trim(),
+        internal_title: form.elements.internal_title.value.trim() || form.elements.title.value.trim(),
+        subtitle: form.elements.subtitle.value.trim() || null,
+        button_text: form.elements.button_text.value.trim() || null,
+        button_url: homeDestinationUrl(form) || null,
+        position: homePosition, media_type: mediaType, sort_order: sortOrder,
+        active: form.elements.active.checked, draft: false, paused: false
+      };
+      if (!record) Object.assign(values, {
+        start_at: null, end_at: null, campaign_type: 'institutional', content_mode: 'banner',
+        category_id: null, promotion_id: null, link_type: form.elements.home_destination.value === 'product' ? 'product' : 'link',
+        alignment: 'left', display_locations: ['home'], auto_include_category: false,
+        deactivate_on_end: false, keep_products_after_end: true
+      });
+      if (mediaType === 'image') {
+        values.video_desktop_url = null; values.video_mobile_url = null; values.poster_url = null;
+        for (const [key, file] of [['image_desktop_url', desktopImageFile], ['image_mobile_url', mobileImageFile]]) {
+          if (!file) continue;
+          const saved = await upload('banners', file, `${record?.id || 'home'}/images`);
+          uploaded.push({ key, ...saved }); values[key] = saved.url;
+        }
+      } else {
+        values.image_desktop_url = null; values.image_mobile_url = null;
+        for (const [key, file] of [['video_desktop_url', desktopVideoFile], ['video_mobile_url', mobileVideoFile]]) {
+          if (!file) continue;
+          const saved = await uploadBannerVideo(file, record?.id || 'home');
+          uploaded.push({ key, ...saved }); values[key] = saved.url;
+        }
+        if (posterFile) {
+          const saved = await upload('banners', posterFile, `${record?.id || 'home'}/posters`);
+          uploaded.push({ key: 'poster_url', ...saved }); values.poster_url = saved.url;
+        }
+      }
+      const result = record
+        ? await db.from('banners').update(values).eq('id', record.id).select().single()
+        : await db.from('banners').insert(values).select().single();
+      if (result.error) throw result.error;
+      persisted = true;
+      for (const key of ['image_desktop_url','image_mobile_url','video_desktop_url','video_mobile_url','poster_url']) {
+        const previous = record?.[key], currentUrl = key in values ? values[key] : previous;
+        if (previous && previous !== currentUrl) await removeUnusedBannerImage(previous);
+      }
+      notifyStorefront('banners');
+      $('#editorDialog').close();
+      toast(homePosition === 'home_hero' ? 'Slide salvo na Home.' : 'Destaque salvo na Home.');
+      render('banners');
+    } catch (error) {
+      if (!persisted) await Promise.all(uploaded.map(saved => db.storage.from(saved.bucket).remove([saved.path])));
+      toast(explain(error), 'error');
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Salvar na Home';
+    }
+  }
+  function highlightContent(section) {
+    const content = section?.content && typeof section.content === 'object' ? section.content : {};
+    return {
+      ...content,
+      eyebrow: content.eyebrow || 'ESPAÇO PARA NOVOS MOMENTOS',
+      title: section?.title || content.title || 'Seu cantinho merece esse aconchego.',
+      text: section?.subtitle || content.text || 'Ideias para renovar a sala e aproveitar cada encontro.',
+      button_text: content.button_text || 'Encontre seu sofá',
+      button_url: content.button_url || '?environment=sala',
+      show_button: content.show_button !== false,
+      media_type: content.media_type === 'video' ? 'video' : 'image'
+    };
+  }
+  function syncHomeHighlightPreview() {
+    const mediaType = $('[name="media_type"]')?.value || 'image';
+    const mode = editorState?.bannerPreviewMode || 'desktop';
+    const image = mode === 'mobile' ? editorState?.mobilePreviewUrl || editorState?.desktopPreviewUrl : editorState?.desktopPreviewUrl;
+    const videoUrl = mode === 'mobile' ? editorState?.mobileVideoPreviewUrl || editorState?.desktopVideoPreviewUrl : editorState?.desktopVideoPreviewUrl;
+    const stage = $('#homeHighlightPreviewStage');
+    const video = $('#homeHighlightPreviewVideo');
+    if (!stage || !video) return;
+    $('#homeHighlightPreviewEyebrow').textContent = $('[name="eyebrow"]')?.value.trim() || 'CHAMADA';
+    $('#homeHighlightPreviewTitle').textContent = $('[name="title"]')?.value.trim() || 'Seu título aparece aqui';
+    $('#homeHighlightPreviewText').textContent = $('[name="subtitle"]')?.value.trim() || 'Seu texto aparece aqui.';
+    const button = $('#homeHighlightPreviewButton');
+    button.textContent = `${$('[name="button_text"]')?.value.trim() || 'Ver mais'} →`;
+    button.hidden = !$('[name="show_button"]')?.checked;
+    if (mediaType === 'video') {
+      stage.style.backgroundImage = editorState?.posterPreviewUrl ? `url("${String(editorState.posterPreviewUrl).replace(/"/g, '%22')}")` : '';
+      video.hidden = !videoUrl; video.poster = editorState?.posterPreviewUrl || '';
+      if (videoUrl && video.src !== new URL(videoUrl, location.href).href) { video.src = videoUrl; video.load(); }
+      if (videoUrl) video.play().catch(() => {});
+    } else {
+      video.pause(); video.hidden = true; video.removeAttribute('src'); video.load();
+      stage.style.backgroundImage = image ? `url("${String(image).replace(/"/g, '%22')}")` : '';
+    }
+  }
+  async function openHomeHighlightEditor(section) {
+    if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.');
+    resetEditorChrome();
+    const productResult = await db.from('products').select('id,name,sku').is('deleted_at', null).eq('active', true).order('name');
+    if (productResult.error) return toast(explain(productResult.error));
+    const content = highlightContent(section);
+    const destination = homeDestinationFromUrl(content.button_url);
+    editorState = {
+      view: 'home-highlight', record: section, content, products: productResult.data || [], previewObjectUrls: [], bannerPreviewMode: 'desktop',
+      desktopPreviewUrl: content.image_desktop_url || 'assets/hero-sofa.png', mobilePreviewUrl: content.image_mobile_url || '',
+      desktopVideoPreviewUrl: content.video_desktop_url || '', mobileVideoPreviewUrl: content.video_mobile_url || '', posterPreviewUrl: content.poster_url || ''
+    };
+    $('#editorDialog').classList.add('banner-editor-dialog', 'visual-home-dialog');
+    $('#dialogEyebrow').textContent = 'DESTAQUE DA HOME';
+    $('#dialogTitle').textContent = 'Espaço para novos momentos';
+    $('#saveEditor').textContent = 'Salvar na Home';
+    $('#editorFields').innerHTML = `<div class="visual-home-editor-layout"><div class="visual-home-editor-fields">
+      <section class="visual-home-form-card"><h3>Foto ou vídeo</h3><p>Você pode trocar esta campanha sempre que quiser.</p>
+        <label>Escolha o formato<select name="media_type"><option value="image" ${content.media_type !== 'video' ? 'selected' : ''}>Usar foto</option><option value="video" ${content.media_type === 'video' ? 'selected' : ''}>Usar vídeo</option></select></label>
+        <div class="visual-home-upload-grid" data-home-image-fields><label><b>Foto para computador</b><span class="visual-home-upload" id="visualDesktopImage"><img src="${esc(content.image_desktop_url || 'assets/hero-sofa.png')}" alt="Foto atual"></span><input name="image_desktop_url" type="file" accept="image/jpeg,image/png,image/webp"><small>JPG, JPEG, PNG ou WEBP</small></label><label><b>Foto para celular</b><span class="visual-home-upload" id="visualMobileImage">${content.image_mobile_url ? `<img src="${esc(content.image_mobile_url)}" alt="Foto mobile atual">` : '<i>＋</i><strong>Adicionar foto opcional</strong>'}</span><input name="image_mobile_url" type="file" accept="image/jpeg,image/png,image/webp"></label></div>
+        <div class="visual-home-upload-grid" data-home-video-fields hidden><label><b>Vídeo para computador</b><span class="visual-home-upload" id="visualDesktopVideo">${content.video_desktop_url ? `<video src="${esc(content.video_desktop_url)}" muted playsinline></video>` : '<i>▶</i><strong>Escolher vídeo</strong>'}</span><input name="video_desktop_url" type="file" accept="video/mp4,video/webm"><small>MP4 ou WEBM · até 50 MB</small></label><label><b>Vídeo para celular</b><span class="visual-home-upload" id="visualMobileVideo">${content.video_mobile_url ? `<video src="${esc(content.video_mobile_url)}" muted playsinline></video>` : '<i>＋</i><strong>Adicionar vídeo opcional</strong>'}</span><input name="video_mobile_url" type="file" accept="video/mp4,video/webm"></label><label><b>Imagem de capa</b><span class="visual-home-upload" id="visualPosterImage">${content.poster_url ? `<img src="${esc(content.poster_url)}" alt="Capa atual">` : '<i>＋</i><strong>Escolher capa</strong>'}</span><input name="poster_url" type="file" accept="image/jpeg,image/png,image/webp"></label></div>
+      </section>
+      <section class="visual-home-form-card"><h3>Textos e botão</h3>
+        <label>Chamada pequena<input name="eyebrow" type="text" value="${esc(content.eyebrow)}"></label>
+        <label>Título<input name="title" type="text" required value="${esc(content.title)}"></label>
+        <label>Texto<textarea name="subtitle">${esc(content.text)}</textarea></label>
+        <label>Texto do botão<input name="button_text" type="text" value="${esc(content.button_text)}"></label>
+        <label>Destino do botão<select name="home_destination">${homeDestinationOptions(destination.key)}</select></label>
+        <label data-home-product-destination hidden>Escolha o produto<select name="home_product_id"><option value="">Selecione</option>${(productResult.data || []).map(product => `<option value="${product.id}" ${String(product.id) === destination.target ? 'selected' : ''}>${esc(product.name)}${product.sku ? ` · ${esc(product.sku)}` : ''}</option>`).join('')}</select></label>
+        <label data-home-custom-destination hidden>Link personalizado<input name="home_custom_url" type="text" value="${esc(destination.key === 'custom' ? destination.target : '')}"></label>
+        <label class="visual-home-check"><input name="show_button" type="checkbox" ${content.show_button ? 'checked' : ''}><span>Mostrar botão</span></label>
+        <label class="visual-home-check"><input name="active" type="checkbox" ${section?.active !== false ? 'checked' : ''}><span>Mostrar este destaque na Home</span></label>
+      </section></div>
+      <aside class="banner-live-preview visual-home-live-preview"><div class="banner-preview-heading"><div><span>PRÉVIA AO VIVO</span><b>Espaço para novos momentos</b></div><div class="banner-device-tabs"><button class="is-active" type="button" data-highlight-device="desktop">Computador</button><button type="button" data-highlight-device="mobile">Celular</button></div></div><div class="home-highlight-preview" id="homeHighlightPreviewStage"><video id="homeHighlightPreviewVideo" muted playsinline loop hidden></video><div><small id="homeHighlightPreviewEyebrow"></small><strong id="homeHighlightPreviewTitle"></strong><p id="homeHighlightPreviewText"></p><button id="homeHighlightPreviewButton" type="button"></button></div></div><p>A prévia é atualizada enquanto você edita.</p></aside>
+    </div>`;
+    bindHomeDestination();
+    const mediaType = $('[name="media_type"]');
+    const syncMedia = () => { $('[data-home-image-fields]').hidden = mediaType.value !== 'image'; $('[data-home-video-fields]').hidden = mediaType.value !== 'video'; syncHomeHighlightPreview(); };
+    mediaType.onchange = syncMedia;
+    const bindings = [['image_desktop_url','visualDesktopImage','desktopPreviewUrl','image'],['image_mobile_url','visualMobileImage','mobilePreviewUrl','image'],['video_desktop_url','visualDesktopVideo','desktopVideoPreviewUrl','video'],['video_mobile_url','visualMobileVideo','mobileVideoPreviewUrl','video'],['poster_url','visualPosterImage','posterPreviewUrl','image']];
+    bindings.forEach(([inputName, boxId, stateKey, kind]) => {
+      const input = $(`[name="${inputName}"]`), box = $(`#${boxId}`);
+      input.onchange = () => { const file = input.files?.[0]; if (!file) return; const url = URL.createObjectURL(file); editorState.previewObjectUrls.push(url); editorState[stateKey] = url; box.innerHTML = kind === 'video' ? `<video src="${esc(url)}" muted playsinline autoplay loop></video>` : `<img src="${esc(url)}" alt="Prévia">`; syncHomeHighlightPreview(); };
+    });
+    $$('[data-highlight-device]').forEach(button => button.onclick = () => { $$('[data-highlight-device]').forEach(item => item.classList.toggle('is-active', item === button)); editorState.bannerPreviewMode = button.dataset.highlightDevice; syncHomeHighlightPreview(); });
+    $('#editorForm').oninput = event => { if (!event.target.matches('[type="file"]')) syncHomeHighlightPreview(); };
+    syncMedia(); syncHomeHighlightPreview();
+    $('#editorDialog').showModal();
+  }
+  async function saveHomeHighlight(event) {
+    event.preventDefault();
+    if (!editorState || !event.currentTarget.reportValidity()) return;
+    const form = event.currentTarget, section = editorState.record, previous = editorState.content || {};
+    const button = $('#saveEditor'), uploaded = [];
+    let persisted = false;
+    button.disabled = true; button.textContent = 'Salvando…';
+    try {
+      const mediaType = form.elements.media_type.value;
+      const desktopImageFile = form.elements.image_desktop_url.files?.[0] || null;
+      const mobileImageFile = form.elements.image_mobile_url.files?.[0] || null;
+      const desktopVideoFile = form.elements.video_desktop_url.files?.[0] || null;
+      const mobileVideoFile = form.elements.video_mobile_url.files?.[0] || null;
+      const posterFile = form.elements.poster_url.files?.[0] || null;
+      if (mediaType === 'video' && !desktopVideoFile && !previous.video_desktop_url) throw new Error('Escolha um vídeo para computador.');
+      if (mediaType === 'video' && !posterFile && !previous.poster_url) throw new Error('Escolha uma imagem de capa para o vídeo.');
+      const content = {
+        ...previous, eyebrow: form.elements.eyebrow.value.trim(), text: form.elements.subtitle.value.trim(),
+        button_text: form.elements.button_text.value.trim(), button_url: homeDestinationUrl(form),
+        show_button: form.elements.show_button.checked, media_type: mediaType
+      };
+      if (mediaType === 'image') {
+        content.video_desktop_url = null; content.video_mobile_url = null; content.poster_url = null;
+        for (const [key, file] of [['image_desktop_url', desktopImageFile], ['image_mobile_url', mobileImageFile]]) {
+          if (!file) continue; const saved = await upload('banners', file, `home-highlights/${section?.id || 'ambient'}`); uploaded.push(saved); content[key] = saved.url;
+        }
+      } else {
+        content.image_desktop_url = null; content.image_mobile_url = null;
+        for (const [key, file] of [['video_desktop_url', desktopVideoFile], ['video_mobile_url', mobileVideoFile]]) {
+          if (!file) continue; const saved = await uploadBannerVideo(file, `home-highlights/${section?.id || 'ambient'}`); uploaded.push(saved); content[key] = saved.url;
+        }
+        if (posterFile) { const saved = await upload('banners', posterFile, `home-highlights/${section?.id || 'ambient'}/posters`); uploaded.push(saved); content.poster_url = saved.url; }
+      }
+      const values = { title: form.elements.title.value.trim(), subtitle: form.elements.subtitle.value.trim(), content, active: form.elements.active.checked };
+      const result = section
+        ? await db.from('site_sections').update(values).eq('id', section.id).select().single()
+        : await db.from('site_sections').insert({ ...values, section_key: 'ambient', sort_order: 60 }).select().single();
+      if (result.error) throw result.error;
+      persisted = true;
+      notifyStorefront('site_sections');
+      $('#editorDialog').close(); toast('Destaque salvo na Home.'); render('banners');
+    } catch (error) {
+      if (!persisted) await Promise.all(uploaded.map(saved => db.storage.from(saved.bucket).remove([saved.path])));
+      toast(explain(error), 'error');
+    } finally { button.disabled = false; button.textContent = 'Salvar na Home'; }
+  }
+  function visualHomeSlideCard(row, index) {
+    const media = homePreviewMedia(row);
+    const isVideo = row.media_type === 'video';
+    return `<article class="visual-home-slide" draggable="${canWrite()}" data-home-slide-id="${row.id}">
+      <span class="visual-home-drag" title="Arraste para mudar a ordem" aria-hidden="true">⠿</span>
+      <div class="visual-home-slide-media">${media ? `<img src="${esc(media)}" alt="">` : '<span>Sem foto</span>'}${isVideo ? '<b>▶ VÍDEO</b>' : ''}</div>
+      <div class="visual-home-slide-copy"><small>SLIDE ${index + 1}</small><strong>${esc(row.internal_title || row.title || `Slide ${index + 1}`)}</strong><span>${row.active === false ? 'Oculto na Home' : 'Visível na Home'}</span></div>
+      <div class="visual-home-slide-actions"><button type="button" data-visual-slide-edit="${row.id}">Editar</button><button type="button" data-visual-slide-duplicate="${row.id}">Duplicar</button><button type="button" class="danger" data-visual-slide-delete="${row.id}">Excluir</button></div>
+    </article>`;
+  }
+  async function importDefaultHomeCarousel(button) {
+    if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.');
+    return runAction(button, async () => {
+      const { count, error: countError } = await db.from('banners').select('id', { count: 'exact', head: true }).eq('position', 'home_hero');
+      if (countError) throw countError;
+      if (count) { toast('O carrossel já possui slides editáveis.'); return render('banners'); }
+      const values = defaultHomeHeroSlides.map(({ id, isDefaultHomeSlide, ...item }) => ({
+        ...item, image_mobile_url: null, video_desktop_url: null, video_mobile_url: null, poster_url: null,
+        position: 'home_hero', start_at: null, end_at: null, campaign_type: 'institutional', content_mode: 'banner',
+        category_id: null, promotion_id: null, link_type: 'link', alignment: 'left', display_locations: ['home'],
+        draft: false, paused: false, auto_include_category: false, deactivate_on_end: false, keep_products_after_end: true
+      }));
+      const { error } = await db.from('banners').insert(values);
+      if (error) throw error;
+      notifyStorefront('banners');
+      toast('Carrossel atual pronto para edição.');
+      render('banners');
+    });
+  }
+  async function renderVisualHomeEditor(revision) {
+    const [bannerResult, sectionResult] = await Promise.all([
+      db.from('banners').select('*').order('sort_order').order('created_at', { ascending: false }).limit(200),
+      db.from('site_sections').select('id,section_key,title,subtitle,content,active,sort_order').eq('section_key', 'ambient').maybeSingle()
+    ]);
+    if (bannerResult.error) throw bannerResult.error;
+    if (sectionResult.error) throw sectionResult.error;
+    if (revision !== viewRevision) return;
+    const rows = bannerResult.data || [];
+    const heroRows = rows.filter(row => row.position === 'home_hero');
+    const secondaryRows = rows.filter(row => row.position !== 'home_hero');
+    const ambient = sectionResult.data || null;
+    const ambientContent = highlightContent(ambient);
+    const visibleHeroRows = heroRows.length ? heroRows : defaultHomeHeroSlides;
+    const heroThumbs = visibleHeroRows.map((row, index) => {
+      const media = homePreviewMedia(row);
+      return `<figure>${media ? `<img src="${esc(media)}" alt="${esc(row.internal_title || row.title || `Slide ${index + 1}`)}">` : '<span>Sem foto</span>'}<figcaption>${index + 1}</figcaption>${row.media_type === 'video' ? '<b>▶</b>' : ''}</figure>`;
+    }).join('');
+    const ambientMedia = ambientContent.media_type === 'video' ? ambientContent.poster_url : ambientContent.image_desktop_url || 'assets/hero-sofa.png';
+    $('#content').innerHTML = `<div class="visual-home-page">
+      <section class="visual-home-intro"><div><span>EDIÇÃO VISUAL</span><h2>Edite a Home sem complicação</h2><p>Veja o que já está publicado e clique para trocar fotos, vídeos e textos.</p></div><a class="secondary" href="index.html" target="_blank" rel="noopener">Ver Home ↗</a></section>
+      <section class="visual-home-card visual-home-hero-card"><header><div><small>ÁREA PRINCIPAL</small><h2>CARROSSEL DO TOPO</h2><p>${heroRows.length ? `${heroRows.length} de 8 slides adicionados` : `${defaultHomeHeroSlides.length} slides atuais · prontos para editar`}</p></div><button class="primary-action" type="button" data-home-carousel-toggle>EDITAR CARROSSEL</button></header><div class="visual-home-thumbnails">${heroThumbs}</div>
+        <div class="visual-home-manager" data-home-carousel-manager hidden><div class="visual-home-manager-head"><div><h3>Slides do carrossel</h3><p>${heroRows.length ? 'Arraste para mudar a ordem. A Home é atualizada depois de salvar.' : 'As fotos atuais serão copiadas para o editor sem mudar o que já aparece no site.'}</p></div>${heroRows.length ? `<button class="secondary" type="button" data-visual-slide-add ${heroRows.length >= 8 ? 'disabled' : ''}>＋ Adicionar slide</button>` : '<button class="secondary" type="button" data-import-default-home>Começar a editar o carrossel atual</button>'}</div><div class="visual-home-slide-list">${heroRows.map(visualHomeSlideCard).join('') || '<p class="visual-home-list-empty">Clique no botão acima para tornar os slides atuais editáveis. Nada será apagado.</p>'}</div></div>
+      </section>
+      <section class="visual-home-card"><header><div><small>BLOCOS DA PÁGINA</small><h2>DESTAQUES DA HOME</h2><p>Edite os destaques existentes sem termos técnicos.</p></div></header><div class="visual-home-highlight-grid">
+        <article class="visual-home-highlight-card"><div class="visual-home-highlight-media">${ambientMedia ? `<img src="${esc(ambientMedia)}" alt="">` : '<span>Sem foto</span>'}${ambientContent.media_type === 'video' ? '<b>▶ VÍDEO</b>' : ''}</div><div><small>DESTAQUE</small><h3>${esc(ambientContent.eyebrow)}</h3><strong>${esc(ambientContent.title)}</strong><p>${esc(ambientContent.text)}</p><button type="button" data-home-highlight-edit>Editar destaque</button></div></article>
+        ${secondaryRows.map(row => `<article class="visual-home-highlight-card"><div class="visual-home-highlight-media">${homePreviewMedia(row) ? `<img src="${esc(homePreviewMedia(row))}" alt="">` : '<span>Sem foto</span>'}${row.media_type === 'video' ? '<b>▶ VÍDEO</b>' : ''}</div><div><small>DESTAQUE</small><h3>${esc(row.internal_title || row.title)}</h3><strong>${esc(row.title)}</strong><p>${esc(row.subtitle || '')}</p><button type="button" data-secondary-highlight-edit="${row.id}">Editar destaque</button></div></article>`).join('')}
+      </div></section>
+    </div>`;
+    $('[data-home-carousel-toggle]').onclick = buttonEvent => {
+      const manager = $('[data-home-carousel-manager]'); manager.hidden = !manager.hidden;
+      buttonEvent.currentTarget.textContent = manager.hidden ? 'EDITAR CARROSSEL' : 'FECHAR EDIÇÃO';
+      if (!manager.hidden) manager.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    };
+    $('[data-visual-slide-add]')?.addEventListener('click', () => openVisualHomeSlideEditor(null, 'home_hero'));
+    $('[data-import-default-home]')?.addEventListener('click', event => importDefaultHomeCarousel(event.currentTarget));
+    $$('[data-visual-slide-edit]').forEach(button => button.onclick = () => openVisualHomeSlideEditor(heroRows.find(row => row.id === button.dataset.visualSlideEdit), 'home_hero'));
+    $$('[data-secondary-highlight-edit]').forEach(button => button.onclick = () => {
+      const row = secondaryRows.find(item => item.id === button.dataset.secondaryHighlightEdit);
+      if (row) openVisualHomeSlideEditor(row, row.position);
+    });
+    $('[data-home-highlight-edit]')?.addEventListener('click', () => openHomeHighlightEditor(ambient));
+    $$('[data-visual-slide-duplicate]').forEach(button => button.onclick = () => runAction(button, async () => {
+      if (heroRows.length >= 8) throw new Error('O carrossel pode ter no máximo 8 slides.');
+      const row = heroRows.find(item => item.id === button.dataset.visualSlideDuplicate);
+      if (!row) return;
+      const { id, created_at, updated_at, ...copy } = row;
+      copy.internal_title = `${row.internal_title || row.title} (cópia)`;
+      copy.sort_order = Math.max(0, ...heroRows.map(item => Number(item.sort_order || 0))) + 10;
+      const { error } = await db.from('banners').insert(copy);
+      if (error) throw error;
+      notifyStorefront('banners'); toast('Slide duplicado.'); render('banners');
+    }));
+    $$('[data-visual-slide-delete]').forEach(button => button.onclick = () => runAction(button, async () => {
+      const row = heroRows.find(item => item.id === button.dataset.visualSlideDelete);
+      if (!row || !await confirmAction({ title: 'Excluir este slide?', message: 'Somente este slide será removido. Os demais conteúdos da Home permanecem intactos.', confirmLabel: 'Excluir slide', tone: 'danger' })) return;
+      const { error } = await db.from('banners').delete().eq('id', row.id);
+      if (error) throw error;
+      for (const url of [row.image_desktop_url,row.image_mobile_url,row.video_desktop_url,row.video_mobile_url,row.poster_url].filter(Boolean)) await removeUnusedBannerImage(url);
+      notifyStorefront('banners'); toast('Slide excluído.'); render('banners');
+    }));
+    let dragged = null;
+    $$('.visual-home-slide').forEach(card => {
+      card.addEventListener('dragstart', () => { dragged = card; card.classList.add('is-dragging'); });
+      card.addEventListener('dragend', () => { card.classList.remove('is-dragging'); dragged = null; });
+      card.addEventListener('dragover', event => { event.preventDefault(); if (!dragged || dragged === card) return; const rect = card.getBoundingClientRect(); card.parentElement.insertBefore(dragged, event.clientY < rect.top + rect.height / 2 ? card : card.nextSibling); });
+      card.addEventListener('drop', async event => {
+        event.preventDefault();
+        const cards = $$('.visual-home-slide');
+        const results = await Promise.all(cards.map((item, index) => db.from('banners').update({ sort_order: (index + 1) * 10 }).eq('id', item.dataset.homeSlideId)));
+        const error = results.find(result => result.error)?.error;
+        if (error) return toast(explain(error), 'error');
+        notifyStorefront('banners'); toast('Ordem dos slides atualizada.'); render('banners');
       });
     });
   }
@@ -5231,7 +5691,7 @@
       if (view === 'dashboard') await dashboard(revision);
       else if (view === 'products') await renderProducts(revision);
       else if (view === 'categories') await renderCategories(revision);
-      else if (view === 'banners') await renderBanners(revision);
+      else if (view === 'banners') await renderVisualHomeEditor(revision);
       else if (view === 'stock') await renderStock(revision);
       else if (view === 'leads') await renderLeads(revision);
       else if (view === 'orders') await renderOrders(revision);
@@ -5328,6 +5788,8 @@
     if (editorState?.view === 'products') return saveProduct(event);
     if (editorState?.view === 'categories') return saveCategory(event);
     if (editorState?.view === 'banners') return saveBanner(event);
+    if (editorState?.view === 'home-slide') return saveVisualHomeSlide(event);
+    if (editorState?.view === 'home-highlight') return saveHomeHighlight(event);
     return saveGeneric(event);
   });
   const editorDialog = $('#editorDialog');

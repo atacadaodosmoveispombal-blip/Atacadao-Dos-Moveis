@@ -22,6 +22,28 @@
       return ['http:', 'https:', 'mailto:', 'tel:'].includes(target.protocol) ? target.href : '#catalogo';
     } catch { return '#catalogo'; }
   };
+  function navigateCmsTarget(value) {
+    if (String(value || '').trim() === 'whatsapp') {
+      window.openWhatsApp?.();
+      return;
+    }
+    location.href = safeNavigationUrl(value);
+  }
+  function applyHeroSlideCopy(item) {
+    if (!item) return;
+    const hero = document.querySelector('.hero');
+    const title = hero?.querySelector('h1');
+    const subtitle = hero?.querySelector('.hero-copy>p:not(.eyebrow)');
+    const button = hero?.querySelector('.hero-copy .btn');
+    if (title && item.title) title.textContent = item.title;
+    if (subtitle && item.subtitle) subtitle.textContent = item.subtitle;
+    if (button) {
+      button.hidden = !item.buttonText;
+      if (item.buttonText) button.firstChild.textContent = `${item.buttonText} `;
+      if (item.buttonUrl) button.onclick = () => navigateCmsTarget(item.buttonUrl);
+    }
+  }
+  document.querySelector('.hero-carousel')?.addEventListener('atacarejo:hero-slide-change', event => applyHeroSlideCopy(event.detail));
   const storefrontBrl = value => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   let deepLinkOpened = false;
   let bootTimer;
@@ -184,7 +206,7 @@
     if (title && banner.title) title.textContent = banner.title;
     if (subtitle && banner.subtitle) subtitle.textContent = banner.subtitle;
     if (button && banner.button_text) button.firstChild.textContent = `${banner.button_text} `;
-    if (button && banner.button_url) button.onclick = () => { location.href = safeNavigationUrl(banner.button_url); };
+    if (button && banner.button_url) button.onclick = () => navigateCmsTarget(banner.button_url);
     const cleanHeroUrl = value => /editorial-room(?:-clean)?\.(?:jpg|png)/i.test(value || '') ? 'assets/editorial-room-clean.png?v=caption-removed-1' : value || '';
     const mediaSlides = slides.map((item, index) => {
       const video = item.media_type === 'video';
@@ -195,7 +217,8 @@
         posterUrl: cleanHeroUrl(item.poster_url || item.image_desktop_url || item.image_mobile_url),
         internalTitle: item.internal_title || item.title || `slide ${index + 1}`,
         alt: item.internal_title || item.title || '',
-        link: item.button_url ? safeNavigationUrl(item.button_url) : '',
+        title: item.title || '', subtitle: item.subtitle || '', buttonText: item.button_text || '', buttonUrl: item.button_url || '',
+        link: item.button_url && item.button_url !== 'whatsapp' ? safeNavigationUrl(item.button_url) : '',
         linkLabel: item.internal_title || item.title ? `Abrir ${item.internal_title || item.title}` : `Abrir slide ${index + 1}`
       };
     }).filter(item => item.desktopUrl);
@@ -223,7 +246,7 @@
       if (subtitle && banner.subtitle) subtitle.textContent = banner.subtitle;
       if (banner.image_desktop_url) slot.style.backgroundImage = `url("${banner.image_desktop_url.replace(/"/g, '%22')}")`;
       if (button && banner.button_text) button.textContent = `${banner.button_text} →`;
-      if (button && banner.button_url) button.onclick = () => { location.href = safeNavigationUrl(banner.button_url); };
+      if (button && banner.button_url) button.onclick = () => navigateCmsTarget(banner.button_url);
     });
   }
   function campaignPromotionFor(row, promotions) {
@@ -277,6 +300,47 @@
       return `<article class="inspiration-card"><img src="${escapeHtml(cover)}" alt="${escapeHtml(item.title)}" loading="lazy" width="800" height="560"><div><small>${escapeHtml(item.environments?.name || 'Inspiração')}</small><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.description || '')}</p></div></article>`;
     }).join('')}</div>`;
   }
+  function applyAmbientSection(section, element) {
+    if (!element) return;
+    const content = section.content && typeof section.content === 'object' ? section.content : {};
+    const eyebrow = element.querySelector('.ambient-copy>p');
+    const title = element.querySelector('.ambient-copy>h2');
+    const text = element.querySelector('.ambient-copy>span');
+    const button = element.querySelector('.ambient-copy>button');
+    const media = element.querySelector('.ambient-image');
+    if (eyebrow && content.eyebrow) eyebrow.textContent = content.eyebrow;
+    if (title && section.title) title.textContent = section.title;
+    if (text && (content.text || section.subtitle)) text.textContent = content.text || section.subtitle;
+    if (button) {
+      button.hidden = content.show_button === false;
+      if (content.button_text) button.textContent = `${content.button_text} →`;
+      button.onclick = () => navigateCmsTarget(content.button_url || '#catalogo');
+    }
+    if (!media) return;
+    media.querySelector('video')?.remove();
+    const mediaType = content.media_type === 'video' ? 'video' : 'image';
+    const desktopImage = content.image_desktop_url || 'assets/hero-sofa.png';
+    const mobileImage = content.image_mobile_url || desktopImage;
+    const poster = content.poster_url || desktopImage;
+    media.style.setProperty('--ambient-desktop-image', `url("${String(desktopImage).replace(/"/g, '%22')}")`);
+    media.style.setProperty('--ambient-mobile-image', `url("${String(mobileImage).replace(/"/g, '%22')}")`);
+    if (mediaType === 'video' && content.video_desktop_url) {
+      const video = document.createElement('video');
+      video.autoplay = true; video.muted = true; video.loop = true; video.playsInline = true;
+      video.preload = 'metadata'; video.poster = poster;
+      if (content.video_mobile_url) {
+        const mobileSource = document.createElement('source');
+        mobileSource.media = '(max-width: 720px)'; mobileSource.src = content.video_mobile_url;
+        video.append(mobileSource);
+      }
+      const desktopSource = document.createElement('source');
+      desktopSource.src = content.video_desktop_url;
+      video.append(desktopSource);
+      video.addEventListener('error', () => { video.hidden = true; }, { once: true });
+      media.append(video);
+      video.play().catch(() => {});
+    }
+  }
   function applySections(sections) {
     const map = {
       environments: document.querySelector('#categorias'), promotions: document.querySelector('#ofertas'),
@@ -289,6 +353,7 @@
     sections.forEach(section => {
       const element = map[section.section_key];
       if (!element) return;
+      if (section.section_key === 'ambient') applyAmbientSection(section, element);
       const needsBanner = ['hero', 'promo_banners'].includes(section.section_key);
       element.hidden = !section.active || (needsBanner && element.dataset.cmsHasBanner !== 'true');
       const title = element.querySelector('h2');
