@@ -189,17 +189,49 @@
   function confirmAction({ title = 'Confirmar ação?', message = 'Revise antes de continuar.', confirmLabel = 'Confirmar', tone = 'default' } = {}) {
     const dialog = $('#confirmDialog');
     if (dialog.open) dialog.close('cancel');
+    dialog.classList.remove('has-alternate');
     $('#confirmTitle').textContent = title;
     $('#confirmMessage').textContent = message;
+    const cancel = $('#confirmCancel');
     const accept = $('#confirmAccept');
+    const alternate = $('#confirmAlternate');
+    cancel.textContent = 'Cancelar';
     accept.textContent = confirmLabel;
     accept.classList.toggle('is-danger', tone === 'danger');
+    alternate.hidden = true;
     dialog.returnValue = 'cancel';
     return new Promise(resolve => {
       dialog.addEventListener('close', () => resolve(dialog.returnValue === 'confirm'), { once: true });
       dialog.addEventListener('cancel', () => { dialog.returnValue = 'cancel'; }, { once: true });
       dialog.showModal();
       requestAnimationFrame(() => $('#confirmCancel').focus());
+    });
+  }
+  function chooseMassDraftAction() {
+    const dialog = $('#confirmDialog');
+    if (dialog.open) dialog.close('cancel');
+    dialog.classList.add('has-alternate');
+    $('#confirmTitle').textContent = 'Cadastro em massa não finalizado';
+    $('#confirmMessage').textContent = 'Existe um rascunho salvo. Escolha continuar, sair mantendo o rascunho ou apagar tudo para começar novamente.';
+    const cancel = $('#confirmCancel');
+    const accept = $('#confirmAccept');
+    const alternate = $('#confirmAlternate');
+    cancel.textContent = 'Sair';
+    accept.textContent = 'Continuar cadastro';
+    accept.classList.remove('is-danger');
+    alternate.textContent = 'Apagar rascunho e iniciar do zero';
+    alternate.hidden = false;
+    dialog.returnValue = 'cancel';
+    return new Promise(resolve => {
+      dialog.addEventListener('close', () => {
+        const action = dialog.returnValue === 'confirm' ? 'continue' : dialog.returnValue === 'alternate' ? 'restart' : 'exit';
+        dialog.classList.remove('has-alternate');
+        alternate.hidden = true;
+        resolve(action);
+      }, { once: true });
+      dialog.addEventListener('cancel', () => { dialog.returnValue = 'cancel'; }, { once: true });
+      dialog.showModal();
+      requestAnimationFrame(() => cancel.focus());
     });
   }
   const dashboardIcon = name => {
@@ -435,6 +467,8 @@
   async function fieldHtml(field, record = {}) {
     const [key, label, type, required, choices] = field;
     const value = record[key] ?? '';
+    if (type === 'dimensions') return productDimensionsEditorHtml(record);
+    if (type === 'materials') return productMaterialsEditorHtml(record);
     if (type === 'checkbox') return `<label class="check-field"><input name="${key}" type="checkbox" ${value ? 'checked' : ''}> ${esc(label)}</label>`;
     if (type === 'textarea') return `<div class="field full"><label for="f-${key}">${esc(label)}</label><textarea id="f-${key}" name="${key}" ${required ? 'required' : ''}>${esc(value)}</textarea></div>`;
     if (type === 'select') return `<div class="field"><label for="f-${key}">${esc(label)}</label><select id="f-${key}" name="${key}">${choices.map(([v, text]) => `<option value="${v}" ${value === v ? 'selected' : ''}>${esc(text)}</option>`).join('')}</select></div>`;
@@ -454,7 +488,7 @@
     return `<div class="field"><label for="f-${key}">${esc(label)}</label><input id="f-${key}" name="${key}" type="${type === 'slug' ? 'text' : type}" value="${esc(formatted)}" ${required ? 'required' : ''} ${type === 'number' ? 'step="any"' : ''}></div>`;
   }
   function resetEditorChrome() {
-    $('#editorDialog').classList.remove('category-editor-dialog', 'banner-editor-dialog', 'quick-campaign-dialog', 'product-editor-dialog');
+    $('#editorDialog').classList.remove('category-editor-dialog', 'banner-editor-dialog', 'quick-campaign-dialog', 'product-editor-dialog', 'mass-product-dialog');
     $('#editorForm>header').classList.remove('quick-library-header');
     $('#editorForm>header .quick-library-heading-subtitle')?.remove();
     $('#editorForm>header .quick-library-heading-search')?.remove();
@@ -1157,8 +1191,20 @@
   function bannerLivePreviewImage(url) {
     const stage = $('#bannerPreviewStage');
     if (!stage) return;
+    const video = $('#bannerPreviewVideo');
+    if (video) { video.pause(); video.hidden = true; video.removeAttribute('src'); video.load(); }
     stage.style.backgroundImage = url ? `linear-gradient(90deg,rgba(3,32,82,.82),rgba(3,32,82,.12)),url("${String(url).replace(/"/g, '%22')}")` : '';
     stage.classList.toggle('has-image', Boolean(url));
+  }
+  function bannerLivePreviewVideo(url, poster = '') {
+    const stage = $('#bannerPreviewStage'), video = $('#bannerPreviewVideo');
+    if (!stage || !video) return;
+    stage.style.backgroundImage = poster ? `linear-gradient(90deg,rgba(3,32,82,.5),rgba(3,32,82,.08)),url("${String(poster).replace(/"/g, '%22')}")` : '';
+    stage.classList.toggle('has-image', Boolean(url || poster));
+    video.poster = poster;
+    video.hidden = !url;
+    if (url && video.src !== new URL(url, location.href).href) { video.src = url; video.load(); }
+    if (url) video.play().catch(() => {});
   }
   function syncBannerPreview() {
     const title = $('[name="title"]')?.value.trim() || 'Título do banner';
@@ -1166,9 +1212,13 @@
     const buttonText = $('[name="button_text"]')?.value.trim() || 'Ver produtos';
     const position = $('[name="position"]')?.value || 'home_hero';
     const alignment = $('[name="alignment"]')?.value || 'left';
+    const mediaType = $('[name="media_type"]')?.value || editorState?.record?.media_type || 'image';
     const mode = editorState?.bannerPreviewMode || 'desktop';
     const desktopUrl = editorState?.desktopPreviewUrl || editorState?.record?.image_desktop_url || '';
     const mobileUrl = editorState?.mobilePreviewUrl || editorState?.record?.image_mobile_url || desktopUrl;
+    const desktopVideoUrl = editorState?.desktopVideoPreviewUrl || editorState?.record?.video_desktop_url || '';
+    const mobileVideoUrl = editorState?.mobileVideoPreviewUrl || editorState?.record?.video_mobile_url || desktopVideoUrl;
+    const posterUrl = editorState?.posterPreviewUrl || editorState?.record?.poster_url || desktopUrl || mobileUrl;
     $('#bannerPreviewTitle').textContent = title;
     $('#bannerPreviewSubtitle').textContent = subtitle;
     $('#bannerPreviewButton').textContent = `${buttonText} →`;
@@ -1177,7 +1227,8 @@
     const selectedCount = $$('[name="campaign_products"]:checked').length;
     const productCount = $('#bannerPreviewProductCount');
     if (productCount) { productCount.textContent = selectedCount ? `${selectedCount} produto${selectedCount === 1 ? '' : 's'} selecionado${selectedCount === 1 ? '' : 's'}` : 'Produtos definidos pela categoria ou campanha'; }
-    bannerLivePreviewImage(mode === 'mobile' ? mobileUrl : desktopUrl);
+    if (mediaType === 'video') bannerLivePreviewVideo(mode === 'mobile' ? mobileVideoUrl : desktopVideoUrl, posterUrl);
+    else bannerLivePreviewImage(mode === 'mobile' ? mobileUrl : desktopUrl);
     const isExistingBanner = Boolean(editorState?.record);
     const isActiveBanner = Boolean($('[name="active"]')?.checked);
     $('#dialogEyebrow').textContent = !isExistingBanner ? '● Nova campanha' : (isActiveBanner ? '● Publicada no site' : '● Banner inativo');
@@ -1209,7 +1260,7 @@
       const cover = productCover(product);
       return `<label class="banner-product-option" data-product-category="${esc(product.category_id || '')}" data-product-search="${esc(`${product.name} ${product.sku || ''}`.toLowerCase())}"><input type="checkbox" name="campaign_products" value="${product.id}" ${selectedProducts.has(String(product.id)) ? 'checked' : ''}><span>${cover ? `<img src="${esc(cover)}" alt="">` : '<i>▦</i>'}<span><b>${esc(product.name)}</b><small>${product.sku ? esc(product.sku) : 'SKU não informado'} · ${brl(product.promotional_price ?? product.price)}</small></span></span></label>`;
     }).join('');
-    editorState = { view: 'banners', config: configs.banners, record, promotion, promotionOptions, saveMode: 'publish', bannerPreviewMode: 'desktop', desktopPreviewUrl: '', mobilePreviewUrl: '', previewObjectUrls: [], products, categories };
+    editorState = { view: 'banners', config: configs.banners, record, promotion, promotionOptions, saveMode: 'publish', bannerPreviewMode: 'desktop', desktopPreviewUrl: '', mobilePreviewUrl: '', desktopVideoPreviewUrl: '', mobileVideoPreviewUrl: '', posterPreviewUrl: '', previewObjectUrls: [], products, categories };
     $('#editorDialog').classList.add('banner-editor-dialog');
     $('#dialogEyebrow').textContent = record ? (record.active === false ? '● Banner inativo' : '● Publicada no site') : '● Nova campanha';
     $('#dialogEyebrow').className = record && record.active !== false ? 'is-live' : 'is-draft';
@@ -1229,16 +1280,20 @@
         </div><div class="campaign-source-fields"><label>Categoria relacionada<select name="category_id"><option value="">Todas as categorias</option>${categoryOptions}</select></label><label>Formato da campanha<select name="content_mode"><option value="banner" ${record?.content_mode === 'banner' || !record?.content_mode ? 'selected' : ''}>Apenas banner</option><option value="banner_products" ${record?.content_mode === 'banner_products' ? 'selected' : ''}>Banner + produtos</option><option value="products" ${record?.content_mode === 'products' ? 'selected' : ''}>Apenas seção de produtos</option></select></label></div><label class="banner-switch-row"><span><b>Incluir automaticamente novos produtos da categoria</b><small>Produtos cadastrados depois também entram nesta campanha enquanto ela estiver ativa.</small></span><input name="auto_include_category" type="checkbox" ${record?.auto_include_category || promotion?.auto_include_category ? 'checked' : ''}><i></i></label>
         <div class="campaign-products"><div class="campaign-products-toolbar"><div><b>Produtos da campanha</b><small id="campaignProductCount">${selectedProducts.size} selecionado${selectedProducts.size === 1 ? '' : 's'}</small></div><label><span>⌕</span><input id="campaignProductSearch" type="search" placeholder="Pesquisar produto ou SKU"></label><button id="selectAllCampaignProducts" type="button" class="secondary">Selecionar todos</button></div><div class="campaign-product-list">${productOptions || '<p>Nenhum produto disponível.</p>'}</div></div>
         <div class="campaign-promotion-fields"><label>Tipo da promoção<select name="promotion_type"><option value="display_only" ${promotion?.promotion_type === 'display_only' || !promotion ? 'selected' : ''}>Apenas divulgar produtos</option><option value="percentage" ${promotion?.promotion_type === 'percentage' ? 'selected' : ''}>Desconto percentual</option><option value="fixed" ${promotion?.promotion_type === 'fixed' ? 'selected' : ''}>Desconto em valor</option><option value="individual" ${promotion?.promotion_type === 'individual' ? 'selected' : ''}>Preços promocionais individuais</option></select></label><label>Valor do desconto<input name="discount_value" type="number" min="0" step="0.01" value="${esc(promotion?.discount_value ?? '')}" placeholder="Ex.: 15"><small>Não altera o preço original do produto.</small></label></div></section>
-        <section class="banner-editor-section"><header><span>2</span><div><h3>Imagem do banner</h3><p>Use arquivos separados para garantir o enquadramento ideal em cada tela.</p></div></header><div class="banner-image-pickers">
+        <section class="banner-editor-section"><header><span>2</span><div><h3>Mídia do slide</h3><p>Escolha imagem ou vídeo. A mídia mobile é opcional e usa automaticamente a versão desktop quando vazia.</p></div></header><div class="banner-fields banner-media-type"><label>Tipo de mídia<select name="media_type"><option value="image" ${record?.media_type !== 'video' ? 'selected' : ''}>Imagem</option><option value="video" ${record?.media_type === 'video' ? 'selected' : ''}>Vídeo</option></select></label><label>Título interno<input name="internal_title" type="text" value="${esc(record?.internal_title || record?.title || '')}" placeholder="Ex.: Hero sala de estar"></label></div><div class="banner-image-pickers" data-banner-image-fields>
           <label><b>Imagem para desktop</b><span class="banner-upload-box" id="desktopBannerBox">${record?.image_desktop_url ? `<img src="${esc(record.image_desktop_url)}" alt="Imagem desktop atual">` : '<i>▣</i><strong>Selecionar imagem</strong><small>Recomendado: 1920 × 760 px</small>'}</span><input name="image_desktop_url" type="file" accept="image/jpeg,image/png,image/webp"></label>
-          <label><b>Imagem para mobile</b><span class="banner-upload-box" id="mobileBannerBox">${record?.image_mobile_url ? `<img src="${esc(record.image_mobile_url)}" alt="Imagem mobile atual">` : '<i>▯</i><strong>Selecionar imagem</strong><small>Recomendado: 750 × 920 px</small>'}</span><input name="image_mobile_url" type="file" accept="image/jpeg,image/png,image/webp"></label>
+          <label><b>Imagem para mobile</b><span class="banner-upload-box" id="mobileBannerBox">${record?.image_mobile_url ? `<img src="${esc(record.image_mobile_url)}" alt="Imagem mobile atual">` : '<i>▯</i><strong>Selecionar imagem</strong><small>Opcional · recomendado: 750 × 920 px</small>'}</span><input name="image_mobile_url" type="file" accept="image/jpeg,image/png,image/webp"></label>
+        </div><div class="banner-image-pickers banner-video-pickers" data-banner-video-fields hidden>
+          <label><b>Vídeo para desktop</b><span class="banner-upload-box" id="desktopVideoBox">${record?.video_desktop_url ? `<video src="${esc(record.video_desktop_url)}" poster="${esc(record.poster_url || '')}" muted playsinline preload="metadata"></video>` : '<i>▶</i><strong>Selecionar vídeo</strong><small>MP4 ou WebM · até 50 MB</small>'}</span><input name="video_desktop_url" type="file" accept="video/mp4,video/webm"></label>
+          <label><b>Vídeo para mobile</b><span class="banner-upload-box" id="mobileVideoBox">${record?.video_mobile_url ? `<video src="${esc(record.video_mobile_url)}" poster="${esc(record.poster_url || '')}" muted playsinline preload="metadata"></video>` : '<i>▯</i><strong>Selecionar vídeo mobile</strong><small>Opcional · usa o desktop se vazio</small>'}</span><input name="video_mobile_url" type="file" accept="video/mp4,video/webm"></label>
+          <label><b>Imagem de capa / poster</b><span class="banner-upload-box" id="posterBannerBox">${record?.poster_url ? `<img src="${esc(record.poster_url)}" alt="Poster atual do vídeo">` : '<i>▣</i><strong>Selecionar poster</strong><small>Obrigatório para fallback</small>'}</span><input name="poster_url" type="file" accept="image/jpeg,image/png,image/webp"></label>
         </div></section>
-        <section class="banner-editor-section"><header><span>3</span><div><h3>Conteúdo</h3><p>Edite a mensagem que o cliente verá sobre a imagem.</p></div></header><div class="banner-fields"><label class="full">Título<input name="title" type="text" required value="${esc(record?.title || '')}" placeholder="Ex.: Sua casa com mais conforto"></label><label class="full">Subtítulo<textarea name="subtitle" placeholder="Explique a oferta em uma frase curta.">${esc(record?.subtitle || '')}</textarea></label><label>Texto do botão<input name="button_text" type="text" value="${esc(record?.button_text || '')}" placeholder="Ex.: Ver ofertas"></label><label>Alinhamento<select name="alignment"><option value="left" ${record?.alignment !== 'center' && record?.alignment !== 'right' ? 'selected' : ''}>À esquerda</option><option value="center" ${record?.alignment === 'center' ? 'selected' : ''}>Centralizado</option><option value="right" ${record?.alignment === 'right' ? 'selected' : ''}>À direita</option></select></label></div></section>
+        <section class="banner-editor-section"><header><span>3</span><div><h3>Conteúdo</h3><p>Edite a mensagem que o cliente verá sobre a mídia.</p></div></header><div class="banner-fields"><label class="full">Título visível<input name="title" type="text" required value="${esc(record?.title || '')}" placeholder="Ex.: Sua casa com mais conforto"></label><label class="full">Subtítulo<textarea name="subtitle" placeholder="Explique a oferta em uma frase curta.">${esc(record?.subtitle || '')}</textarea></label><label>Texto do botão<input name="button_text" type="text" value="${esc(record?.button_text || '')}" placeholder="Ex.: Ver ofertas"></label><label>Alinhamento<select name="alignment"><option value="left" ${record?.alignment !== 'center' && record?.alignment !== 'right' ? 'selected' : ''}>À esquerda</option><option value="center" ${record?.alignment === 'center' ? 'selected' : ''}>Centralizado</option><option value="right" ${record?.alignment === 'right' ? 'selected' : ''}>À direita</option></select></label></div></section>
         <section class="banner-editor-section"><header><span>4</span><div><h3>Onde aparecerá?</h3><p>Escolha uma posição compreensível. Os códigos internos ficam ocultos.</p></div></header><div class="banner-fields"><label>Posição principal<select name="position" required><option value="home_hero" ${record?.position === 'home_hero' || !record ? 'selected' : ''}>Hero principal</option><option value="home_middle" ${record?.position === 'home_middle' ? 'selected' : ''}>Banner abaixo das categorias</option><option value="home_bottom" ${record?.position === 'home_bottom' ? 'selected' : ''}>Banner entre produtos / promoções</option></select></label><label>Ordem de exibição<input name="sort_order" type="number" min="0" step="1" value="${Number(record?.sort_order || 10)}"></label></div><div class="banner-location-checks"><label><input type="checkbox" name="display_location" value="home" checked> Página inicial</label><label><input type="checkbox" name="display_location" value="offers" ${(record?.display_locations || []).includes('offers') ? 'checked' : ''}> Página de ofertas</label><label><input type="checkbox" name="display_location" value="category" ${(record?.display_locations || []).includes('category') ? 'checked' : ''}> Página de categoria</label></div><label class="banner-switch-row"><span><b>Campanha publicada</b><small>Pode aparecer quando estiver dentro do período programado.</small></span><input name="active" type="checkbox" ${record?.active !== false ? 'checked' : ''}><i></i></label></section>
         <section class="banner-editor-section"><header><span>5</span><div><h3>Botão e destino</h3><p>Defina o que acontece quando o cliente clica no botão.</p></div></header><div class="banner-fields"><label>Destino<select name="link_type"><option value="link" ${(record?.link_type || destination.key) === 'link' ? 'selected' : ''}>Página ou link personalizado</option><option value="category" ${(record?.link_type || destination.key) === 'category' ? 'selected' : ''}>Categoria</option><option value="product" ${(record?.link_type || destination.key) === 'product' ? 'selected' : ''}>Produto</option><option value="promotion" ${(record?.link_type || destination.key) === 'promotion' ? 'selected' : ''}>Promoção</option></select></label><label id="bannerDestinationTargetWrap" hidden>Destino específico<select id="bannerDestinationTarget"><option value="">Selecione uma opção</option></select><small>O endereço é preenchido automaticamente.</small></label><label class="full">Endereço de destino<input name="button_url" type="text" value="${esc(record?.button_url || '')}" placeholder="#catalogo, ?product=... ou URL completa"><small id="bannerDestinationHelp">Use uma seção como #catalogo ou cole o endereço completo.</small></label></div></section>
         <section class="banner-editor-section"><header><span>6</span><div><h3>Quando essa campanha deve aparecer?</h3><p>Publique agora ou programe um período específico.</p></div></header><label class="banner-switch-row"><span><b>Publicar continuamente</b><small>Sem data de início ou encerramento.</small></span><input name="permanent" type="checkbox" ${permanent ? 'checked' : ''}><i></i></label><div class="banner-fields banner-schedule-fields"><label>Data e hora de início<input name="start_at" type="datetime-local" value="${esc(dateValue(record?.start_at))}" ${permanent ? 'disabled' : ''}></label><label>Data e hora de término<input name="end_at" type="datetime-local" value="${esc(dateValue(record?.end_at))}" ${permanent ? 'disabled' : ''}></label></div><label class="banner-switch-row"><span><b>Desativar automaticamente ao terminar</b><small>O site deixa de exibir a campanha após a data final.</small></span><input name="deactivate_on_end" type="checkbox" ${record?.deactivate_on_end !== false ? 'checked' : ''}><i></i></label><label class="banner-switch-row"><span><b>Manter produtos no catálogo depois da campanha</b><small>A campanha termina sem ocultar ou excluir nenhum produto.</small></span><input name="keep_products_after_end" type="checkbox" ${record?.keep_products_after_end !== false ? 'checked' : ''}><i></i></label></section>
       </div>
-      <aside class="banner-live-preview"><div class="banner-preview-heading"><div><span>PRÉ-VISUALIZAÇÃO</span><b id="bannerPreviewPosition">${esc(bannerPositionLabels[record?.position] || 'Hero principal da Home')}</b></div><div class="banner-device-tabs" role="group" aria-label="Tamanho da prévia"><button class="is-active" type="button" data-banner-device="desktop">Desktop</button><button type="button" data-banner-device="tablet">Tablet</button><button type="button" data-banner-device="mobile">Celular</button></div></div><div class="banner-preview-canvas desktop" id="bannerPreviewCanvas"><div class="banner-preview-stage" id="bannerPreviewStage" data-alignment="${esc(record?.alignment || 'left')}"><div><small>ATACAREJO DOS MÓVEIS</small><strong id="bannerPreviewTitle">${esc(record?.title || 'Título do banner')}</strong><p id="bannerPreviewSubtitle">${esc(record?.subtitle || 'A mensagem principal aparecerá aqui para seus clientes.')}</p><em id="bannerPreviewProductCount">${selectedProducts.size ? `${selectedProducts.size} produto${selectedProducts.size === 1 ? '' : 's'} selecionado${selectedProducts.size === 1 ? '' : 's'}` : 'Produtos definidos pela categoria ou campanha'}</em><button id="bannerPreviewButton" type="button">${esc(record?.button_text || 'Ver produtos')} →</button></div></div></div><p>A prévia é atualizada enquanto você edita. O enquadramento final acompanha o tamanho da tela do cliente.</p></aside>
+      <aside class="banner-live-preview"><div class="banner-preview-heading"><div><span>PRÉ-VISUALIZAÇÃO</span><b id="bannerPreviewPosition">${esc(bannerPositionLabels[record?.position] || 'Hero principal da Home')}</b></div><div class="banner-device-tabs" role="group" aria-label="Tamanho da prévia"><button class="is-active" type="button" data-banner-device="desktop">Desktop</button><button type="button" data-banner-device="tablet">Tablet</button><button type="button" data-banner-device="mobile">Celular</button></div></div><div class="banner-preview-canvas desktop" id="bannerPreviewCanvas"><div class="banner-preview-stage" id="bannerPreviewStage" data-alignment="${esc(record?.alignment || 'left')}"><video id="bannerPreviewVideo" muted playsinline loop controls hidden></video><div><small>ATACAREJO DOS MÓVEIS</small><strong id="bannerPreviewTitle">${esc(record?.title || 'Título do banner')}</strong><p id="bannerPreviewSubtitle">${esc(record?.subtitle || 'A mensagem principal aparecerá aqui para seus clientes.')}</p><em id="bannerPreviewProductCount">${selectedProducts.size ? `${selectedProducts.size} produto${selectedProducts.size === 1 ? '' : 's'} selecionado${selectedProducts.size === 1 ? '' : 's'}` : 'Produtos definidos pela categoria ou campanha'}</em><button id="bannerPreviewButton" type="button">${esc(record?.button_text || 'Ver produtos')} →</button></div></div></div><p>A prévia é atualizada enquanto você edita. O enquadramento final acompanha o tamanho da tela do cliente.</p></aside>
     </div>`;
     const permanentInput = $('[name="permanent"]');
     const syncSchedule = () => { $$('[name="start_at"], [name="end_at"]').forEach(input => { input.disabled = permanentInput.checked; if (permanentInput.checked) input.value = ''; }); };
@@ -1307,6 +1362,37 @@
     };
     bindImagePreview('image_desktop_url', 'desktopBannerBox', 'desktopPreviewUrl');
     bindImagePreview('image_mobile_url', 'mobileBannerBox', 'mobilePreviewUrl');
+    bindImagePreview('poster_url', 'posterBannerBox', 'posterPreviewUrl');
+    const bindVideoPreview = (name, boxId, stateKey) => {
+      const input = $(`[name="${name}"]`);
+      input.onchange = () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        if (!allowedVideoTypes.has(file.type)) { input.value = ''; return toast('Formato inválido. Envie um vídeo MP4 ou WebM.', 'error'); }
+        if (file.size > maxVideoBytes) { input.value = ''; return toast('O vídeo deve ter no máximo 50 MB.', 'error'); }
+        const url = URL.createObjectURL(file);
+        editorState.previewObjectUrls.push(url);
+        editorState[stateKey] = url;
+        $(`#${boxId}`).innerHTML = `<video src="${esc(url)}" muted playsinline controls preload="metadata"></video>`;
+        syncBannerPreview();
+      };
+    };
+    bindVideoPreview('video_desktop_url', 'desktopVideoBox', 'desktopVideoPreviewUrl');
+    bindVideoPreview('video_mobile_url', 'mobileVideoBox', 'mobileVideoPreviewUrl');
+    const syncMediaFields = () => {
+      const hero = $('[name="position"]').value === 'home_hero';
+      const mediaType = $('[name="media_type"]');
+      const videoOption = mediaType.querySelector('option[value="video"]');
+      videoOption.disabled = !hero;
+      if (!hero && mediaType.value === 'video') mediaType.value = 'image';
+      $('[data-banner-image-fields]').hidden = mediaType.value !== 'image';
+      $('[data-banner-video-fields]').hidden = mediaType.value !== 'video';
+      syncBannerPreview();
+    };
+    $('[name="media_type"]').onchange = syncMediaFields;
+    $('[name="position"]').addEventListener('change', syncMediaFields);
+    $('[name="internal_title"]').addEventListener('input', syncBannerPreview);
+    syncMediaFields();
     syncBannerPreview();
     $('#editorDialog').showModal();
   }
@@ -1323,7 +1409,7 @@
     button.textContent = 'Salvando…';
     try {
       const [bannerSchema, promotionSchema] = await Promise.all([
-        db.from('banners').select('campaign_type,content_mode,display_locations,promotion_id').limit(1),
+        db.from('banners').select('campaign_type,content_mode,display_locations,promotion_id,internal_title,media_type,video_desktop_url,video_mobile_url,poster_url').limit(1),
         db.from('promotions').select('promotion_type,discount_value,category_id,selection_mode').limit(1)
       ]);
       const schemaError = bannerSchema.error || promotionSchema.error;
@@ -1333,6 +1419,16 @@
       const selectedProductIds = [...form.querySelectorAll('[name="campaign_products"]:checked')].map(input => input.value);
       const campaignType = form.querySelector('[name="campaign_type"]:checked')?.value || 'custom';
       const categoryId = form.elements.category_id.value || null;
+      const position = form.elements.position.value;
+      const mediaType = position === 'home_hero' ? form.elements.media_type.value : 'image';
+      const desktopImageFile = form.elements.image_desktop_url.files?.[0] || null;
+      const mobileImageFile = form.elements.image_mobile_url.files?.[0] || null;
+      const desktopVideoFile = form.elements.video_desktop_url.files?.[0] || null;
+      const mobileVideoFile = form.elements.video_mobile_url.files?.[0] || null;
+      const posterFile = form.elements.poster_url.files?.[0] || null;
+      if (mediaType === 'image' && !desktopImageFile && !record?.image_desktop_url && !record?.image_mobile_url) throw new Error('Selecione a imagem desktop do slide.');
+      if (mediaType === 'video' && !desktopVideoFile && !record?.video_desktop_url) throw new Error('Selecione o vídeo desktop do slide.');
+      if (mediaType === 'video' && !posterFile && !record?.poster_url) throw new Error('Selecione uma imagem de capa para o fallback do vídeo.');
       const startAt = permanent || !form.elements.start_at.value ? null : new Date(form.elements.start_at.value).toISOString();
       const endAt = permanent || !form.elements.end_at.value ? null : new Date(form.elements.end_at.value).toISOString();
       if (startAt && endAt && new Date(endAt) <= new Date(startAt)) throw new Error('A data final precisa ser posterior à data inicial.');
@@ -1342,21 +1438,35 @@
         if (!await confirmAction({ title: 'Confirmar publicação?', message: summary, confirmLabel: 'Salvar e publicar' })) { button.disabled = false; button.textContent = 'Salvar e publicar'; return; }
       }
       const values = {
-        title: form.elements.title.value.trim(), subtitle: form.elements.subtitle.value.trim() || null,
+        title: form.elements.title.value.trim(), internal_title: form.elements.internal_title.value.trim() || form.elements.title.value.trim(), subtitle: form.elements.subtitle.value.trim() || null,
         button_text: form.elements.button_text.value.trim() || null, button_url: form.elements.button_url.value.trim() || null,
-        position: form.elements.position.value, sort_order: Number(form.elements.sort_order.value || 0), active: saveMode === 'publish' && form.elements.active.checked,
+        position, media_type: mediaType, sort_order: Number(form.elements.sort_order.value || 0), active: saveMode === 'publish' && form.elements.active.checked,
         start_at: startAt, end_at: endAt, campaign_type: campaignType, content_mode: form.elements.content_mode.value,
         category_id: categoryId, link_type: form.elements.link_type.value, alignment: form.elements.alignment.value,
         display_locations: [...form.querySelectorAll('[name="display_location"]:checked')].map(input => input.value),
         draft: saveMode === 'draft', paused: false, auto_include_category: form.elements.auto_include_category.checked,
         deactivate_on_end: form.elements.deactivate_on_end.checked, keep_products_after_end: form.elements.keep_products_after_end.checked
       };
-      for (const key of ['image_desktop_url', 'image_mobile_url']) {
-        const file = form.elements[key].files?.[0];
-        if (file) {
+      if (mediaType === 'image') {
+        values.video_desktop_url = null; values.video_mobile_url = null; values.poster_url = null;
+        for (const [key, file] of [['image_desktop_url', desktopImageFile], ['image_mobile_url', mobileImageFile]]) {
+          if (!file) continue;
           const saved = await upload('banners', file, record?.id || 'novos');
           uploadedImages.push({ key, ...saved });
           values[key] = saved.url;
+        }
+      } else {
+        values.image_desktop_url = null; values.image_mobile_url = null;
+        for (const [key, file] of [['video_desktop_url', desktopVideoFile], ['video_mobile_url', mobileVideoFile]]) {
+          if (!file) continue;
+          const saved = await uploadBannerVideo(file, record?.id || 'novos');
+          uploadedImages.push({ key, ...saved });
+          values[key] = saved.url;
+        }
+        if (posterFile) {
+          const saved = await upload('banners', posterFile, `${record?.id || 'novos'}/posters`);
+          uploadedImages.push({ key: 'poster_url', ...saved });
+          values.poster_url = saved.url;
         }
       }
       const needsPromotion = ['promotion', 'category', 'products', 'new_arrivals', 'best_sellers', 'clearance'].includes(campaignType) || selectedProductIds.length > 0;
@@ -1364,7 +1474,7 @@
       if (needsPromotion) {
         const promotionValues = {
           title: values.title, description: values.subtitle, start_at: startAt, end_at: endAt, active: values.active,
-          banner_url: values.image_desktop_url || record?.image_desktop_url || null,
+          banner_url: values.image_desktop_url || values.poster_url || record?.image_desktop_url || record?.poster_url || null,
           promotion_type: form.elements.promotion_type.value, discount_value: form.elements.discount_value.value === '' ? null : Number(form.elements.discount_value.value),
           category_id: categoryId, selection_mode: form.elements.auto_include_category.checked ? 'all_category' : 'manual', auto_include_category: form.elements.auto_include_category.checked
         };
@@ -1382,13 +1492,16 @@
       values.promotion_id = promotionId;
       const result = record ? await db.from('banners').update(values).eq('id', record.id).select().single() : await db.from('banners').insert(values).select().single();
       if (result.error) {
-        if (result.error.code === '42703' || /campaign_type|content_mode|promotion_id|display_locations/i.test(result.error.message || '')) throw new Error('Execute a migration 20260920_visual_campaign_manager.sql no Supabase antes de salvar campanhas completas.');
+        if (result.error.code === '42703' || /internal_title|media_type|video_desktop_url|video_mobile_url|poster_url/i.test(result.error.message || '')) throw new Error('Execute a migration 20261007_hero_media_carousel.sql no Supabase antes de salvar slides com vídeo.');
+        if (/campaign_type|content_mode|promotion_id|display_locations/i.test(result.error.message || '')) throw new Error('Execute a migration 20260920_visual_campaign_manager.sql no Supabase antes de salvar campanhas completas.');
         throw result.error;
       }
       persisted = true;
-      for (const saved of uploadedImages) {
-        const previousUrl = record?.[saved.key];
-        if (previousUrl && previousUrl !== saved.url) await removeUnusedBannerImage(previousUrl);
+      const mediaKeys = ['image_desktop_url','image_mobile_url','video_desktop_url','video_mobile_url','poster_url'];
+      for (const key of mediaKeys) {
+        const previousUrl = record?.[key];
+        const currentUrl = key in values ? values[key] : previousUrl;
+        if (previousUrl && previousUrl !== currentUrl) await removeUnusedBannerImage(previousUrl);
       }
       rollbackPromotionId = null;
       notifyStorefront('banners');
@@ -1398,7 +1511,8 @@
     } catch (error) {
       if (!persisted) await Promise.all(uploadedImages.map(saved => db.storage.from(saved.bucket).remove([saved.path])));
       if (rollbackPromotionId) await db.from('promotions').delete().eq('id', rollbackPromotionId);
-      if (error?.code === '42703' || /campaign_type|content_mode|promotion_id|promotion_type|display_locations/i.test(error?.message || '')) toast('Execute a migration 20260920_visual_campaign_manager.sql no Supabase antes de salvar campanhas completas.');
+      if (/20261007_hero_media_carousel|internal_title|media_type|video_desktop_url|video_mobile_url|poster_url/i.test(error?.message || '')) toast('Execute a migration 20261007_hero_media_carousel.sql no Supabase antes de salvar slides com vídeo.', 'error');
+      else if (error?.code === '42703' || /campaign_type|content_mode|promotion_id|promotion_type|display_locations/i.test(error?.message || '')) toast('Execute a migration 20260920_visual_campaign_manager.sql no Supabase antes de salvar campanhas completas.');
       else toast(explain(error));
     }
     finally { button.disabled = false; button.textContent = 'Salvar e publicar'; }
@@ -1444,21 +1558,43 @@
       if (insertError) throw insertError;
     }
   }
+  function isDimensionsProductImage(item) {
+    return item?.image_role === 'dimensions';
+  }
+  function orderedProductMedia(items = []) {
+    const rows = [...items];
+    const mainOriginal = rows
+      .filter(item => item.media_type !== 'video' && !isDimensionsProductImage(item))
+      .sort((a, b) => Number(b.is_cover) - Number(a.is_cover) || Number(a.sort_order || 0) - Number(b.sort_order || 0))[0];
+    return rows.sort((a, b) => {
+      const rank = item => item.id === mainOriginal?.id ? 0 : isDimensionsProductImage(item) ? 1 : 2;
+      return rank(a) - rank(b) || Number(a.sort_order || 0) - Number(b.sort_order || 0);
+    });
+  }
   async function loadGallery(parentId, table, foreignKey) {
     const productGallery = table === 'product_images';
     const bucket = productGallery ? 'products' : 'inspirations';
     const { data, error } = await db.from(table).select('*').eq(foreignKey, parentId).order('sort_order');
     if (error) throw error;
-    if (productGallery && editorState?.view === 'products') editorState.existingGalleryCount = (data || []).length;
+    const displayRows = productGallery ? orderedProductMedia(data || []) : (data || []);
+    if (productGallery && editorState?.view === 'products') {
+      editorState.existingGalleryCount = displayRows.filter(item => !isDimensionsProductImage(item)).length;
+      if (editorState.record) editorState.record.product_images = displayRows;
+      renderDimensionsImagePreview(displayRows.find(isDimensionsProductImage));
+      syncDimensionsImageTool();
+    }
     const root = $('#existingGallery');
     if (!root) return;
-    root.innerHTML = (data || []).map((item, index, rows) => {
+    const movableRows = displayRows.filter(item => !isDimensionsProductImage(item));
+    root.innerHTML = displayRows.map((item, index) => {
       const type = productGallery && item.media_type === 'video' ? 'video' : 'image';
+      const dimensionsImage = productGallery && isDimensionsProductImage(item);
+      const movableIndex = movableRows.findIndex(media => media.id === item.id);
       const preview = type === 'video'
         ? `<div class="product-media-video-preview"><video src="${esc(item.image_url)}" poster="${esc(item.poster_url || '')}" preload="metadata" muted playsinline></video><span aria-hidden="true">▶</span></div>`
         : `<img src="${esc(item.image_url)}" alt="Foto ${index + 1}">`;
-      const label = type === 'video' ? `VÍDEO ${index + 1}` : item.is_cover ? '<b>FOTO · CAPA</b>' : `FOTO ${index + 1}`;
-      return `<figure data-media-id="${item.id}" data-media-type="${type}">${preview}<figcaption>${label}</figcaption><div class="gallery-actions">${productGallery && type === 'image' && !item.is_cover ? `<button type="button" data-media-cover="${item.id}">Capa</button>` : ''}<button type="button" data-media-move="up" ${index === 0 ? 'disabled' : ''} aria-label="Mover mídia para a esquerda">←</button><button type="button" data-media-move="down" ${index === rows.length - 1 ? 'disabled' : ''} aria-label="Mover mídia para a direita">→</button><button type="button" class="danger" data-media-delete="${item.id}" aria-label="Excluir ${type === 'video' ? 'vídeo' : 'foto'}">×</button></div></figure>`;
+      const label = dimensionsImage ? '<b>FOTO · MEDIDAS</b>' : type === 'video' ? `VÍDEO ${index + 1}` : item.is_cover ? '<b>FOTO · CAPA</b>' : `FOTO ${index + 1}`;
+      return `<figure data-media-id="${item.id}" data-media-type="${type}" data-media-role="${esc(item.image_role || 'gallery')}">${preview}<figcaption>${label}</figcaption><div class="gallery-actions">${productGallery && type === 'image' && !item.is_cover && !dimensionsImage ? `<button type="button" data-media-cover="${item.id}">Capa</button>` : ''}${dimensionsImage ? '' : `<button type="button" data-media-move="up" ${movableIndex === 0 ? 'disabled' : ''} aria-label="Mover mídia para a esquerda">←</button><button type="button" data-media-move="down" ${movableIndex === movableRows.length - 1 ? 'disabled' : ''} aria-label="Mover mídia para a direita">→</button>`}<button type="button" class="danger" data-media-delete="${item.id}" aria-label="Excluir ${dimensionsImage ? 'foto com medidas' : type === 'video' ? 'vídeo' : 'foto'}">×</button></div></figure>`;
     }).join('');
     $$('[data-media-cover]', root).forEach(button => button.onclick = async () => {
       const { error: clearError } = await db.from(table).update({ is_cover: false }).eq(foreignKey, parentId);
@@ -1469,7 +1605,7 @@
     });
     $$('[data-media-move]', root).forEach(button => button.onclick = async () => {
       const figure = button.closest('figure');
-      const figures = $$('figure', root);
+      const figures = $$('figure:not([data-media-role="dimensions"])', root);
       const from = figures.indexOf(figure);
       const to = button.dataset.mediaMove === 'up' ? from - 1 : from + 1;
       if (to < 0 || to >= figures.length) return;
@@ -1484,15 +1620,15 @@
       notifyStorefront(table); await loadGallery(parentId, table, foreignKey);
     });
     $$('[data-media-delete]', root).forEach(button => button.onclick = () => runAction(button, async () => {
-      const item = (data || []).find(media => media.id === button.dataset.mediaDelete);
-      const kind = productGallery && item?.media_type === 'video' ? 'vídeo' : 'imagem';
+      const item = displayRows.find(media => media.id === button.dataset.mediaDelete);
+      const kind = isDimensionsProductImage(item) ? 'foto com medidas' : productGallery && item?.media_type === 'video' ? 'vídeo' : 'imagem';
       if (!await confirmAction({ title: `Remover este ${kind}?`, message: `O ${kind} será removido deste produto. Esta ação não poderá ser desfeita.`, confirmLabel: 'Remover', tone: 'danger' })) return;
       const { error: deleteError } = await db.from(table).delete().eq('id', button.dataset.mediaDelete);
       if (deleteError) return toast(explain(deleteError), 'error');
       const storedPaths = [item?.storage_path, item?.poster_storage_path].filter(Boolean);
       if (storedPaths.length && /\/storage\/v1\/object\//.test(item.image_url || '')) await db.storage.from(bucket).remove(storedPaths);
       if (productGallery && item?.is_cover) {
-        const { data: next } = await db.from(table).select('id').eq(foreignKey, parentId).eq('media_type', 'image').order('sort_order').limit(1).maybeSingle();
+        const { data: next } = await db.from(table).select('id').eq(foreignKey, parentId).eq('media_type', 'image').neq('image_role', 'dimensions').order('sort_order').limit(1).maybeSingle();
         if (next) await db.from(table).update({ is_cover: true }).eq('id', next.id);
       }
       notifyStorefront(table); toast(`${kind.charAt(0).toUpperCase() + kind.slice(1)} removido.`); await loadGallery(parentId, table, foreignKey);
@@ -1552,9 +1688,9 @@
   }
   async function removeUnusedBannerImage(url) {
     if (!storageReference(url)) return;
-    const [banners, promotions] = await Promise.all([db.from('banners').select('image_desktop_url,image_mobile_url'), db.from('promotions').select('banner_url')]);
+    const [banners, promotions] = await Promise.all([db.from('banners').select('image_desktop_url,image_mobile_url,video_desktop_url,video_mobile_url,poster_url'), db.from('promotions').select('banner_url')]);
     if (banners.error || promotions.error) return console.warn('Não foi possível verificar referências da imagem; o arquivo foi mantido por segurança.', banners.error || promotions.error);
-    const usedByBanner = (banners.data || []).some(item => item.image_desktop_url === url || item.image_mobile_url === url);
+    const usedByBanner = (banners.data || []).some(item => ['image_desktop_url','image_mobile_url','video_desktop_url','video_mobile_url','poster_url'].some(key => item[key] === url));
     const usedByPromotion = (promotions.data || []).some(item => item.banner_url === url);
     if (!usedByBanner && !usedByPromotion) await removeStoredUrl(url, 'banners');
   }
@@ -1565,6 +1701,15 @@
     const { error } = await db.storage.from(bucket).upload(path, optimized, { cacheControl: '31536000', contentType: optimized.type, upsert: false });
     if (error) throw error;
     return { url: db.storage.from(bucket).getPublicUrl(path).data.publicUrl, path, bucket };
+  }
+  async function uploadBannerVideo(file, folder = '') {
+    if (!allowedVideoTypes.has(file.type)) throw new Error('Formato inválido. Envie um vídeo MP4 ou WebM.');
+    if (file.size > maxVideoBytes) throw new Error('O vídeo selecionado ultrapassa o tamanho máximo permitido de 50 MB.');
+    const extension = file.type === 'video/webm' ? 'webm' : 'mp4';
+    const path = `${folder ? folder + '/videos/' : 'videos/'}${crypto.randomUUID()}.${extension}`;
+    const { error } = await db.storage.from('banners').upload(path, file, { cacheControl: '31536000', contentType: file.type, upsert: false });
+    if (error) throw error;
+    return { url: db.storage.from('banners').getPublicUrl(path).data.publicUrl, path, bucket: 'banners' };
   }
   async function createVideoPoster(file) {
     const source = URL.createObjectURL(file);
@@ -1617,6 +1762,7 @@
   function formValues(fields, form) {
     const values = {};
     fields.forEach(([key, , type]) => {
+      if (type === 'materials') { values[key] = productMaterialValueFromForm(form); return; }
       const input = form.elements[key];
       if (!input || ['file', 'multifile', 'productmedia'].includes(type)) return;
       if (type === 'checkbox') values[key] = input.checked;
@@ -1634,7 +1780,10 @@
     const table = product ? 'product_images' : 'inspiration_images';
     const foreignKey = product ? 'product_id' : 'inspiration_id';
     const bucket = product ? 'products' : 'inspirations';
-    const { count: total } = await db.from(table).select('id', { count: 'exact', head: true }).eq(foreignKey, parentId);
+    let countQuery = db.from(table).select('id', { count: 'exact', head: true }).eq(foreignKey, parentId);
+    if (product) countQuery = countQuery.neq('image_role', 'dimensions');
+    const { count: total, error: countError } = await countQuery;
+    if (countError) throw countError;
     const max = product ? 10 : 4;
     if ((total || 0) + files.length > max) throw new Error(`Envie no máximo ${max} ${product ? 'mídias' : 'fotos'}.`);
     const created = [];
@@ -1651,7 +1800,7 @@
         const mediaType = product && allowedVideoTypes.has(file.type) ? 'video' : 'image';
         const saved = mediaType === 'video' ? await uploadProductVideo(file, parentId) : await upload(bucket, file, parentId);
         const row = { [foreignKey]: parentId, image_url: saved.url, storage_path: saved.path, sort_order: (total || 0) + index };
-        if (product) Object.assign(row, { media_type: mediaType, poster_url: saved.posterUrl || null, poster_storage_path: saved.posterPath || null, is_cover: false });
+        if (product) Object.assign(row, { media_type: mediaType, poster_url: saved.posterUrl || null, poster_storage_path: saved.posterPath || null, is_cover: false, image_role: 'gallery' });
         const { data, error } = await db.from(table).insert(row).select('id').single();
         if (error) { await db.storage.from(bucket).remove([saved.path, saved.posterPath].filter(Boolean)); throw error; }
         created.push({ id: data.id, path: saved.path, posterPath: saved.posterPath || null, file, mediaType });
@@ -1963,14 +2112,16 @@
   function bannerCard(row, now, productCount = 0) {
     const status = bannerSchedule(row, now);
     const destination = bannerDestination(row.button_url);
-    const image = row.image_desktop_url || row.image_mobile_url;
+    const internalTitle = row.internal_title || row.title;
+    const isVideo = row.media_type === 'video';
+    const image = isVideo ? row.poster_url : row.image_desktop_url || row.image_mobile_url;
     const campaignTypes = { promotion: 'Promoção', category: 'Categoria', products: 'Produtos específicos', new_arrivals: 'Novidades', best_sellers: 'Mais vendidos', clearance: 'Liquidação', institutional: 'Institucional', custom: 'Personalizado' };
     const campaignType = campaignTypes[row.campaign_type] || (row.position === 'home_hero' ? 'Institucional' : 'Banner personalizado');
     const contentLabel = row.auto_include_category ? 'Todos os produtos da categoria' : productCount ? `${productCount} produto${productCount === 1 ? '' : 's'} selecionado${productCount === 1 ? '' : 's'}` : row.content_mode === 'products' ? 'Seção automática de produtos' : 'Apenas conteúdo visual';
     const period = status.key === 'scheduled' ? status.detail : (!row.start_at && !row.end_at ? 'Sempre ativo' : `${row.start_at ? dateTime(row.start_at) : 'Agora'} → ${row.end_at ? dateTime(row.end_at) : 'Sem término'}`);
     const actions = ActionMenu({
       id: `banner-${row.id}`,
-      label: row.title,
+      label: internalTitle,
       primary: { label: 'Editar', icon: 'edit', attributes: { 'data-banner-edit': row.id } },
       actions: [
         { label: 'Visualizar', icon: 'view', attributes: { 'data-banner-preview': row.id } },
@@ -1983,10 +2134,10 @@
         { label: 'Excluir', icon: 'trash', danger: true, attributes: { 'data-banner-delete': row.id } }
       ]
     });
-    return `<article class="banner-card" data-banner-id="${row.id}" data-position="${esc(row.position)}" data-campaign="${esc(row.campaign_type || 'custom')}" data-status="${status.key}" data-title="${esc(String(row.title || '').toLowerCase())}" data-order="${Number(row.sort_order || 0)}">
-      <div class="banner-card-preview" ${image ? `style="background-image:linear-gradient(90deg,rgba(3,31,78,.74),rgba(3,31,78,.08)),url(&quot;${esc(image)}&quot;)"` : ''}><span class="banner-order-handle" draggable="${canWrite()}" title="Arraste para mudar a ordem" aria-label="Reordenar ${esc(row.title)}">⠿</span><div><small>${esc(bannerPositionShort[row.position] || row.position)}</small><strong>${esc(row.title)}</strong><p>${esc(row.subtitle || '')}</p>${row.button_text ? `<em>${esc(row.button_text)} →</em>` : ''}</div></div>
-      <div class="banner-card-body"><div class="banner-card-heading"><div><h3>${esc(row.title)}</h3><p>${esc(bannerPositionLabels[row.position] || 'Área personalizada do site')}</p></div><span class="banner-status ${status.key}"><i></i>${esc(status.label)}</span></div>
-      <dl><div><dt>Tipo</dt><dd>${esc(campaignType)}</dd></div><div><dt>Período</dt><dd>${esc(period)}</dd></div><div><dt>Conteúdo</dt><dd>${esc(contentLabel)}</dd></div><div><dt>Destino</dt><dd><b>${esc(destination.type)}</b><span title="${esc(destination.label)}">${esc(destination.label)}</span></dd></div></dl>
+    return `<article class="banner-card" data-banner-id="${row.id}" data-position="${esc(row.position)}" data-campaign="${esc(row.campaign_type || 'custom')}" data-status="${status.key}" data-title="${esc(String(internalTitle || '').toLowerCase())}" data-order="${Number(row.sort_order || 0)}">
+      <div class="banner-card-preview" ${image ? `style="background-image:linear-gradient(90deg,rgba(3,31,78,.74),rgba(3,31,78,.08)),url(&quot;${esc(image)}&quot;)"` : ''}><span class="banner-order-handle" draggable="${canWrite()}" title="Arraste para mudar a ordem" aria-label="Reordenar ${esc(internalTitle)}">⠿</span>${isVideo ? '<span class="banner-media-badge">▶ VÍDEO</span>' : '<span class="banner-media-badge">▣ IMAGEM</span>'}<div><small>${esc(bannerPositionShort[row.position] || row.position)}</small><strong>${esc(internalTitle)}</strong><p>${esc(row.subtitle || '')}</p>${row.button_text ? `<em>${esc(row.button_text)} →</em>` : ''}</div></div>
+      <div class="banner-card-body"><div class="banner-card-heading"><div><h3>${esc(internalTitle)}</h3><p>${esc(bannerPositionLabels[row.position] || 'Área personalizada do site')}</p></div><span class="banner-status ${status.key}"><i></i>${esc(status.label)}</span></div>
+      <dl><div><dt>Mídia</dt><dd>${isVideo ? 'Vídeo' : 'Imagem'} · ${esc(campaignType)}</dd></div><div><dt>Período</dt><dd>${esc(period)}</dd></div><div><dt>Conteúdo</dt><dd>${esc(contentLabel)}</dd></div><div><dt>Destino</dt><dd><b>${esc(destination.type)}</b><span title="${esc(destination.label)}">${esc(destination.label)}</span></dd></div></dl>
       <div class="banner-card-actions action-cell">${actions}</div></div>
     </article>`;
   }
@@ -2004,6 +2155,8 @@
     if (quickCategoryResult.error) throw quickCategoryResult.error;
     if (revision !== viewRevision) return;
     const rows = data || [];
+    const heroRows = rows.filter(row => row.position === 'home_hero');
+    const campaignRows = rows.filter(row => row.position !== 'home_hero');
     const homeSections = sectionResult.data || [];
     const sectionLabels = { hero: 'Hero principal', environments: 'Categorias', office: 'Escritório', featured_products: 'Produtos em destaque', promotions: 'Ofertas', promo_banners: 'Campanhas e banners', best_sellers: 'Mais vendidos', benefits: 'Benefícios', ambient: 'Ambientes', inspirations: 'Inspirações' };
     const homeOrderHtml = homeSections.map(section => `<div class="home-order-item ${section.active ? '' : 'is-off'}" draggable="${canWrite()}" data-home-section="${section.id}"><span>⠿</span><div><b>${esc(sectionLabels[section.section_key] || section.title || section.section_key)}</b><small>${section.active ? 'Visível no site' : 'Oculto'} · posição ${Number(section.sort_order || 0)}</small></div></div>`).join('');
@@ -2031,12 +2184,13 @@
     const slotBanners = position => rows.filter(row => row.position === position);
     const structureBanner = (position, emptyText) => {
       const items = slotBanners(position);
-      return items.length ? items.map(item => `<button type="button" data-banner-edit="${item.id}"><span class="banner-structure-thumb" ${item.image_desktop_url ? `style="background-image:url(&quot;${esc(item.image_desktop_url)}&quot;)"` : ''}></span><span><b>${esc(item.title)}</b><small>${esc(bannerSchedule(item, now).label)} · ordem ${Number(item.sort_order || 0)}</small></span></button>`).join('') : `<p>${esc(emptyText)}</p>`;
+      return items.length ? items.map(item => { const thumb = item.media_type === 'video' ? item.poster_url : item.image_desktop_url || item.image_mobile_url; return `<button type="button" data-banner-edit="${item.id}"><span class="banner-structure-thumb" ${thumb ? `style="background-image:url(&quot;${esc(thumb)}&quot;)"` : ''}></span><span><b>${esc(item.internal_title || item.title)}</b><small>${item.media_type === 'video' ? 'Vídeo' : 'Imagem'} · ${esc(bannerSchedule(item, now).label)} · ordem ${Number(item.sort_order || 0)}</small></span></button>`; }).join('') : `<p>${esc(emptyText)}</p>`;
     };
     $('#content').innerHTML = `<div class="banner-summary"><article><span>▣</span><div><b>${active}</b><small>Campanhas ativas</small></div></article><article class="scheduled"><span>◷</span><div><b>${scheduled}</b><small>Agendadas</small></div></article><article class="ended"><span>✓</span><div><b>${ended}</b><small>Encerradas</small></div></article><article class="inactive"><span>−</span><div><b>${drafts}</b><small>Rascunhos / pausadas</small></div></article></div>
+      <section class="hero-media-manager card"><header><div><small>BANNERS</small><h2>Hero da Home</h2><p>Gerencie imagens e vídeos do carrossel. Arraste pelo ícone ⠿ para alterar a ordem.</p></div><button type="button" data-new-hero-slide>+ Novo slide</button></header><div class="banner-card-list" id="heroBannerList">${heroRows.map(row => bannerCard(row, now, productCounts.get(String(row.promotion_id)) || 0)).join('') || '<div class="empty admin-empty"><span class="admin-empty-icon" aria-hidden="true">▣</span><h2>Nenhum slide cadastrado</h2><p>Adicione uma imagem ou vídeo para a Hero.</p></div>'}</div></section>
       <details class="quick-suggestions card admin-disclosure"><summary><span aria-hidden="true">💡</span><span><strong>Sugestões para sua loja</strong><small>Ideias criadas a partir do catálogo e estoque.</small></span><em aria-hidden="true">⌄</em></summary><div>${suggestions.map(item => `<article><span>${item.icon}</span><p>${esc(item.text)}</p><button type="button" data-quick-suggestion="${item.preset}">${esc(item.action)}</button></article>`).join('')}</div></details>
-      <section class="banner-toolbar card"><label class="banner-search"><span aria-hidden="true">⌕</span><input id="searchList" type="search" placeholder="Pesquisar campanha ou banner..."></label><div class="banner-filter-tabs" role="group" aria-label="Filtrar campanhas"><button class="is-active" type="button" data-banner-filter="all">Todos</button><button type="button" data-banner-filter="home_hero">Hero principal</button><button type="button" data-banner-filter="campaign:promotion">Promoções</button><button type="button" data-banner-filter="campaign:category">Categorias</button><button type="button" data-banner-filter="campaign:products">Produtos</button><button type="button" data-banner-filter="status:scheduled">Agendados</button><button type="button" data-banner-filter="status:draft">Rascunhos</button><button type="button" data-banner-filter="status:ended">Encerrados</button></div><label class="banner-sort">Ordenar<select id="bannerSort"><option value="order">Ordem no site</option><option value="name">Nome (A–Z)</option><option value="order-desc">Ordem inversa</option></select></label></section>
-      <div class="banner-workspace"><section><div class="banner-section-heading"><div><h2>Campanhas e banners</h2><p>Arraste pelo ícone ⠿ para reorganizar a ordem de exibição.</p></div><span id="bannerResults">${rows.length} campanha${rows.length === 1 ? '' : 's'}</span></div><div class="banner-card-list" id="bannerCardList">${rows.map(row => bannerCard(row, now, productCounts.get(String(row.promotion_id)) || 0)).join('') || '<div class="card empty admin-empty"><span class="admin-empty-icon" aria-hidden="true">▣</span><h2>Nenhuma campanha cadastrada</h2><p>Crie o primeiro destaque comercial da loja.</p><button class="secondary" type="button" data-open-quick-campaign>Explorar modelos</button></div>'}</div></section>
+      <section class="banner-toolbar card"><label class="banner-search"><span aria-hidden="true">⌕</span><input id="searchList" type="search" placeholder="Pesquisar campanha ou banner..."></label><div class="banner-filter-tabs" role="group" aria-label="Filtrar campanhas"><button class="is-active" type="button" data-banner-filter="all">Todos</button><button type="button" data-banner-filter="campaign:promotion">Promoções</button><button type="button" data-banner-filter="campaign:category">Categorias</button><button type="button" data-banner-filter="campaign:products">Produtos</button><button type="button" data-banner-filter="status:scheduled">Agendados</button><button type="button" data-banner-filter="status:draft">Rascunhos</button><button type="button" data-banner-filter="status:ended">Encerrados</button></div><label class="banner-sort">Ordenar<select id="bannerSort"><option value="order">Ordem no site</option><option value="name">Nome (A–Z)</option><option value="order-desc">Ordem inversa</option></select></label></section>
+      <div class="banner-workspace"><section><div class="banner-section-heading"><div><h2>Campanhas e banners</h2><p>Arraste pelo ícone ⠿ para reorganizar a ordem de exibição.</p></div><span id="bannerResults">${campaignRows.length} campanha${campaignRows.length === 1 ? '' : 's'}</span></div><div class="banner-card-list" id="bannerCardList">${campaignRows.map(row => bannerCard(row, now, productCounts.get(String(row.promotion_id)) || 0)).join('') || '<div class="card empty admin-empty"><span class="admin-empty-icon" aria-hidden="true">▣</span><h2>Nenhuma campanha cadastrada</h2><p>Crie o primeiro destaque comercial da loja.</p><button class="secondary" type="button" data-open-quick-campaign>Explorar modelos</button></div>'}</div></section>
       <aside class="home-structure card"><header><span>⌂</span><div><h2>Estrutura da Home</h2><p>Veja onde cada banner aparece para os clientes.</p></div></header><ol>
         <li><i>1</i><div><strong>Hero principal</strong><small>Primeira área da página</small><div class="home-slot-banners">${structureBanner('home_hero', 'Nenhum banner nesta posição.')}</div></div></li>
         <li class="fixed"><i>2</i><div><strong>Categorias</strong><small>Seção automática do catálogo</small></div></li>
@@ -2049,10 +2203,11 @@
     pageAction.textContent = '+  Modelos prontos';
     pageAction.onclick = () => openQuickCampaign();
     const rowFor = id => rows.find(row => String(row.id) === String(id));
-    $$('[data-banner-edit]').forEach(button => button.onclick = () => openQuickCampaign(rowFor(button.dataset.bannerEdit)));
+    $('[data-new-hero-slide]')?.addEventListener('click', () => openBannerEditor());
+    $$('[data-banner-edit]').forEach(button => button.onclick = () => { const row = rowFor(button.dataset.bannerEdit); return row?.position === 'home_hero' ? openBannerEditor(row) : openQuickCampaign(row); });
     $$('[data-quick-suggestion]').forEach(button => button.onclick = () => openQuickCampaign(null, button.dataset.quickSuggestion, true));
     $$('[data-open-quick-campaign]').forEach(button => button.onclick = () => openQuickCampaign());
-    $$('[data-banner-preview]').forEach(button => button.onclick = () => { const row = rowFor(button.dataset.bannerPreview); const url = row?.image_desktop_url || row?.image_mobile_url; if (url) window.open(url, '_blank', 'noopener'); else toast('Este banner ainda não possui imagem.'); });
+    $$('[data-banner-preview]').forEach(button => button.onclick = () => { const row = rowFor(button.dataset.bannerPreview); const url = row?.media_type === 'video' ? row.video_desktop_url || row.video_mobile_url : row?.image_desktop_url || row?.image_mobile_url; if (url) window.open(url, '_blank', 'noopener'); else toast('Este banner ainda não possui mídia.'); });
     $$('[data-banner-duplicate]').forEach(button => button.onclick = () => runAction(button, async () => {
       const source = rowFor(button.dataset.bannerDuplicate);
       if (!source || !canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
@@ -2076,7 +2231,7 @@
           }
         }
       }
-      const keys = ['subtitle','image_desktop_url','image_mobile_url','button_text','button_url','position','campaign_type','content_mode','category_id','link_type','alignment','display_locations','auto_include_category','deactivate_on_end','keep_products_after_end'];
+      const keys = ['internal_title','subtitle','media_type','image_desktop_url','image_mobile_url','video_desktop_url','video_mobile_url','poster_url','button_text','button_url','position','campaign_type','content_mode','category_id','link_type','alignment','display_locations','auto_include_category','deactivate_on_end','keep_products_after_end'];
       const copy = { title: `${source.title} — cópia`, active: false, draft: true, paused: false, start_at: null, end_at: null, sort_order: Number(source.sort_order || 0) + 1, promotion_id: promotionId };
       keys.forEach(key => { if (key in source) copy[key] = source[key]; });
       if (promotionId && source.promotion_id && copy.button_url) {
@@ -2099,8 +2254,9 @@
     }));
     $$('[data-banner-move]').forEach(button => button.onclick = () => runAction(button, async () => {
       if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
-      const ordered = [...rows].sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || String(a.created_at || '').localeCompare(String(b.created_at || '')));
-      const index = ordered.findIndex(item => String(item.id) === String(button.dataset.bannerId));
+      const selected = rowFor(button.dataset.bannerId);
+      const ordered = rows.filter(item => item.position === selected?.position).sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || String(a.created_at || '').localeCompare(String(b.created_at || '')));
+      const index = ordered.findIndex(item => String(item.id) === String(selected?.id));
       const targetIndex = button.dataset.bannerMove === 'up' ? index - 1 : index + 1;
       if (index < 0 || targetIndex < 0 || targetIndex >= ordered.length) return toast(button.dataset.bannerMove === 'up' ? 'Este banner já é o primeiro.' : 'Este banner já é o último.');
       const source = ordered[index]; const target = ordered[targetIndex];
@@ -2123,7 +2279,7 @@
           if (promotionDeleteError) console.warn('O banner foi removido, mas a promoção vinculada não pôde ser excluída.', promotionDeleteError);
         }
       }
-      const storedUrls = new Set([source.image_desktop_url, source.image_mobile_url].filter(Boolean));
+      const storedUrls = new Set([source.image_desktop_url, source.image_mobile_url, source.video_desktop_url, source.video_mobile_url, source.poster_url].filter(Boolean));
       for (const url of storedUrls) await removeUnusedBannerImage(url);
       notifyStorefront('banners'); toast('Banner excluído com sucesso. Os produtos permaneceram intactos.'); render('banners');
     }));
@@ -2157,6 +2313,7 @@
         const targetId = card.dataset.bannerId;
         if (!sourceId || sourceId === targetId) return;
         const source = rowFor(sourceId), target = rowFor(targetId);
+        if (!source || !target || source.position !== target.position) return toast('Reordene os slides somente dentro da mesma área.', 'error');
         const results = await Promise.all([db.from('banners').update({ sort_order: target.sort_order }).eq('id', source.id), db.from('banners').update({ sort_order: source.sort_order }).eq('id', target.id)]);
         const swapError = results.find(result => result.error)?.error;
         if (swapError) return toast(explain(swapError));
@@ -2315,13 +2472,16 @@
     { key: 'variations', label: 'Cores', help: 'Selecione acabamentos e informe estoque e fotos de cada opção.', fields: [
       ['variations_ui', 'Variações do produto']
     ] },
+    { key: 'product_options', label: 'Opções do Produto', help: 'Características selecionáveis independentes das cores, como espelho e ripado.', fields: [
+      ['product_options_ui', 'Opções do Produto']
+    ] },
     { key: 'benefits', label: 'Benefícios / Selos', help: 'Escolha nenhum, um ou os dois benefícios.', fields: [
       ['benefits', 'Benefícios e Selos'], ['free_city_shipping', 'Frete grátis', 'checkbox'], ['free_assembly', 'Armação gratuita', 'checkbox']
     ] },
     { key: 'description', label: 'Descrição', help: 'Apresente o produto e registre suas especificações.', fields: [
       ['short_description', 'Descrição curta', 'textarea'], ['description', 'Descrição completa', 'textarea'],
       ['specifications_text', 'Especificações — uma por linha (ex.: Lugares: 3)', 'textarea'],
-      ['dimensions_text', 'Medidas', 'text'], ['material', 'Material', 'text'], ['color', 'Cores', 'text'], ['warranty', 'Garantia', 'text']
+      ['dimensions', 'Medidas do produto', 'dimensions'], ['material', 'Material', 'materials'], ['warranty', 'Garantia', 'text']
     ] },
     { key: 'publication', label: 'Publicação', help: 'Venda, destaques e visibilidade no site.', fields: [
       ['whatsapp_enabled', 'Permitir compra pelo WhatsApp', 'checkbox'], ['cart_enabled', 'Permitir adicionar à sacola', 'checkbox'],
@@ -2333,6 +2493,133 @@
     ] }
   ];
   const productFields = productEditorSections.flatMap(section => section.fields);
+  const productOptionTemplates = [
+    { name: 'Espelho', slug: 'espelho', values: [{ label: 'Com espelho', slug: 'com-espelho' }, { label: 'Sem espelho', slug: 'sem-espelho' }] },
+    { name: 'Ripado', slug: 'ripado', values: [{ label: 'Com ripado', slug: 'com-ripado' }, { label: 'Sem ripado', slug: 'sem-ripado' }] }
+  ];
+  function newProductOptionValue(source = {}, selectedByDefault = false) {
+    return {
+      key: source.key || source.id || crypto.randomUUID(), id: source.id || null,
+      label: source.label || '', slug: source.slug || slugify(source.label || ''),
+      selected: source.selected ?? selectedByDefault
+    };
+  }
+  function newProductOptionGroup(source = {}, persisted = false) {
+    const sourceValues = source.values || source.product_option_values || [];
+    return {
+      key: source.key || source.id || crypto.randomUUID(), id: source.id || null,
+      name: source.name || '', slug: source.slug || slugify(source.name || ''),
+      custom: source.custom ?? !productOptionTemplates.some(template => template.slug === source.slug),
+      values: sourceValues.map(value => newProductOptionValue(value, persisted || Boolean(source.id)))
+    };
+  }
+  function normaliseProductOptionGroups(source = [], includeTemplates = true) {
+    const incoming = [...(Array.isArray(source) ? source : [])].sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0)).map(group => {
+      const values = [...(group.values || group.product_option_values || [])].sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0));
+      return newProductOptionGroup({ ...group, values }, Boolean(group.id || group.product_option_values));
+    });
+    if (!includeTemplates) return incoming;
+    const groups = productOptionTemplates.map(template => {
+      const saved = incoming.find(group => group.slug === template.slug);
+      const values = template.values.map(value => {
+        const current = saved?.values.find(item => item.slug === value.slug);
+        return newProductOptionValue(current || value, Boolean(current));
+      });
+      for (const extra of (saved?.values || []).filter(item => !template.values.some(value => value.slug === item.slug))) values.push(extra);
+      return { key: saved?.key || crypto.randomUUID(), id: saved?.id || null, name: template.name, slug: template.slug, custom: false, values };
+    });
+    groups.push(...incoming.filter(group => !productOptionTemplates.some(template => template.slug === group.slug)));
+    return groups;
+  }
+  function selectedProductOptionPayload(groups, strict = true) {
+    const result = [], groupSlugs = new Set();
+    for (const [groupIndex, group] of (groups || []).entries()) {
+      const selected = (group.values || []).filter(value => value.selected);
+      if (!selected.length) continue;
+      const name = String(group.name || '').trim(), slug = slugify(group.slug || name);
+      if (!name || !slug) { if (strict) throw new Error(`Informe o nome da opção ${groupIndex + 1}.`); continue; }
+      if (groupSlugs.has(slug)) throw new Error(`A opção “${name}” está repetida.`);
+      groupSlugs.add(slug);
+      const valueSlugs = new Set(), values = selected.map((value, valueIndex) => {
+        const label = String(value.label || '').trim(), valueSlug = slugify(value.slug || label);
+        if (!label || !valueSlug) throw new Error(`Informe a alternativa ${valueIndex + 1} de “${name}”.`);
+        if (valueSlugs.has(valueSlug)) throw new Error(`A alternativa “${label}” está repetida em “${name}”.`);
+        valueSlugs.add(valueSlug);
+        return { label, slug: valueSlug };
+      });
+      result.push({ name, slug, values });
+    }
+    return result;
+  }
+  function productOptionGroupsMarkup(groups, mode = 'product') {
+    const prefix = mode === 'mass' ? 'mass-option' : 'product-option';
+    return `<div class="product-option-groups">${groups.map(group => {
+      const values = group.values.map(value => group.custom
+        ? `<div class="${value.selected ? 'is-selected' : ''}"><input type="checkbox" aria-label="Disponibilizar alternativa" data-${prefix}-value-toggle="${esc(value.key)}" data-option-group-key="${esc(group.key)}" ${value.selected ? 'checked' : ''}><input data-${prefix}-value-label="${esc(value.key)}" data-option-group-key="${esc(group.key)}" value="${esc(value.label)}" placeholder="Ex.: Com pés"><button type="button" data-${prefix}-value-remove="${esc(value.key)}" data-option-group-key="${esc(group.key)}" aria-label="Excluir alternativa">×</button></div>`
+        : `<label class="${value.selected ? 'is-selected' : ''}"><input type="checkbox" data-${prefix}-value-toggle="${esc(value.key)}" data-option-group-key="${esc(group.key)}" ${value.selected ? 'checked' : ''}><b>${esc(value.label)}</b></label>`).join('');
+      return `<article class="product-option-admin-card" data-option-group="${esc(group.key)}"><header>${group.custom ? `<label>Nome da opção<input data-${prefix}-group-name="${esc(group.key)}" value="${esc(group.name)}" placeholder="Ex.: Pés"></label>` : `<div><h3>${esc(group.name)}</h3><small>Opcional · independente das cores</small></div>`}${group.custom ? `<button type="button" class="danger" data-${prefix}-group-remove="${esc(group.key)}">Excluir opção</button>` : ''}</header><div class="product-option-values">${values}</div>${group.custom ? `<button type="button" class="secondary product-option-add-value" data-${prefix}-value-add="${esc(group.key)}">+ Adicionar alternativa</button>` : ''}</article>`;
+    }).join('')}</div><button type="button" class="secondary product-option-add-group" data-${prefix}-group-add>+ Adicionar outra opção</button>`;
+  }
+  function productOptionsEditorHtml() {
+    return `<div class="product-options-editor"><div class="product-options-intro"><b>Características selecionáveis do móvel</b><p>Marque somente as alternativas realmente disponíveis. Se nada for marcado, a opção não aparecerá no site.</p></div><div id="productOptionsEditorBody"></div></div>`;
+  }
+  function renderProductOptionsEditor() {
+    const root = $('#productOptionsEditorBody');
+    if (root) root.innerHTML = productOptionGroupsMarkup(editorState?.productOptions || []);
+  }
+  function optionGroupByKey(groups, key) { return (groups || []).find(group => group.key === key) || null; }
+  function addCustomProductOption(groups) {
+    groups.push(newProductOptionGroup({ custom: true, name: '', slug: '', values: [{ label: '', selected: false }, { label: '', selected: false }] }));
+  }
+  function bindProductOptionsEditor() {
+    const root = $('#productOptionsEditorBody');
+    if (!root) return;
+    root.addEventListener('change', event => {
+      const valueKey = event.target.dataset.productOptionValueToggle;
+      if (!valueKey) return;
+      const group = optionGroupByKey(editorState.productOptions, event.target.dataset.optionGroupKey);
+      const value = group?.values.find(item => item.key === valueKey);
+      if (value) value.selected = event.target.checked;
+      renderProductOptionsEditor(); setProductEditorDirty();
+    });
+    root.addEventListener('input', event => {
+      const groupKey = event.target.dataset.productOptionGroupName;
+      if (groupKey) { const group = optionGroupByKey(editorState.productOptions, groupKey); if (group) { group.name = event.target.value; group.slug = slugify(event.target.value); } return; }
+      const valueKey = event.target.dataset.productOptionValueLabel;
+      if (valueKey) { const group = optionGroupByKey(editorState.productOptions, event.target.dataset.optionGroupKey); const value = group?.values.find(item => item.key === valueKey); if (value) { value.label = event.target.value; value.slug = slugify(event.target.value); } }
+    });
+    root.addEventListener('click', event => {
+      if (event.target.closest('[data-product-option-group-add]')) { addCustomProductOption(editorState.productOptions); renderProductOptionsEditor(); setProductEditorDirty(); return; }
+      const addValue = event.target.closest('[data-product-option-value-add]');
+      if (addValue) { optionGroupByKey(editorState.productOptions, addValue.dataset.productOptionValueAdd)?.values.push(newProductOptionValue()); renderProductOptionsEditor(); setProductEditorDirty(); return; }
+      const removeGroup = event.target.closest('[data-product-option-group-remove]');
+      if (removeGroup) { editorState.productOptions = editorState.productOptions.filter(group => group.key !== removeGroup.dataset.productOptionGroupRemove); renderProductOptionsEditor(); setProductEditorDirty(); return; }
+      const removeValue = event.target.closest('[data-product-option-value-remove]');
+      if (removeValue) { const group = optionGroupByKey(editorState.productOptions, removeValue.dataset.optionGroupKey); if (group) group.values = group.values.filter(value => value.key !== removeValue.dataset.productOptionValueRemove); renderProductOptionsEditor(); setProductEditorDirty(); }
+    });
+  }
+  async function saveProductOptions(productId, groups) {
+    const { error } = await db.rpc('replace_product_options', { target_product_id: productId, option_groups: groups });
+    if (error) throw error;
+  }
+  function productMaterialFlags(value) {
+    const source = String(value || '').toLocaleUpperCase('pt-BR');
+    return { mdf: /(^|[^A-Z0-9])MDF([^A-Z0-9]|$)/.test(source), mdp: /(^|[^A-Z0-9])MDP([^A-Z0-9]|$)/.test(source) };
+  }
+  function productMaterialsEditorHtml(record = {}) {
+    const original = String(record.material || '');
+    const selected = productMaterialFlags(original);
+    return `<fieldset class="field product-material-field"><legend>Material</legend><p>Selecione MDF, MDP ou os dois.</p><div class="product-material-options"><label><input name="material_mdf" type="checkbox" ${selected.mdf ? 'checked' : ''}><span class="admin-material-seal is-mdf" aria-hidden="true">MDF</span><b>MDF</b></label><label><input name="material_mdp" type="checkbox" ${selected.mdp ? 'checked' : ''}><span class="admin-material-seal is-mdp" aria-hidden="true">MDP</span><b>MDP</b></label></div><input type="hidden" name="material_original" value="${esc(original)}"></fieldset>`;
+  }
+  function productMaterialValueFromForm(form) {
+    const original = form.elements.material_original?.value?.trim() || '';
+    const originalFlags = productMaterialFlags(original);
+    const selectedFlags = { mdf: Boolean(form.elements.material_mdf?.checked), mdp: Boolean(form.elements.material_mdp?.checked) };
+    if (original && originalFlags.mdf === selectedFlags.mdf && originalFlags.mdp === selectedFlags.mdp) return original;
+    const selected = [selectedFlags.mdf ? 'MDF' : '', selectedFlags.mdp ? 'MDP' : ''].filter(Boolean);
+    if (original && !originalFlags.mdf && !originalFlags.mdp && selected.length) return [original, ...selected].join(' / ');
+    return selected.join(' / ');
+  }
   function formatSpecificationsText(specifications) {
     if (!specifications || typeof specifications !== 'object' || Array.isArray(specifications)) return '';
     return Object.entries(specifications).map(([key, value]) => `${key}: ${typeof value === 'string' ? value : JSON.stringify(value)}`).join('\n');
@@ -2347,6 +2634,586 @@
       specifications[trimmed.slice(0, separator).trim()] = trimmed.slice(separator + 1).trim();
     });
     return specifications;
+  }
+  function parseProductDimension(value) {
+    if (value === null || value === undefined || String(value).trim() === '') return null;
+    const parsed = Number(String(value).trim().replace(',', '.'));
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+  }
+  function productDimensionText(value) {
+    return value === null || value === undefined || value === '' ? '' : String(value).replace('.', ',');
+  }
+  function parseLegacyProductDimensions(value) {
+    const source = typeof value === 'object' && value !== null ? String(value.description || '') : String(value || '');
+    const parsed = {};
+    [['largura', 'largura'], ['altura', 'altura'], ['profundidade', 'profundidade']].forEach(([key, label]) => {
+      const afterLabel = new RegExp(`${label}\\s*[:=\\-]?\\s*(\\d+(?:[.,]\\d+)?)`, 'i').exec(source);
+      const beforeLabel = new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*(?:cm\\s*)?${label}`, 'i').exec(source);
+      const match = afterLabel || beforeLabel;
+      const number = parseProductDimension(match?.[1]);
+      if (number !== null) parsed[key] = number;
+    });
+    return { source, ...parsed };
+  }
+  function normaliseProductDimensions(value) {
+    const objectValue = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const legacy = parseLegacyProductDimensions(value);
+    return {
+      largura: parseProductDimension(objectValue.largura ?? objectValue.width) ?? legacy.largura,
+      altura: parseProductDimension(objectValue.altura ?? objectValue.height) ?? legacy.altura,
+      profundidade: parseProductDimension(objectValue.profundidade ?? objectValue.depth) ?? legacy.profundidade,
+      description: legacy.source
+    };
+  }
+  function formatProductDimensions(dimensions) {
+    return [['largura', 'LARGURA'], ['altura', 'ALTURA'], ['profundidade', 'PROFUNDIDADE']]
+      .filter(([key]) => dimensions[key] !== null && dimensions[key] !== undefined)
+      .map(([key, label]) => `${productDimensionText(dimensions[key])} CM ${label}`)
+      .join(' X ');
+  }
+  function productDimensionsEditorHtml(record = {}) {
+    const dimensions = normaliseProductDimensions(record.dimensions);
+    const hasLegacyValues = Boolean(dimensions.description) && [dimensions.largura, dimensions.altura, dimensions.profundidade].every(value => value === null || value === undefined);
+    const generatedImage = (record.product_images || []).find(isDimensionsProductImage);
+    const mainImage = productCover(record);
+    const complete = ['largura', 'altura', 'profundidade'].every(key => dimensions[key] !== null && dimensions[key] !== undefined);
+    const canGenerate = Boolean(record.id && mainImage && complete);
+    const input = (key, label) => `<div class="product-dimension-input"><label for="f-dimension-${key}">${label}</label><div class="product-dimension-control"><input id="f-dimension-${key}" name="dimension_${key}" type="number" inputmode="decimal" min="0" step="any" value="${dimensions[key] ?? ''}" placeholder="Ex.: 45,5" aria-describedby="productDimensionsHelp"><span aria-hidden="true">cm</span></div></div>`;
+    const hint = !record.id ? 'Salve o produto antes de gerar a imagem.' : !mainImage ? 'Adicione e salve uma foto principal para continuar.' : !complete ? 'Preencha largura, altura e profundidade.' : 'A foto original será preservada. As medidas atuais serão salvas ao gerar.';
+    return `<fieldset class="field full product-dimensions-field"><legend>Medidas do produto</legend><p id="productDimensionsHelp">Preencha as medidas em centímetros (cm).</p><div class="product-dimensions-inputs">${input('largura', 'LARGURA')}${input('altura', 'ALTURA')}${input('profundidade', 'PROFUNDIDADE')}</div>${hasLegacyValues ? `<small class="product-dimensions-legacy">Medida antiga preservada: ${esc(dimensions.description)}</small>` : ''}<input type="hidden" name="dimensions_legacy_description" value="${hasLegacyValues ? esc(dimensions.description) : ''}"><div class="product-dimensions-photo-tool"><div class="product-dimensions-photo-copy"><b>Foto automática com medidas</b><small id="productDimensionsPhotoHint">${esc(hint)}</small></div><button id="generateDimensionsImage" class="secondary" type="button" ${canGenerate ? '' : 'disabled'}>${generatedImage ? '🔄 Regenerar Foto com Medidas' : '📐 Gerar Foto com Medidas'}</button><div id="productDimensionsPhotoPreview" class="product-dimensions-photo-preview" ${generatedImage ? '' : 'hidden'}>${generatedImage ? `<img src="${esc(generatedImage.image_url)}" alt="Foto do produto com medidas"><span>Imagem adicional da galeria</span>` : ''}</div><section id="productDimensionsMapping" class="product-dimensions-mapping" hidden aria-labelledby="productDimensionsMappingTitle"><header><div><b id="productDimensionsMappingTitle">Mapeamento visual do móvel</b><small id="productDimensionsMappingStatus">Analisando a foto principal…</small></div><span id="productDimensionsConfidence" class="product-dimensions-confidence"></span></header><p>Confira as linhas detectadas. Arraste os pontos azuis para ajustar o início e o fim de cada medida antes de salvar.</p><div class="product-dimensions-mapping-stage"><img id="productDimensionsMappingImage" alt="Foto principal usada para mapear as medidas"><svg id="productDimensionsMappingOverlay" aria-label="Pontos ajustáveis das setas de largura, altura e profundidade"></svg></div><footer><button id="cancelDimensionsMapping" class="secondary" type="button">Cancelar ajuste</button><button id="saveDimensionsMapping" type="button">Salvar foto com medidas</button></footer></section></div></fieldset>`;
+  }
+  function productDimensionsFromForm(form) {
+    const dimensions = { ...(editorState?.record?.dimensions && typeof editorState.record.dimensions === 'object' ? editorState.record.dimensions : {}) };
+    ['largura', 'altura', 'profundidade', 'width', 'height', 'depth'].forEach(key => delete dimensions[key]);
+    const values = {};
+    for (const key of ['largura', 'altura', 'profundidade']) {
+      const raw = form.elements[`dimension_${key}`]?.value ?? '';
+      const parsed = parseProductDimension(raw);
+      if (raw.trim() !== '' && parsed === null) throw new Error(`A medida de ${key} deve ser um número maior ou igual a zero.`);
+      if (parsed !== null) values[key] = parsed;
+    }
+    Object.assign(dimensions, values);
+    const formatted = formatProductDimensions(values);
+    const legacy = form.elements.dimensions_legacy_description?.value?.trim();
+    if (formatted) dimensions.description = formatted;
+    else if (legacy) dimensions.description = legacy;
+    else delete dimensions.description;
+    return dimensions;
+  }
+  function productMainImageRecord(record) {
+    return [...(record?.product_images || [])]
+      .filter(item => item.media_type !== 'video' && !isDimensionsProductImage(item))
+      .sort((a, b) => Number(b.is_cover) - Number(a.is_cover) || Number(a.sort_order || 0) - Number(b.sort_order || 0))[0] || null;
+  }
+  function currentProductDimensionValues() {
+    const form = $('#editorForm');
+    if (!form) return null;
+    const values = {};
+    for (const key of ['largura', 'altura', 'profundidade']) {
+      const parsed = parseProductDimension(form.elements[`dimension_${key}`]?.value || '');
+      if (parsed === null) return null;
+      values[key] = parsed;
+    }
+    return values;
+  }
+  function syncDimensionsImageTool() {
+    const button = $('#generateDimensionsImage');
+    const hint = $('#productDimensionsPhotoHint');
+    if (!button || !hint || editorState?.view !== 'products') return;
+    const record = editorState.record;
+    const hasMainImage = Boolean(productMainImageRecord(record));
+    const complete = Boolean(currentProductDimensionValues());
+    const generated = (record?.product_images || []).find(isDimensionsProductImage);
+    const phase = editorState.dimensionsImagePhase || '';
+    const busy = Boolean(phase);
+    button.disabled = busy || !record?.id || !hasMainImage || !complete;
+    button.textContent = phase === 'analyzing'
+      ? 'Analisando foto…'
+      : phase === 'saving'
+        ? 'Salvando imagem…'
+        : editorState.dimensionsMapping
+          ? '🔄 Refazer análise visual'
+          : generated ? '🔄 Regenerar Foto com Medidas' : '📐 Gerar Foto com Medidas';
+    hint.textContent = phase === 'analyzing'
+      ? 'Detectando o móvel principal, seus limites e a direção da profundidade.'
+      : phase === 'saving'
+        ? 'Criando e enviando a nova imagem. A foto original não será alterada.'
+      : !record?.id
+        ? 'Salve o produto antes de gerar a imagem.'
+        : !hasMainImage
+          ? 'Adicione e salve uma foto principal para continuar.'
+          : !complete
+            ? 'Preencha largura, altura e profundidade.'
+            : editorState.dimensionsMapping
+              ? 'Confira o mapeamento abaixo. Nada será gravado antes da sua confirmação.'
+              : 'A foto será analisada antes de qualquer imagem ser salva.';
+    if (editorState.dimensionsMapping) renderDimensionsMappingOverlay();
+  }
+  function drawDimensionArrow(context, x1, y1, x2, y2, scale) {
+    const angle = Math.atan2(y2 - y1, x2 - x1);
+    const head = 12 * scale;
+    const paint = (color, width) => {
+      context.beginPath();
+      context.moveTo(x1, y1); context.lineTo(x2, y2);
+      for (const [x, y, direction] of [[x1, y1, angle + Math.PI], [x2, y2, angle]]) {
+        context.moveTo(x, y);
+        context.lineTo(x - head * Math.cos(direction - Math.PI / 6), y - head * Math.sin(direction - Math.PI / 6));
+        context.moveTo(x, y);
+        context.lineTo(x - head * Math.cos(direction + Math.PI / 6), y - head * Math.sin(direction + Math.PI / 6));
+      }
+      context.strokeStyle = color;
+      context.lineWidth = width;
+      context.lineCap = 'round';
+      context.lineJoin = 'round';
+      context.stroke();
+    };
+    paint('rgba(255,255,255,.96)', 8 * scale);
+    paint('#0757bd', 4 * scale);
+  }
+  function drawDimensionLabel(context, text, centerX, centerY, canvasWidth, canvasHeight, scale) {
+    const fontSize = Math.max(15, 24 * scale);
+    const horizontal = 14 * scale;
+    const vertical = 9 * scale;
+    const radius = 9 * scale;
+    context.save();
+    context.font = `800 ${fontSize}px Arial, sans-serif`;
+    const width = context.measureText(text).width + horizontal * 2;
+    const height = fontSize + vertical * 2;
+    const left = Math.min(Math.max(6 * scale, centerX - width / 2), canvasWidth - width - 6 * scale);
+    const top = Math.min(Math.max(6 * scale, centerY - height / 2), canvasHeight - height - 6 * scale);
+    context.beginPath();
+    context.roundRect(left, top, width, height, radius);
+    context.shadowColor = 'rgba(0,20,55,.35)';
+    context.shadowBlur = 12 * scale;
+    context.shadowOffsetY = 3 * scale;
+    context.fillStyle = 'rgba(5,50,112,.92)';
+    context.fill();
+    context.shadowColor = 'transparent';
+    context.lineWidth = Math.max(1, 1.5 * scale);
+    context.strokeStyle = 'rgba(255,255,255,.9)';
+    context.stroke();
+    context.fillStyle = '#fff';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText(text, left + width / 2, top + height / 2 + scale);
+    context.restore();
+  }
+  async function loadDimensionsImageCanvas(imageUrl, maxDimension = 2200) {
+    let response;
+    try { response = await fetch(imageUrl, { cache: 'no-store' }); }
+    catch { throw new Error('Não foi possível carregar a foto principal para analisar as medidas.'); }
+    if (!response.ok) throw new Error('Não foi possível carregar a foto principal para analisar as medidas.');
+    let bitmap;
+    try { bitmap = await createImageBitmap(await response.blob()); }
+    catch { throw new Error('A foto principal não pôde ser processada pelo navegador.'); }
+    const largest = Math.max(bitmap.width, bitmap.height);
+    const resize = Math.min(1, maxDimension / largest);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * resize));
+    canvas.height = Math.max(1, Math.round(bitmap.height * resize));
+    const context = canvas.getContext('2d', { alpha: false });
+    context.fillStyle = '#fff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close?.();
+    return { canvas, context };
+  }
+  function medianDimensionSample(values) {
+    if (!values.length) return 0;
+    values.sort((a, b) => a - b);
+    return values[Math.floor(values.length / 2)];
+  }
+  function clampDimensionPoint(value, minimum = 0, maximum = 1) {
+    return Math.max(minimum, Math.min(maximum, value));
+  }
+  async function analyzeFurnitureForDimensions(imageUrl) {
+    const { canvas, context } = await loadDimensionsImageCanvas(imageUrl, 420);
+    const width = canvas.width;
+    const height = canvas.height;
+    const pixels = context.getImageData(0, 0, width, height).data;
+    const total = width * height;
+    const red = [], green = [], blue = [], borderSamples = [];
+    const sampleStep = Math.max(1, Math.round(Math.min(width, height) / 110));
+    const addSample = index => { borderSamples.push(index); red.push(pixels[index]); green.push(pixels[index + 1]); blue.push(pixels[index + 2]); };
+    for (let x = 0; x < width; x += sampleStep) {
+      addSample(x * 4); addSample(((height - 1) * width + x) * 4);
+    }
+    for (let y = sampleStep; y < height - sampleStep; y += sampleStep) {
+      addSample((y * width) * 4); addSample((y * width + width - 1) * 4);
+    }
+    const background = [medianDimensionSample(red), medianDimensionSample(green), medianDimensionSample(blue)];
+    let uniformSamples = 0;
+    for (const offset of borderSamples) {
+      if (Math.hypot(pixels[offset] - background[0], pixels[offset + 1] - background[1], pixels[offset + 2] - background[2]) < 38) uniformSamples += 1;
+    }
+    const borderUniformity = borderSamples.length ? uniformSamples / borderSamples.length : 0;
+    const luminance = new Float32Array(total);
+    for (let index = 0; index < total; index += 1) {
+      const offset = index * 4;
+      luminance[index] = pixels[offset] * .299 + pixels[offset + 1] * .587 + pixels[offset + 2] * .114;
+    }
+    let mask = new Uint8Array(total);
+    const colorThreshold = borderUniformity > .58 ? 34 : 58;
+    for (let y = 2; y < height - 2; y += 1) {
+      for (let x = 2; x < width - 2; x += 1) {
+        const index = y * width + x;
+        const offset = index * 4;
+        const distance = Math.hypot(pixels[offset] - background[0], pixels[offset + 1] - background[1], pixels[offset + 2] - background[2]);
+        const gx = Math.abs(luminance[index + 1] - luminance[index - 1]);
+        const gy = Math.abs(luminance[index + width] - luminance[index - width]);
+        const edge = gx + gy;
+        if (distance > colorThreshold || edge > (borderUniformity > .58 ? 45 : 70)) mask[index] = 1;
+      }
+    }
+    for (let pass = 0; pass < 2; pass += 1) {
+      const expanded = mask.slice();
+      for (let y = 1; y < height - 1; y += 1) {
+        for (let x = 1; x < width - 1; x += 1) {
+          const index = y * width + x;
+          if (!mask[index]) continue;
+          expanded[index - 1] = expanded[index + 1] = expanded[index - width] = expanded[index + width] = 1;
+          expanded[index - width - 1] = expanded[index - width + 1] = expanded[index + width - 1] = expanded[index + width + 1] = 1;
+        }
+      }
+      mask = expanded;
+    }
+    const visited = new Uint8Array(total);
+    const queue = new Int32Array(total);
+    let best = null;
+    let foregroundTotal = 0;
+    for (let start = 0; start < total; start += 1) {
+      if (!mask[start] || visited[start]) continue;
+      let head = 0, tail = 0;
+      queue[tail++] = start;
+      visited[start] = 1;
+      let minX = width, minY = height, maxX = 0, maxY = 0;
+      while (head < tail) {
+        const index = queue[head++];
+        const x = index % width;
+        const y = Math.floor(index / width);
+        minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+        for (const neighbour of [index - 1, index + 1, index - width, index + width]) {
+          if (neighbour < 0 || neighbour >= total || visited[neighbour] || !mask[neighbour]) continue;
+          const neighbourX = neighbour % width;
+          if (Math.abs(neighbourX - x) > 1) continue;
+          visited[neighbour] = 1;
+          queue[tail++] = neighbour;
+        }
+      }
+      foregroundTotal += tail;
+      if (tail < total * .0015) continue;
+      const boxWidth = maxX - minX + 1;
+      const boxHeight = maxY - minY + 1;
+      const boxArea = boxWidth * boxHeight;
+      const centerX = (minX + maxX) / 2 / width;
+      const centerY = (minY + maxY) / 2 / height;
+      const centerScore = 1 - Math.min(1, Math.hypot(centerX - .5, centerY - .53));
+      const touches = Number(minX < 3) + Number(maxX > width - 4) + Number(minY < 3) + Number(maxY > height - 4);
+      const score = tail * (.72 + centerScore * .28) + boxArea * .07 - touches * total * .025;
+      if (!best || score > best.score) best = { minX, minY, maxX, maxY, count: tail, score, touches };
+    }
+    if (!best) throw new Error('Não foi possível identificar o móvel principal. Ajuste a foto principal e tente novamente.');
+    const padding = Math.max(1, Math.round(Math.min(width, height) * .008));
+    const bounds = {
+      left: clampDimensionPoint((best.minX - padding) / width),
+      top: clampDimensionPoint((best.minY - padding) / height),
+      right: clampDimensionPoint((best.maxX + padding) / width),
+      bottom: clampDimensionPoint((best.maxY + padding) / height)
+    };
+    const boxWidth = bounds.right - bounds.left;
+    const boxHeight = bounds.bottom - bounds.top;
+    const orientationBins = new Float64Array(18);
+    let diagonalEnergy = 0;
+    let allEdgeEnergy = 0;
+    const xStart = Math.max(2, Math.floor(bounds.left * width));
+    const xEnd = Math.min(width - 2, Math.ceil(bounds.right * width));
+    const yStart = Math.max(2, Math.floor(bounds.top * height));
+    const yEnd = Math.min(height - 2, Math.ceil(bounds.bottom * height));
+    for (let y = yStart; y < yEnd; y += 2) {
+      for (let x = xStart; x < xEnd; x += 2) {
+        const index = y * width + x;
+        const gx = luminance[index + 1] - luminance[index - 1];
+        const gy = luminance[index + width] - luminance[index - width];
+        const energy = Math.hypot(gx, gy);
+        if (energy < 20) continue;
+        allEdgeEnergy += energy;
+        let lineAngle = Math.atan2(gy, gx) + Math.PI / 2;
+        while (lineAngle < 0) lineAngle += Math.PI;
+        while (lineAngle >= Math.PI) lineAngle -= Math.PI;
+        const diagonalWeight = Math.abs(Math.sin(lineAngle * 2));
+        if (diagonalWeight < .48) continue;
+        const weighted = energy * diagonalWeight;
+        orientationBins[Math.min(17, Math.floor(lineAngle / Math.PI * 18))] += weighted;
+        diagonalEnergy += weighted;
+      }
+    }
+    let orientationIndex = 0;
+    for (let index = 1; index < orientationBins.length; index += 1) if (orientationBins[index] > orientationBins[orientationIndex]) orientationIndex = index;
+    const orientationStrength = diagonalEnergy ? orientationBins[orientationIndex] / diagonalEnergy : 0;
+    const detectedAngle = diagonalEnergy ? (orientationIndex + .5) / orientationBins.length * Math.PI : Math.atan2(boxHeight, boxWidth);
+    const lineClusters = Array.from({ length: 28 }, () => ({ energy: 0, count: 0, minProjection: Infinity, maxProjection: -Infinity, minPoint: null, maxPoint: null }));
+    const angleCos = Math.cos(detectedAngle);
+    const angleSin = Math.sin(detectedAngle);
+    if (diagonalEnergy) {
+      for (let y = yStart; y < yEnd; y += 2) {
+        for (let x = xStart; x < xEnd; x += 2) {
+          const index = y * width + x;
+          const gx = luminance[index + 1] - luminance[index - 1];
+          const gy = luminance[index + width] - luminance[index - width];
+          const energy = Math.hypot(gx, gy);
+          if (energy < 20) continue;
+          let lineAngle = Math.atan2(gy, gx) + Math.PI / 2;
+          while (lineAngle < 0) lineAngle += Math.PI;
+          while (lineAngle >= Math.PI) lineAngle -= Math.PI;
+          const bin = Math.min(17, Math.floor(lineAngle / Math.PI * 18));
+          const binDistance = Math.min(Math.abs(bin - orientationIndex), 18 - Math.abs(bin - orientationIndex));
+          if (binDistance > 1) continue;
+          const normalisedX = x / width;
+          const normalisedY = y / height;
+          const normal = -angleSin * normalisedX + angleCos * normalisedY;
+          const projection = angleCos * normalisedX + angleSin * normalisedY;
+          const clusterIndex = Math.max(0, Math.min(lineClusters.length - 1, Math.floor((normal + 1.5) / 3 * lineClusters.length)));
+          const cluster = lineClusters[clusterIndex];
+          cluster.energy += energy;
+          cluster.count += 1;
+          if (projection < cluster.minProjection) { cluster.minProjection = projection; cluster.minPoint = { x: normalisedX, y: normalisedY }; }
+          if (projection > cluster.maxProjection) { cluster.maxProjection = projection; cluster.maxPoint = { x: normalisedX, y: normalisedY }; }
+        }
+      }
+    }
+    const depthCluster = lineClusters.reduce((bestCluster, cluster) => {
+      const span = Math.max(0, cluster.maxProjection - cluster.minProjection);
+      const score = cluster.energy * Math.sqrt(span);
+      return !bestCluster || score > bestCluster.score ? { ...cluster, score, span } : bestCluster;
+    }, null);
+    const minimumDepthSpan = Math.min(boxWidth, boxHeight) * .12;
+    const depthDetected = Boolean(depthCluster?.minPoint && depthCluster?.maxPoint && depthCluster.span >= minimumDepthSpan && depthCluster.count >= 3);
+    const inset = .006;
+    const point = (x, y) => ({ x: clampDimensionPoint(x, inset, 1 - inset), y: clampDimensionPoint(y, inset, 1 - inset) });
+    const lines = {
+      largura: [point(bounds.left, bounds.bottom), point(bounds.right, bounds.bottom)],
+      altura: [point(bounds.left, bounds.bottom), point(bounds.left, bounds.top)],
+      profundidade: depthDetected
+        ? [point(depthCluster.minPoint.x, depthCluster.minPoint.y), point(depthCluster.maxPoint.x, depthCluster.maxPoint.y)]
+        : [point(bounds.left, bounds.bottom), point(bounds.right, bounds.top)]
+    };
+    const boxAreaRatio = boxWidth * boxHeight;
+    const fillRatio = best.count / Math.max(1, (best.maxX - best.minX + 1) * (best.maxY - best.minY + 1));
+    const dominance = best.count / Math.max(1, foregroundTotal);
+    const boundsScore = boxAreaRatio > .08 && boxAreaRatio < .92 ? 1 : boxAreaRatio > .035 ? .55 : .2;
+    const depthScore = Math.min(1, orientationStrength * 4.2) * Math.min(1, diagonalEnergy / Math.max(1, allEdgeEnergy * .16));
+    const edgePenalty = Math.max(.25, 1 - best.touches * .19);
+    let confidence = clampDimensionPoint((borderUniformity * .18 + Math.min(1, dominance * 1.7) * .27 + Math.min(1, fillRatio * 2.2) * .18 + boundsScore * .17 + depthScore * .2) * edgePenalty);
+    if (boxAreaRatio > .92 || best.touches >= 3) confidence = Math.min(confidence, .45);
+    const furnitureBoundsReliable = confidence >= .58;
+    if (!depthDetected) confidence = Math.min(confidence, .42);
+    const requiredAdjustments = furnitureBoundsReliable && !depthDetected
+      ? ['profundidade:0', 'profundidade:1']
+      : confidence < .58
+        ? ['largura:0', 'largura:1', 'altura:0', 'altura:1', 'profundidade:0', 'profundidade:1']
+        : [];
+    return { width, height, bounds, lines, confidence, depthDetected, manualRequired: requiredAdjustments.length > 0, requiredAdjustments, adjustedPoints: {} };
+  }
+  function dimensionMappingLabel(key, dimensions) {
+    const labels = { largura: 'Largura', altura: 'Altura', profundidade: 'Profundidade' };
+    return `${labels[key]}: ${productDimensionText(dimensions[key])} cm`;
+  }
+  function dimensionsMappingReady(mapping) {
+    return !mapping?.manualRequired || (mapping.requiredAdjustments || []).every(key => mapping.adjustedPoints?.[key]);
+  }
+  function renderDimensionsMappingOverlay() {
+    const mapping = editorState?.dimensionsMapping;
+    const overlay = $('#productDimensionsMappingOverlay');
+    if (!mapping || !overlay) return;
+    const dimensions = currentProductDimensionValues();
+    if (!dimensions) return;
+    overlay.setAttribute('viewBox', `0 0 ${mapping.width} ${mapping.height}`);
+    const radius = Math.max(5, Math.min(mapping.width, mapping.height) * .017);
+    const stroke = Math.max(2.5, radius * .38);
+    const mappedLine = key => {
+      const [start, end] = mapping.lines[key];
+      const x1 = start.x * mapping.width, y1 = start.y * mapping.height;
+      const x2 = end.x * mapping.width, y2 = end.y * mapping.height;
+      const middleX = (x1 + x2) / 2;
+      const middleY = (y1 + y2) / 2;
+      const dx = x2 - x1, dy = y2 - y1;
+      const length = Math.max(1, Math.hypot(dx, dy));
+      const labelOffset = radius * 2.25;
+      const labelX = clampDimensionPoint(middleX - dy / length * labelOffset, 8, mapping.width - 8);
+      const labelY = clampDimensionPoint(middleY + dx / length * labelOffset, 12, mapping.height - 8);
+      return `<g class="dimension-map-line is-${key}"><line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" style="stroke-width:${stroke}px" marker-start="url(#dimensionMapArrow)" marker-end="url(#dimensionMapArrow)"></line><text x="${labelX}" y="${labelY}" style="font-size:${Math.max(11, radius * 1.35)}px">${esc(dimensionMappingLabel(key, dimensions))}</text><circle data-dimension-point="${key}:0" cx="${x1}" cy="${y1}" r="${radius}"></circle><circle data-dimension-point="${key}:1" cx="${x2}" cy="${y2}" r="${radius}"></circle></g>`;
+    };
+    overlay.innerHTML = `<defs><marker id="dimensionMapArrow" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto-start-reverse" markerUnits="strokeWidth"><path d="M 8 0 L 0 4 L 8 8" fill="none" stroke="#0757bd" stroke-width="1.5"></path></marker></defs><rect class="dimension-map-bounds" x="${mapping.bounds.left * mapping.width}" y="${mapping.bounds.top * mapping.height}" width="${(mapping.bounds.right - mapping.bounds.left) * mapping.width}" height="${(mapping.bounds.bottom - mapping.bounds.top) * mapping.height}"></rect>${mappedLine('largura')}${mappedLine('altura')}${mappedLine('profundidade')}`;
+    const confidence = $('#productDimensionsConfidence');
+    const status = $('#productDimensionsMappingStatus');
+    const save = $('#saveDimensionsMapping');
+    if (confidence) {
+      confidence.textContent = mapping.manualRequired ? 'Revisão manual necessária' : `Confiança ${Math.round(mapping.confidence * 100)}%`;
+      confidence.classList.toggle('is-warning', mapping.manualRequired);
+    }
+    const ready = dimensionsMappingReady(mapping);
+    const adjusted = Object.keys(mapping.adjustedPoints || {}).length > 0;
+    if (status) status.textContent = mapping.manualRequired && !ready
+      ? mapping.requiredAdjustments.length === 2
+        ? 'A profundidade não foi detectada com segurança. Ajuste seus dois pontos para liberar o salvamento.'
+        : 'A detecção não teve confiança suficiente. Ajuste o início e o fim das três setas.'
+      : adjusted
+        ? 'Pontos ajustados manualmente. Confira as três linhas antes de salvar.'
+        : 'Móvel principal detectado. Confira os limites e ajuste se necessário.';
+    if (save) save.disabled = !ready || editorState.dimensionsImagePhase === 'saving';
+  }
+  function openDimensionsMappingEditor(imageUrl, mapping) {
+    const section = $('#productDimensionsMapping');
+    const image = $('#productDimensionsMappingImage');
+    if (!section || !image) return;
+    editorState.dimensionsMapping = mapping;
+    image.src = imageUrl;
+    section.hidden = false;
+    renderDimensionsMappingOverlay();
+    section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  function closeDimensionsMappingEditor() {
+    const section = $('#productDimensionsMapping');
+    if (section) section.hidden = true;
+    if (editorState) delete editorState.dimensionsMapping;
+    syncDimensionsImageTool();
+  }
+  function bindDimensionsMappingEditor() {
+    const overlay = $('#productDimensionsMappingOverlay');
+    if (!overlay) return;
+    let drag = null;
+    overlay.addEventListener('pointerdown', event => {
+      const handle = event.target.closest?.('[data-dimension-point]');
+      if (!handle || !editorState?.dimensionsMapping) return;
+      const [key, pointIndex] = handle.dataset.dimensionPoint.split(':');
+      drag = { key, pointIndex: Number(pointIndex), pointerId: event.pointerId };
+      overlay.setPointerCapture?.(event.pointerId);
+      event.preventDefault();
+    });
+    overlay.addEventListener('pointermove', event => {
+      if (!drag || drag.pointerId !== event.pointerId || !editorState?.dimensionsMapping) return;
+      const rect = overlay.getBoundingClientRect();
+      const point = editorState.dimensionsMapping.lines[drag.key]?.[drag.pointIndex];
+      if (!point || !rect.width || !rect.height) return;
+      point.x = clampDimensionPoint((event.clientX - rect.left) / rect.width, .006, .994);
+      point.y = clampDimensionPoint((event.clientY - rect.top) / rect.height, .006, .994);
+      editorState.dimensionsMapping.adjustedPoints[`${drag.key}:${drag.pointIndex}`] = true;
+      renderDimensionsMappingOverlay();
+      event.preventDefault();
+    });
+    const endDrag = event => {
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      overlay.releasePointerCapture?.(event.pointerId);
+      drag = null;
+    };
+    overlay.addEventListener('pointerup', endDrag);
+    overlay.addEventListener('pointercancel', endDrag);
+  }
+  async function createDimensionsImageFile(imageUrl, dimensions, productName, mapping) {
+    const { canvas, context } = await loadDimensionsImageCanvas(imageUrl, 2200);
+    const width = canvas.width;
+    const height = canvas.height;
+    const scale = Math.max(.62, Math.min(1.9, Math.min(width, height) / 850));
+    for (const key of ['largura', 'altura', 'profundidade']) {
+      const [start, end] = mapping.lines[key];
+      const x1 = start.x * width, y1 = start.y * height;
+      const x2 = end.x * width, y2 = end.y * height;
+      drawDimensionArrow(context, x1, y1, x2, y2, scale);
+      const dx = x2 - x1, dy = y2 - y1;
+      const length = Math.max(1, Math.hypot(dx, dy));
+      const offset = 39 * scale;
+      drawDimensionLabel(context, dimensionMappingLabel(key, dimensions), (x1 + x2) / 2 - dy / length * offset, (y1 + y2) / 2 + dx / length * offset, width, height, scale);
+    }
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', .9));
+    if (!blob) throw new Error('Não foi possível finalizar a imagem com medidas.');
+    return new File([blob], `${slugify(productName || 'produto')}-medidas.webp`, { type: 'image/webp', lastModified: Date.now() });
+  }
+  function renderDimensionsImagePreview(image) {
+    const preview = $('#productDimensionsPhotoPreview');
+    if (!preview) return;
+    preview.hidden = !image;
+    preview.innerHTML = image ? `<img src="${esc(image.image_url)}" alt="Foto do produto com medidas"><span>Imagem adicional da galeria</span>` : '';
+  }
+  async function generateProductDimensionsImage() {
+    if (editorState?.view !== 'products' || !editorState.record?.id || editorState.dimensionsImagePhase) return;
+    const form = $('#editorForm');
+    const mainImage = productMainImageRecord(editorState.record);
+    let dimensions;
+    try { dimensions = productDimensionsFromForm(form); }
+    catch (error) { return toast(error.message, 'error'); }
+    const complete = ['largura', 'altura', 'profundidade'].every(key => dimensions[key] !== null && dimensions[key] !== undefined);
+    if (!mainImage) return toast('Adicione e salve uma foto principal antes de gerar a imagem.', 'error');
+    if (!complete) return toast('Preencha largura, altura e profundidade antes de gerar a imagem.', 'error');
+    editorState.dimensionsImagePhase = 'analyzing';
+    syncDimensionsImageTool();
+    try {
+      const mapping = await analyzeFurnitureForDimensions(mainImage.image_url);
+      openDimensionsMappingEditor(mainImage.image_url, mapping);
+      toast(mapping.manualRequired ? 'Detecção incerta: ajuste os pontos manualmente antes de salvar.' : 'Mapeamento concluído. Confira os pontos antes de salvar.', mapping.manualRequired ? 'error' : undefined);
+    } catch (error) {
+      toast(explain(error), 'error');
+    } finally {
+      if (editorState) editorState.dimensionsImagePhase = '';
+      syncDimensionsImageTool();
+    }
+  }
+  async function saveProductDimensionsImage() {
+    if (editorState?.view !== 'products' || !editorState.record?.id || editorState.dimensionsImagePhase || !editorState.dimensionsMapping) return;
+    const mapping = editorState.dimensionsMapping;
+    if (!dimensionsMappingReady(mapping)) return toast('Conclua o ajuste manual dos pontos indicados antes de salvar esta imagem.', 'error');
+    const form = $('#editorForm');
+    const mainImage = productMainImageRecord(editorState.record);
+    let dimensions;
+    try { dimensions = productDimensionsFromForm(form); }
+    catch (error) { return toast(error.message, 'error'); }
+    const complete = ['largura', 'altura', 'profundidade'].every(key => dimensions[key] !== null && dimensions[key] !== undefined);
+    if (!mainImage) return toast('A foto principal não está mais disponível.', 'error');
+    if (!complete) return toast('Preencha largura, altura e profundidade antes de salvar a imagem.', 'error');
+    editorState.dimensionsImagePhase = 'saving';
+    syncDimensionsImageTool();
+    let uploaded = null;
+    try {
+      const file = await createDimensionsImageFile(mainImage.image_url, dimensions, editorState.record.name, mapping);
+      const { error: dimensionsError } = await db.from('products').update({ dimensions }).eq('id', editorState.record.id);
+      if (dimensionsError) throw dimensionsError;
+      const existingResult = await db.from('product_images').select('*').eq('product_id', editorState.record.id).eq('image_role', 'dimensions').maybeSingle();
+      if (existingResult.error) throw existingResult.error;
+      uploaded = await upload('products', file, `${editorState.record.id}/dimensions`);
+      const generatedStoragePath = uploaded.path;
+      const row = {
+        product_id: editorState.record.id,
+        image_url: uploaded.url,
+        storage_path: uploaded.path,
+        alt_text: `${editorState.record.name || 'Produto'} com largura ${productDimensionText(dimensions.largura)} cm, altura ${productDimensionText(dimensions.altura)} cm e profundidade ${productDimensionText(dimensions.profundidade)} cm`,
+        media_type: 'image', poster_url: null, poster_storage_path: null,
+        is_cover: false, sort_order: 1, image_role: 'dimensions'
+      };
+      const savedResult = existingResult.data
+        ? await db.from('product_images').update(row).eq('id', existingResult.data.id).select('*').single()
+        : await db.from('product_images').insert(row).select('*').single();
+      if (savedResult.error) throw savedResult.error;
+      if (existingResult.data?.storage_path && existingResult.data.storage_path !== generatedStoragePath) {
+        const { error: cleanupError } = await db.storage.from('products').remove([existingResult.data.storage_path]);
+        if (cleanupError) console.warn('A versão anterior da foto com medidas foi mantida no Storage.', cleanupError);
+      }
+      uploaded = null;
+      editorState.record.dimensions = dimensions;
+      const mediaResult = await db.from('product_images').select('*').eq('product_id', editorState.record.id).order('sort_order');
+      if (mediaResult.error) throw mediaResult.error;
+      editorState.record.product_images = mediaResult.data || [];
+      renderDimensionsImagePreview(savedResult.data);
+      await loadGallery(editorState.record.id, 'product_images', 'product_id');
+      notifyStorefront('product_images');
+      closeDimensionsMappingEditor();
+      toast(existingResult.data ? 'Foto com medidas regenerada com sucesso.' : 'Foto com medidas gerada com sucesso.');
+    } catch (error) {
+      if (uploaded?.path) await db.storage.from('products').remove([uploaded.path]);
+      if (/image_role/i.test(error?.message || '')) toast('A migration da foto com medidas ainda não está disponível no Supabase.', 'error');
+      else toast(explain(error), 'error');
+    } finally {
+      if (editorState) editorState.dimensionsImagePhase = '';
+      syncDimensionsImageTool();
+    }
   }
   function productBenefitBadgesMarkup(freeShipping, freeAssembly) {
     return [
@@ -2419,7 +3286,7 @@
     if (editorState?.view === 'products') editorState.activeTab = key;
   }
   function setProductEditorDirty(dirty = true, message = '') {
-    if (editorState?.view !== 'products') return;
+    if (!['products', 'mass-products'].includes(editorState?.view)) return;
     editorState.dirty = dirty;
     const status = $('#productUnsavedStatus');
     if (!status) return;
@@ -2537,7 +3404,7 @@
       priceMode: source.priceMode || (explicitPrice !== '' && explicitPrice != null ? 'specific' : (Number(adjustment || 0) ? 'adjustment' : 'main')),
       stock: Number(source.stock || 0), low_stock_threshold: Number(source.low_stock_threshold || 0),
       active: source.active !== false, default_variant: Boolean(source.default_variant), display_order: Number(source.display_order || 0),
-      variant_images: [...(source.variant_images || [])].sort((a, b) => Number(b.is_cover) - Number(a.is_cover) || Number(a.sort_order || 0) - Number(b.sort_order || 0)),
+      variant_images: [...(source.variant_images || [])].sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0)),
       swatchFile: null, galleryFiles: [], removedImageIds: []
     };
   }
@@ -2620,7 +3487,7 @@
     if (!variants.length) { root.innerHTML = '<div class="variant-empty"><b>Nenhuma cor selecionada</b><p>Toque nas opções acima. Cada cor vira uma variação automaticamente.</p></div>'; return; }
     root.innerHTML = variants.map((draft, index) => {
       const existingImages = draft.variant_images.filter(image => !draft.removedImageIds.includes(image.id));
-      const gallery = [...existingImages.map(image => ({ url: image.image_url, label: image.is_cover ? 'Principal' : 'Foto', id: image.id })), ...draft.galleryFiles.map((file, fileIndex) => { const url = URL.createObjectURL(file); editorState.variantPreviewUrls.push(url); return { url, label: `Nova ${fileIndex + 1}`, fileIndex }; })];
+      const gallery = [...existingImages.map((image, imageIndex) => ({ url: image.image_url, label: `Foto da cor ${imageIndex + 1}`, id: image.id })), ...draft.galleryFiles.map((file, fileIndex) => { const url = URL.createObjectURL(file); editorState.variantPreviewUrls.push(url); return { url, label: `Nova foto da cor ${existingImages.length + fileIndex + 1}`, fileIndex }; })];
       const fallback = variantFallbackImage(), cover = gallery[0]?.url || fallback;
       return `<article class="variant-admin-card compact-variant-card" data-variant-card="${draft.key}"><header><span class="variant-admin-swatch" ${variantSwatchPreview(draft)}></span><div><b>${esc(draft.color_name || draft.name || `Cor ${index + 1}`)}</b><small>${draft.default_variant ? 'Cor padrão · ' : ''}${draft.active ? 'Disponível' : 'Indisponível'}</small></div><button class="variant-remove" type="button" data-variant-delete aria-label="Remover ${esc(draft.color_name || draft.name)}">×</button></header><div class="variant-compact-body"><div class="variant-cover-preview">${cover ? `<img src="${esc(cover)}" alt="Prévia de ${esc(draft.color_name || draft.name)}">` : '<span>Sem foto</span>'}${!gallery.length && fallback ? '<small>Galeria principal</small>' : ''}</div><label>Estoque<input data-variant-field="stock" type="number" min="0" step="1" value="${Number(draft.stock || 0)}"></label><label>Preço<select data-variant-field="priceMode"><option value="main" ${draft.priceMode === 'main' ? 'selected' : ''}>Usar preço principal</option><option value="specific" ${draft.priceMode === 'specific' ? 'selected' : ''}>Preço específico</option><option value="adjustment" ${draft.priceMode === 'adjustment' ? 'selected' : ''}>Acréscimo ao principal</option></select></label>${draft.priceMode === 'specific' ? `<label>Valor específico<input data-variant-field="price" type="number" min="0" step="0.01" value="${esc(draft.price)}" placeholder="R$ 0,00"></label>` : ''}${draft.priceMode === 'adjustment' ? `<label>Acréscimo<input data-variant-field="price_adjustment" type="number" min="0" step="0.01" value="${esc(draft.price_adjustment)}" placeholder="R$ 0,00"></label>` : ''}<label class="variant-gallery-add">+ Enviar fotos<input data-variant-gallery type="file" accept="image/jpeg,image/png,image/webp" multiple></label></div><div class="variant-gallery-grid compact-gallery">${gallery.map(image => `<figure><img src="${esc(image.url)}" alt=""><figcaption>${esc(image.label)}</figcaption><button type="button" ${image.id ? `data-variant-image-delete="${image.id}"` : `data-variant-new-image-delete="${image.fileIndex}"`}>×</button></figure>`).join('') || '<p>Nenhuma foto específica — será usada a galeria principal.</p>'}</div><details class="variant-advanced"><summary>Configurações avançadas</summary><div><label>SKU da variação<input data-variant-field="sku" value="${esc(draft.sku)}" placeholder="Gerado automaticamente ao salvar"></label><label>Alerta de estoque baixo<input data-variant-field="low_stock_threshold" type="number" min="0" step="1" value="${Number(draft.low_stock_threshold || 0)}"></label><label class="check-field"><input data-variant-field="active" type="checkbox" ${draft.active ? 'checked' : ''}> Disponível para venda</label><button type="button" data-variant-default ${draft.default_variant ? 'disabled' : ''}>${draft.default_variant ? 'Cor padrão atual' : 'Definir como padrão'}</button><small>Código da cor: ${esc(draft.color_id || 'legado')} ${draft.combination_color_id ? `+ ${esc(draft.combination_color_id)}` : ''}</small></div></details></article>`;
     }).join('');
@@ -2748,8 +3615,8 @@
       if (result.error) throw result.error; const variantId = result.data.id; if (draft.default_variant) defaultId = variantId;
       if (draft.removedImageIds.length) { const removed = draft.variant_images.filter(image => draft.removedImageIds.includes(image.id)); const deletion = await db.from('variant_images').delete().in('id', draft.removedImageIds); if (deletion.error) throw deletion.error; const paths = removed.map(image => image.storage_path).filter(Boolean); if (paths.length) await db.storage.from('products').remove(paths); }
       const remaining = draft.variant_images.filter(image => !draft.removedImageIds.includes(image.id));
-      for (const [fileIndex, file] of draft.galleryFiles.entries()) { const saved = await upload('products', file, `${productId}/variants/${variantId}`); const image = await db.from('variant_images').insert({ variant_id: variantId, image_url: saved.url, storage_path: saved.path, sort_order: remaining.length + fileIndex, is_cover: remaining.length === 0 && fileIndex === 0 }).select('id').single(); if (image.error) { await db.storage.from('products').remove([saved.path]); throw image.error; } }
-      if (!remaining.some(image => image.is_cover)) { const { data: first } = await db.from('variant_images').select('id').eq('variant_id', variantId).order('sort_order').limit(1).maybeSingle(); if (first) await db.from('variant_images').update({ is_cover: true }).eq('id', first.id); }
+      const clearVariantCover = await db.from('variant_images').update({ is_cover: false }).eq('variant_id', variantId).eq('is_cover', true); if (clearVariantCover.error) throw clearVariantCover.error;
+      for (const [fileIndex, file] of draft.galleryFiles.entries()) { const saved = await upload('products', file, `${productId}/variants/${variantId}`); const image = await db.from('variant_images').insert({ variant_id: variantId, image_url: saved.url, storage_path: saved.path, sort_order: remaining.length + fileIndex, is_cover: false }).select('id').single(); if (image.error) { await db.storage.from('products').remove([saved.path]); throw image.error; } }
       if (draft.swatchFile && draft.swatch_storage_path && draft.swatch_storage_path !== swatchPath) await db.storage.from('products').remove([draft.swatch_storage_path]);
     }
     if (defaultId) { const { error } = await db.from('product_variants').update({ default_variant: true }).eq('id', defaultId); if (error) throw error; }
@@ -2762,6 +3629,7 @@
       for (const field of section.fields) {
         if (field[0] === 'benefits') fields.push(productBenefitsEditorHtml(record));
         else if (field[0] === 'variations_ui') fields.push(productVariationsEditorHtml(record));
+        else if (field[0] === 'product_options_ui') fields.push(productOptionsEditorHtml());
         else if (!['free_city_shipping', 'free_assembly'].includes(field[0])) fields.push(await fieldHtml(field, record));
       }
       panels.push(`<section class="product-editor-panel" role="tabpanel" data-product-panel="${section.key}" ${index === 0 ? '' : 'hidden'}><header><div><h3>${esc(section.label)}</h3><p>${esc(section.help)}</p></div><span>${index + 1} de ${productEditorSections.length}</span></header><div class="product-section-fields">${fields.join('')}</div></section>`);
@@ -2785,7 +3653,6 @@
     const editRecord = record ? {
       ...commerceDefaults,
       ...record,
-      dimensions_text: record.dimensions?.description || '',
       specifications_text: formatSpecificationsText(record.specifications)
     } : { ...commerceDefaults, specifications_text: '' };
     const colorCatalog = await loadProductColorCatalog();
@@ -2796,7 +3663,8 @@
       view: 'products', record: record ? editRecord : null, activeTab: 'basic', dirty: false, saving: false,
       existingGalleryCount: record?.product_images?.length || 0, pendingGalleryFiles: [], pendingCoverFile: null,
       previewObjectUrls: [], variantPreviewUrls: [], colors: colorCatalog.colors, colorsAvailable: colorCatalog.available,
-      variants: [...(record?.product_variants || [])].sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0)).map(newVariantDraft)
+      variants: [...(record?.product_variants || [])].sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0)).map(newVariantDraft),
+      productOptions: normaliseProductOptionGroups(record?.product_option_groups || [])
     };
     $('#editorDialog').classList.add('product-editor-dialog');
     $('#dialogEyebrow').textContent = 'CATÁLOGO';
@@ -2804,6 +3672,8 @@
     $('#editorFields').innerHTML = await productEditorMarkup(editRecord);
     renderVariantEditor();
     bindVariantEditor();
+    renderProductOptionsEditor();
+    bindProductOptionsEditor();
     const environmentSelect = $('[name="environment_id"]');
     const categorySelect = $('[name="category_id"]');
     if (environmentSelect && categorySelect) {
@@ -2859,6 +3729,12 @@
       if (!editorState.pendingGalleryFiles.length) setProductBenefitPreviewImage(file);
     });
     if (record) await loadGallery(record.id, 'product_images', 'product_id');
+    $$('[name="dimension_largura"], [name="dimension_altura"], [name="dimension_profundidade"]').forEach(input => input.addEventListener('input', syncDimensionsImageTool));
+    $('#generateDimensionsImage')?.addEventListener('click', generateProductDimensionsImage);
+    $('#saveDimensionsMapping')?.addEventListener('click', saveProductDimensionsImage);
+    $('#cancelDimensionsMapping')?.addEventListener('click', closeDimensionsMappingEditor);
+    bindDimensionsMappingEditor();
+    syncDimensionsImageTool();
     $('#editorForm').oninput = () => setProductEditorDirty();
     $('#editorForm').onchange = () => setProductEditorDirty();
     $('#editorDialog').showModal();
@@ -2892,6 +3768,9 @@
     let variantSettings;
     try { variantSettings = validatedProductVariants(); }
     catch (error) { activateProductEditorTab('variations'); return toast(error.message, 'error'); }
+    let productOptions;
+    try { productOptions = selectedProductOptionPayload(editorState?.productOptions || []); }
+    catch (error) { activateProductEditorTab('product_options'); return toast(error.message, 'error'); }
     const record = editorState?.record || null;
     const button = $('#saveEditor');
     button.disabled = true;
@@ -2905,13 +3784,12 @@
     try {
       await persistPendingVariantColors(variantSettings);
       const values = formValues(productFields.filter(field => !['section', 'benefits'].includes(field[0])), form);
-      values.dimensions = values.dimensions_text ? { description: values.dimensions_text } : {};
+      values.dimensions = productDimensionsFromForm(form);
       values.specifications = parseSpecificationsText(values.specifications_text);
       values.sku = values.sku || null;
       values.variants_enabled = variantSettings.enabled;
       values.variation_type = variantSettings.type;
       if (variantSettings.enabled) values.stock_quantity = variantSettings.variants.filter(item => item.active).reduce((total, item) => total + Number(item.stock || 0), 0);
-      delete values.dimensions_text;
       delete values.specifications_text;
       const ogFile = form.elements.og_image_url?.files?.[0];
       if (ogFile) { uploadedOgImage = await upload('products', ogFile, 'sharing'); values.og_image_url = uploadedOgImage.url; }
@@ -2927,6 +3805,7 @@
         files: editorState?.pendingGalleryFiles || [], coverFile: editorState?.pendingCoverFile || null
       });
       await saveProductVariants(result.data.id, variantSettings);
+      await saveProductOptions(result.data.id, productOptions);
       completed = true;
       if (editorState) editorState.dirty = false;
       notifyStorefront('products'); $('#editorDialog').close(); toast('Produto salvo e sincronizado com o catálogo.'); render('products');
@@ -2939,11 +3818,815 @@
       else if (/media_type|poster_url|poster_storage_path/i.test(error?.message || '')) toast('Execute a migração 20261002_product_media_gallery.sql no Supabase antes de enviar vídeos.', 'error');
       else if (/product_colors|color_id|combination_color_id/i.test(error?.message || '')) toast('Execute a migração 20261001_product_color_catalog.sql no Supabase antes de cadastrar cores.', 'error');
       else if (/product_variants|variant_images|variants_enabled|variation_type/i.test(error?.message || '')) toast('Execute a migração 20260930_product_variants.sql no Supabase antes de salvar variações.', 'error');
+      else if (/replace_product_options|product_option_groups|product_option_values/i.test(error?.message || '')) toast('Execute a migração 20261008_product_options.sql no Supabase antes de salvar as opções do produto.', 'error');
       else if (/whatsapp_enabled|cart_enabled|free_city_shipping|free_assembly|is_campaign/i.test(error?.message || '')) toast('Execute a migration 20260920_product_commerce_cards.sql no Supabase antes de salvar estes campos.', 'error');
       else toast(explain(error), 'error');
       if (editorState) { editorState.saving = false; setProductEditorDirty(true); }
     }
     finally { button.disabled = false; button.textContent = 'Salvar alterações'; if (editorState) editorState.saving = false; }
+  }
+  const MASS_PRODUCT_DRAFT_KEY = 'atacarejo.mass-product-draft.v1';
+  const massProductBaseDefaults = () => ({ environment_id: '', category_id: '', material: '', warranty: '', description: '', free_city_shipping: false, free_assembly: false, on_sale: false, featured: false });
+  function newMassColorSelection(source = {}) {
+    const imageNames = Array.isArray(source.imageNames)
+      ? source.imageNames.filter(Boolean)
+      : (Array.isArray(source.imageItems) ? source.imageItems.map(item => item?.name).filter(Boolean) : []);
+    return {
+      color_id: source.color_id || null,
+      combination_color_id: source.combination_color_id || null,
+      imageItems: [],
+      imageNames
+    };
+  }
+  function revokeMassColorSelectionImages(selection) {
+    (selection?.imageItems || []).forEach(item => { if (item.url) URL.revokeObjectURL(item.url); });
+  }
+  function newMassProductRow(source = {}) {
+    const imageNames = Array.isArray(source.imageNames) ? source.imageNames.filter(Boolean) : (source.imageName ? [source.imageName] : []);
+    return {
+      key: source.key || crypto.randomUUID(), name: source.name || '', price: source.price ?? '', promotional_price: source.promotional_price ?? '',
+      altura: source.altura ?? '', largura: source.largura ?? '', profundidade: source.profundidade ?? '', stock_quantity: source.stock_quantity ?? '',
+      imageItems: [], imageNames, coverKey: null,
+      colorSelections: Array.isArray(source.colorSelections) ? source.colorSelections.map(newMassColorSelection) : [],
+      productOptions: normaliseProductOptionGroups(source.productOptions || []),
+      status: 'pending', createdId: null, errors: [], overrides: { ...(source.overrides || {}) }
+    };
+  }
+  function newMassImageItem(file) {
+    const url = URL.createObjectURL(file);
+    editorState?.previewObjectUrls?.push(url);
+    return { key: crypto.randomUUID(), file, url, name: file.name };
+  }
+  function readMassProductDraft() {
+    try {
+      const draft = JSON.parse(localStorage.getItem(MASS_PRODUCT_DRAFT_KEY) || 'null');
+      return [1, 2, 3, 4].includes(draft?.version) && Array.isArray(draft.rows) && draft.rows.length ? draft : null;
+    } catch { return null; }
+  }
+  function massProductDraftSnapshot() {
+    const mass = editorState?.mass;
+    if (!mass) return null;
+    return {
+      version: 4, savedAt: new Date().toISOString(), base: mass.base,
+      colors: (editorState.colors || []).filter(color => String(color.id || '').startsWith('local:')).map(color => ({ ...color })),
+      rows: mass.rows.filter(row => row.status !== 'success').map(row => ({
+        key: row.key, name: row.name, price: row.price, promotional_price: row.promotional_price,
+        altura: row.altura, largura: row.largura, profundidade: row.profundidade, stock_quantity: row.stock_quantity,
+        imageNames: row.imageItems.length ? row.imageItems.map(item => item.name) : row.imageNames,
+        coverIndex: 0,
+        colorSelections: row.colorSelections.map(selection => ({
+          color_id: selection.color_id,
+          combination_color_id: selection.combination_color_id || null,
+          imageNames: selection.imageItems?.length ? selection.imageItems.map(item => item.name) : (selection.imageNames || [])
+        })),
+        productOptions: row.productOptions.map(group => ({
+          name: group.name, slug: group.slug, custom: group.custom,
+          values: group.values.map(value => ({ label: value.label, slug: value.slug, selected: Boolean(value.selected) }))
+        })), overrides: row.overrides
+      }))
+    };
+  }
+  function persistMassProductDraft() {
+    if (!editorState?.mass) return;
+    clearTimeout(editorState.mass.draftTimer);
+    editorState.mass.draftTimer = setTimeout(writeMassProductDraftNow, 180);
+  }
+  function writeMassProductDraftNow() {
+    if (!editorState?.mass) return;
+    clearTimeout(editorState.mass.draftTimer);
+    const snapshot = massProductDraftSnapshot();
+    try {
+      if (snapshot?.rows.length) localStorage.setItem(MASS_PRODUCT_DRAFT_KEY, JSON.stringify(snapshot));
+      else localStorage.removeItem(MASS_PRODUCT_DRAFT_KEY);
+    } catch { /* o navegador pode bloquear armazenamento local */ }
+  }
+  function clearMassProductDraft() {
+    try { localStorage.removeItem(MASS_PRODUCT_DRAFT_KEY); } catch { /* o navegador pode bloquear armazenamento local */ }
+  }
+  function massEffectiveValues(row, base) {
+    const override = row.overrides || {};
+    return {
+      environment_id: override.environment_id ?? base.environment_id,
+      category_id: override.category_id ?? base.category_id,
+      material: override.material ?? base.material,
+      warranty: override.warranty ?? base.warranty,
+      description: override.description ?? base.description,
+      free_city_shipping: override.free_city_shipping ?? base.free_city_shipping,
+      free_assembly: override.free_assembly ?? base.free_assembly,
+      on_sale: override.on_sale ?? base.on_sale,
+      featured: override.featured ?? base.featured
+    };
+  }
+  function massProductErrors(row, mass) {
+    const errors = [];
+    const common = massEffectiveValues(row, mass.base);
+    const price = parseProductDimension(row.price);
+    const promotional = row.promotional_price === '' ? null : parseProductDimension(row.promotional_price);
+    const stock = row.stock_quantity === '' ? null : Number(row.stock_quantity);
+    if (!row.name.trim()) errors.push('Falta nome');
+    if (price === null || price <= 0) errors.push('Falta preço');
+    if (promotional !== null && (promotional <= 0 || promotional >= price)) errors.push('Preço promocional inválido');
+    if (!row.imageItems.length) errors.push(row.imageNames.length ? 'Selecione as imagens novamente' : 'Falta imagem');
+    if (row.imageItems.length > 8) errors.push('Máximo de 8 fotos');
+    if (row.colorSelections.some(selection => !catalogColor(selection.color_id) || (selection.combination_color_id && !catalogColor(selection.combination_color_id)))) errors.push('Revise as cores');
+    const colorPhotosToReselect = row.colorSelections.find(selection => selection.imageNames?.length && !selection.imageItems?.length);
+    if (colorPhotosToReselect) errors.push(`Selecione novamente as fotos de ${massColorSelectionLabel(colorPhotosToReselect)}`);
+    if (row.colorSelections.some(selection => (selection.imageItems || []).length > 8)) errors.push('Máximo de 8 fotos por cor');
+    try { selectedProductOptionPayload(row.productOptions || []); } catch (error) { errors.push(error.message); }
+    if (!Number.isInteger(stock) || stock < 0) errors.push('Estoque inválido');
+    if (!common.environment_id) errors.push('Falta ambiente');
+    if (!common.category_id) errors.push('Falta subcategoria');
+    for (const [key, label] of [['altura', 'Altura'], ['largura', 'Largura'], ['profundidade', 'Profundidade']]) {
+      if (row[key] !== '' && parseProductDimension(row[key]) === null) errors.push(`${label} inválida`);
+    }
+    const slug = slugify(row.name.trim());
+    if (slug && mass.rows.some(other => other.key !== row.key && other.status !== 'success' && slugify(other.name.trim()) === slug)) errors.push('Nome repetido na lista');
+    return errors;
+  }
+  function massProductDimensions(row) {
+    const dimensions = {};
+    const values = { largura: parseProductDimension(row.largura), altura: parseProductDimension(row.altura), profundidade: parseProductDimension(row.profundidade) };
+    Object.entries(values).forEach(([key, value]) => { if (value !== null) dimensions[key] = value; });
+    const description = formatProductDimensions(values);
+    if (description) dimensions.description = description;
+    return dimensions;
+  }
+  function massSelectOptions(items, selected, placeholder, filter = null) {
+    const visible = filter ? items.filter(filter) : items;
+    return `<option value="">${esc(placeholder)}</option>${visible.map(item => `<option value="${esc(item.id)}" ${String(item.id) === String(selected || '') ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}`;
+  }
+  function massColorSelectionKey(selection) {
+    return selection.combination_color_id ? `combo:${selection.color_id}:${selection.combination_color_id}` : `single:${selection.color_id}`;
+  }
+  function massColorSelectionDetails(selection) {
+    return { primary: catalogColor(selection.color_id), secondary: selection.combination_color_id ? catalogColor(selection.combination_color_id) : null };
+  }
+  function massColorSelectionLabel(selection, separator = ' + ') {
+    const { primary, secondary } = massColorSelectionDetails(selection);
+    return `${primary?.name || 'Cor'}${secondary ? `${separator}${secondary.name}` : ''}`;
+  }
+  function massColorCellMarkup(row) {
+    const selections = row.colorSelections || [];
+    if (!selections.length) return `<button type="button" class="mass-color-picker is-empty" data-mass-colors-open="${esc(row.key)}"><span>＋</span><b>Cor</b></button>`;
+    const first = selections[0], { primary, secondary } = massColorSelectionDetails(first);
+    const label = massColorSelectionLabel(first);
+    return `<button type="button" class="mass-color-picker" data-mass-colors-open="${esc(row.key)}" title="${esc(selections.map(selection => massColorSelectionLabel(selection)).join(', '))}"><span class="mass-color-picker-swatch" style="background:${colorSwatchBackground(primary, secondary)}"></span><b>${esc(label)}</b>${selections.length > 1 ? `<small>+${selections.length - 1}</small>` : ''}</button>`;
+  }
+  function massImageCellMarkup(row, index) {
+    const items = row.imageItems || [], cover = items[0];
+    if (!cover) return `<button type="button" class="mass-image-picker" data-mass-media-open="${esc(row.key)}" aria-label="Adicionar fotos ao produto ${index + 1}"><span aria-hidden="true">＋</span></button>`;
+    return `<button type="button" class="mass-image-picker has-images" data-mass-media-open="${esc(row.key)}" aria-label="Gerenciar ${items.length} foto${items.length === 1 ? '' : 's'} de ${esc(row.name || `produto ${index + 1}`)}"><img src="${esc(cover.url)}" alt="Foto de capa de ${esc(row.name || `produto ${index + 1}`)}"><small>${items.length === 1 ? 'CAPA' : `+${items.length - 1}`}</small></button>`;
+  }
+  function massOptionsCellMarkup(row) {
+    const selected = (row.productOptions || []).map(group => ({ group, values: group.values.filter(value => value.selected) })).filter(item => item.values.length);
+    if (!selected.length) return `<button type="button" class="mass-options-picker is-empty" data-mass-options-open="${esc(row.key)}"><span>＋</span><b>Opções</b></button>`;
+    return `<button type="button" class="mass-options-picker" data-mass-options-open="${esc(row.key)}" title="${esc(selected.map(item => `${item.group.name}: ${item.values.map(value => value.label).join(', ')}`).join(' · '))}"><b>${selected.map(item => esc(item.group.name)).join(' · ')}</b><small>${selected.reduce((total, item) => total + item.values.length, 0)} alternativa(s)</small></button>`;
+  }
+  function massDescriptionButtonMarkup(row, mass) {
+    const custom = Object.prototype.hasOwnProperty.call(row.overrides || {}, 'description');
+    const description = massEffectiveValues(row, mass.base).description || '';
+    const status = custom ? 'Personalizada' : description ? 'Padrão' : 'Adicionar';
+    const title = description ? description.replace(/\s+/g, ' ').trim().slice(0, 160) : 'Adicionar descrição completa';
+    return `<button type="button" class="mass-description-button ${description ? 'has-description' : ''} ${custom ? 'is-custom' : ''}" data-mass-description-open="${esc(row.key)}" title="${esc(title)}" ${row.status === 'success' ? 'disabled' : ''}><span aria-hidden="true">✎</span><b>Descrição</b><small>${status}</small></button>`;
+  }
+  function massProductManagersMarkup() {
+    return `<div id="massMediaManager" class="mass-manager-layer" hidden><button type="button" class="mass-manager-backdrop" data-mass-media-close aria-label="Fechar fotos"></button><section class="mass-manager-panel" role="dialog" aria-modal="true" aria-labelledby="massMediaManagerTitle"><header><div><small>GALERIA DO PRODUTO</small><h3 id="massMediaManagerTitle">Fotos</h3></div><button type="button" data-mass-media-close aria-label="Fechar">×</button></header><div class="mass-manager-toolbar"><span id="massMediaCount">0 de 8 fotos</span><label class="secondary">+ Adicionar fotos<input id="massMediaInput" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden></label></div><div id="massMediaGrid" class="mass-media-manager-grid"></div><footer><small>A primeira foto é sempre a capa. As demais ficam na galeria do produto.</small><button type="button" data-mass-media-close>Concluir</button></footer></section></div>
+    <div id="massColorManager" class="mass-manager-layer" hidden><button type="button" class="mass-manager-backdrop" data-mass-colors-close aria-label="Fechar cores"></button><section class="mass-manager-panel mass-color-manager-panel" role="dialog" aria-modal="true" aria-labelledby="massColorManagerTitle"><header><div><small>CORES DO PRODUTO</small><h3 id="massColorManagerTitle">Selecionar cores</h3></div><button type="button" data-mass-colors-close aria-label="Fechar">×</button></header><div id="massColorManagerBody"></div><footer><small>As cores usam o mesmo catálogo e as mesmas variações do cadastro normal.</small><button type="button" data-mass-colors-close>Concluir</button></footer></section></div>
+    <div id="massOptionsManager" class="mass-manager-layer" hidden><button type="button" class="mass-manager-backdrop" data-mass-options-close aria-label="Fechar opções"></button><section class="mass-manager-panel mass-options-manager-panel" role="dialog" aria-modal="true" aria-labelledby="massOptionsManagerTitle"><header><div><small>OPÇÕES DO PRODUTO</small><h3 id="massOptionsManagerTitle">Configurar opções</h3></div><button type="button" data-mass-options-close aria-label="Fechar">×</button></header><div class="mass-options-manager-body"><p>Marque somente as alternativas disponíveis. Estas opções não alteram cores, fotos, preço ou estoque.</p><div id="massOptionsManagerContent"></div></div><footer><small>Opções sem alternativas marcadas não aparecem no site.</small><button type="button" data-mass-options-close>Concluir</button></footer></section></div>
+    <div id="massDescriptionManager" class="mass-manager-layer" hidden><button type="button" class="mass-manager-backdrop" data-mass-description-close aria-label="Fechar descrição"></button><section class="mass-manager-panel mass-description-manager-panel" role="dialog" aria-modal="true" aria-labelledby="massDescriptionManagerTitle"><header><div><small>DESCRIÇÃO COMPLETA</small><h3 id="massDescriptionManagerTitle">Descrição do produto</h3></div><button type="button" data-mass-description-close aria-label="Fechar">×</button></header><div class="mass-description-manager-body"><label for="massDescriptionInput">Descrição completa</label><textarea id="massDescriptionInput" rows="7" placeholder="Apresente o produto e seus principais diferenciais."></textarea><small id="massDescriptionSource"></small></div><footer><button id="massDescriptionUseDefault" type="button" class="secondary">Usar descrição padrão</button><span></span><button type="button" class="secondary" data-mass-description-close>Cancelar</button><button id="massDescriptionSave" type="button">Salvar descrição</button></footer></section></div>`;
+  }
+  function massProductBaseMarkup(mass) {
+    return `<section class="mass-product-base card"><header><div><h3>Informações aplicadas a todos</h3><p>Os dados abaixo serão herdados pelas linhas. Você poderá editar cada produto individualmente depois.</p></div><span id="massBaseCount">${mass.rows.length} linhas</span></header><div class="mass-product-base-grid"><label>Ambiente<select data-mass-base="environment_id">${massSelectOptions(mass.environments, mass.base.environment_id, 'Selecione o ambiente', item => item.active !== false)}</select></label><label>Subcategoria<select data-mass-base="category_id">${massSelectOptions(mass.categories, mass.base.category_id, 'Selecione a subcategoria', item => !mass.base.environment_id || String(item.environment_id) === String(mass.base.environment_id))}</select></label><label>Material<select data-mass-base="material"><option value="" ${!mass.base.material ? 'selected' : ''}>Nenhum</option><option value="MDF" ${mass.base.material === 'MDF' ? 'selected' : ''}>MDF</option><option value="MDP" ${mass.base.material === 'MDP' ? 'selected' : ''}>MDP</option><option value="MDF / MDP" ${mass.base.material === 'MDF / MDP' ? 'selected' : ''}>MDF e MDP</option></select></label><label>Garantia<input data-mass-base="warranty" value="${esc(mass.base.warranty)}" placeholder="Ex.: 3 meses"></label><label class="mass-description-default">Descrição padrão <small>Opcional. Será herdada pelas linhas sem descrição personalizada.</small><textarea data-mass-base="description" rows="3" placeholder="Descrição completa aplicada inicialmente a todos os produtos.">${esc(mass.base.description || '')}</textarea></label><label class="mass-check"><input type="checkbox" data-mass-base="free_city_shipping" ${mass.base.free_city_shipping ? 'checked' : ''}> Frete grátis</label><label class="mass-check"><input type="checkbox" data-mass-base="free_assembly" ${mass.base.free_assembly ? 'checked' : ''}> Armação gratuita</label><label class="mass-check"><input type="checkbox" data-mass-base="on_sale" ${mass.base.on_sale ? 'checked' : ''}> Produto em promoção</label><label class="mass-check"><input type="checkbox" data-mass-base="featured" ${mass.base.featured ? 'checked' : ''}> Produto em destaque</label></div></section>`;
+  }
+  const massBulkFields = [['price', 'Preço normal'], ['promotional_price', 'Preço promocional'], ['stock_quantity', 'Estoque'], ['environment_id', 'Ambiente'], ['category_id', 'Subcategoria'], ['material', 'Material'], ['warranty', 'Garantia'], ['free_city_shipping', 'Frete grátis'], ['free_assembly', 'Armação gratuita'], ['on_sale', 'Promoção'], ['featured', 'Destaque']];
+  function massBulkInputMarkup(mass, field) {
+    if (field === 'environment_id') return `<select data-mass-bulk-value>${massSelectOptions(mass.environments, '', 'Selecione o ambiente', item => item.active !== false)}</select>`;
+    if (field === 'category_id') return `<select data-mass-bulk-value>${massSelectOptions(mass.categories, '', 'Selecione a subcategoria')}</select>`;
+    if (field === 'material') return '<select data-mass-bulk-value><option value="">Nenhum</option><option value="MDF">MDF</option><option value="MDP">MDP</option><option value="MDF / MDP">MDF e MDP</option></select>';
+    if (['free_city_shipping', 'free_assembly', 'on_sale', 'featured'].includes(field)) return '<select data-mass-bulk-value><option value="">Escolha</option><option value="true">Ativar</option><option value="false">Desativar</option></select>';
+    const number = ['price', 'promotional_price', 'stock_quantity'].includes(field);
+    return `<input data-mass-bulk-value type="${number ? 'number' : 'text'}" ${number ? 'min="0" step="any"' : ''} placeholder="Informe o valor">`;
+  }
+  function massProductBulkMarkup(mass) {
+    return `<section class="mass-product-bulk card" id="massProductBulk" hidden><div><b>Aplicar aos selecionados</b><small id="massBulkCount">0 produtos selecionados</small></div><label>Campo<select id="massBulkField">${massBulkFields.map(([value, label]) => `<option value="${value}">${label}</option>`).join('')}</select></label><label id="massBulkValueWrap">Valor${massBulkInputMarkup(mass, 'price')}</label><button type="button" class="secondary" id="massBulkApply">Aplicar</button><button type="button" class="secondary" id="massDuplicateSelected">Duplicar selecionados</button></section>`;
+  }
+  function massRowStatusMarkup(row, errors) {
+    if (row.status === 'success') return '<span class="mass-row-status is-success">✓ Cadastrado</span>';
+    if (row.status === 'saving') return '<span class="mass-row-status">Salvando…</span>';
+    if (row.status === 'failed') return `<span class="mass-row-status is-error">${esc(errors[0] || 'Falhou')}</span>`;
+    return errors.length ? `<span class="mass-row-status is-error">${esc(errors[0])}</span>` : '<span class="mass-row-status is-ready">✓ Pronto</span>';
+  }
+  function massProductRowMarkup(row, index, mass) {
+    row.errors = massProductErrors(row, mass);
+    return `<tr data-mass-row="${esc(row.key)}" class="${row.errors.length ? 'has-errors' : ''} ${row.status === 'success' ? 'is-success' : ''}"><td class="mass-select-cell"><input type="checkbox" data-mass-select="${esc(row.key)}" ${mass.selected.has(row.key) ? 'checked' : ''} ${row.status === 'success' ? 'disabled' : ''} aria-label="Selecionar linha ${index + 1}"></td><td class="mass-image-cell">${massImageCellMarkup(row, index)}</td><td class="mass-name-cell"><input data-mass-field="name" value="${esc(row.name)}" placeholder="Nome do produto" ${row.status === 'success' ? 'disabled' : ''}>${massDescriptionButtonMarkup(row, mass)}<small data-mass-row-errors>${esc(row.errors.join(' · '))}</small></td><td class="mass-color-cell">${massColorCellMarkup(row)}</td><td class="mass-options-cell">${massOptionsCellMarkup(row)}</td><td><input data-mass-field="price" type="number" min="0.01" step="0.01" value="${esc(row.price)}" placeholder="0,00" ${row.status === 'success' ? 'disabled' : ''}></td><td><input data-mass-field="promotional_price" type="number" min="0" step="0.01" value="${esc(row.promotional_price)}" placeholder="Opcional" ${row.status === 'success' ? 'disabled' : ''}></td><td><input data-mass-field="altura" type="number" min="0" step="any" value="${esc(row.altura)}" placeholder="cm" ${row.status === 'success' ? 'disabled' : ''}></td><td><input data-mass-field="largura" type="number" min="0" step="any" value="${esc(row.largura)}" placeholder="cm" ${row.status === 'success' ? 'disabled' : ''}></td><td><input data-mass-field="profundidade" type="number" min="0" step="any" value="${esc(row.profundidade)}" placeholder="cm" ${row.status === 'success' ? 'disabled' : ''}></td><td><input data-mass-field="stock_quantity" type="number" min="0" step="1" value="${esc(row.stock_quantity)}" placeholder="0" ${row.status === 'success' ? 'disabled' : ''}></td><td class="mass-actions">${massRowStatusMarkup(row, row.errors)}<button type="button" class="small-action" data-mass-duplicate="${esc(row.key)}">Duplicar</button><button type="button" class="small-action danger" data-mass-remove="${esc(row.key)}" ${mass.rows.length === 1 || row.status === 'success' ? 'disabled' : ''}>Remover</button></td></tr>`;
+  }
+  function massProductRowsMarkup(mass) {
+    return `<section class="mass-product-grid card"><div class="mass-product-grid-toolbar"><div><b>Produtos</b><small>Uma linha representa um produto.</small></div><div class="mass-add-lines"><label>Quantidade<input id="massLineCount" type="number" min="1" max="100" value="10"></label><button type="button" class="secondary" id="massAddLine">+ Adicionar linha</button><button type="button" class="secondary" id="massAddManyLines">Criar linhas</button></div></div><div class="mass-product-table-wrap"><table class="mass-product-table"><thead><tr><th><input id="massSelectAll" type="checkbox" aria-label="Selecionar todas"></th><th>Fotos</th><th>Nome do produto</th><th>Cor</th><th>Opções</th><th>Preço normal</th><th>Preço promocional</th><th>Altura</th><th>Largura</th><th>Profundidade</th><th>Estoque</th><th>Ações</th></tr></thead><tbody id="massProductRows">${mass.rows.map((row, index) => massProductRowMarkup(row, index, mass)).join('')}</tbody></table></div><div class="mass-product-summary" id="massProductSummary"></div></section>`;
+  }
+  function massProductEditorMarkup(mass) {
+    return `<div class="mass-product-workspace">${massProductBaseMarkup(mass)}${massProductBulkMarkup(mass)}${massProductRowsMarkup(mass)}<p class="mass-product-note">Os produtos são criados como rascunhos. Fotos usam a galeria principal, cores usam as variações existentes e medidas usam o mesmo JSONB do cadastro individual.</p>${massProductManagersMarkup()}</div>`;
+  }
+  function massRowElement(key) { return $(`[data-mass-row="${CSS.escape(key)}"]`); }
+  function updateMassRowFeedback(row) {
+    const mass = editorState?.mass;
+    const element = massRowElement(row.key);
+    if (!mass || !element) return;
+    row.errors = massProductErrors(row, mass);
+    element.classList.toggle('has-errors', row.errors.length > 0);
+    element.classList.toggle('is-success', row.status === 'success');
+    const error = $('[data-mass-row-errors]', element);
+    if (error) error.textContent = row.errors.join(' · ');
+    const current = $('.mass-row-status', element);
+    if (current) current.outerHTML = massRowStatusMarkup(row, row.errors);
+  }
+  function updateMassSummary() {
+    const mass = editorState?.mass;
+    if (!mass) return;
+    mass.rows.forEach(updateMassRowFeedback);
+    const pending = mass.rows.filter(row => row.status !== 'success');
+    const complete = pending.filter(row => !row.errors.length).length;
+    const summary = $('#massProductSummary');
+    if (summary) summary.innerHTML = `<span><b>${mass.rows.length}</b> produtos na grade</span><span class="is-ok">✓ ${mass.rows.filter(row => row.status === 'success').length} cadastrados</span><span>✓ ${pending.filter(row => row.name.trim()).length} nomes</span><span>✓ ${pending.filter(row => parseProductDimension(row.price) > 0).length} preços</span><span>✓ ${pending.filter(row => row.imageItems.length).length} com fotos</span><span>✓ ${pending.filter(row => row.colorSelections.length).length} com cores</span>${pending.length - complete ? `<span class="is-warning">⚠ ${pending.length - complete} precisam de correção</span>` : `<span class="is-ok">✓ ${complete} prontos</span>`}`;
+    const save = $('#saveEditor');
+    if (save && !mass.saving) save.textContent = mass.failedOnly ? `Tentar novamente ${pending.length} produto${pending.length === 1 ? '' : 's'}` : `Cadastrar ${pending.length} produto${pending.length === 1 ? '' : 's'}`;
+    const selected = mass.selected.size;
+    const bulk = $('#massProductBulk');
+    if (bulk) bulk.hidden = selected === 0;
+    if ($('#massBulkCount')) $('#massBulkCount').textContent = `${selected} produto${selected === 1 ? '' : 's'} selecionado${selected === 1 ? '' : 's'}`;
+    if ($('#massBaseCount')) $('#massBaseCount').textContent = `${mass.rows.length} linha${mass.rows.length === 1 ? '' : 's'}`;
+    if ($('#massSelectAll')) {
+      const selectable = mass.rows.filter(row => row.status !== 'success');
+      const count = selectable.filter(row => mass.selected.has(row.key)).length;
+      $('#massSelectAll').checked = Boolean(selectable.length) && count === selectable.length;
+      $('#massSelectAll').indeterminate = count > 0 && count < selectable.length;
+    }
+  }
+  function renderMassRows() {
+    const mass = editorState?.mass;
+    if (!mass || !$('#massProductRows')) return;
+    $('#massProductRows').innerHTML = mass.rows.map((row, index) => massProductRowMarkup(row, index, mass)).join('');
+    updateMassSummary();
+  }
+  function markMassProductDirty() {
+    const mass = editorState?.mass;
+    if (!mass) return;
+    mass.dirty = true; editorState.dirty = true;
+    persistMassProductDraft();
+  }
+  function activeMassRow(keyName) {
+    const mass = editorState?.mass;
+    return mass?.rows.find(row => row.key === mass[keyName]) || null;
+  }
+  function closeMassMediaManager() {
+    const layer = $('#massMediaManager');
+    if (layer) layer.hidden = true;
+    if (editorState?.mass) editorState.mass.activeMediaRowKey = null;
+  }
+  function renderMassMediaManager() {
+    const row = activeMassRow('activeMediaRowKey'), grid = $('#massMediaGrid');
+    if (!row || !grid) return closeMassMediaManager();
+    const cover = row.imageItems[0];
+    if (cover && row.coverKey !== cover.key) row.coverKey = cover.key;
+    $('#massMediaManagerTitle').textContent = row.name.trim() || 'Fotos do produto';
+    $('#massMediaCount').textContent = `${row.imageItems.length} de 8 fotos`;
+    grid.innerHTML = row.imageItems.length ? row.imageItems.map((item, index) => `<figure class="${index === 0 ? 'is-cover' : ''}"><div><img src="${esc(item.url)}" alt="Foto ${index + 1} de ${esc(row.name || 'produto')}"><span>${index === 0 ? 'CAPA' : `FOTO ${index + 1}`}</span></div><figcaption title="${esc(item.name)}">${esc(item.name)}</figcaption><div><button type="button" data-mass-media-move="${esc(item.key)}" data-direction="-1" ${index === 0 ? 'disabled' : ''} aria-label="Mover foto para a esquerda">←</button><button type="button" data-mass-media-move="${esc(item.key)}" data-direction="1" ${index === row.imageItems.length - 1 ? 'disabled' : ''} aria-label="Mover foto para a direita">→</button><button type="button" class="danger" data-mass-media-remove="${esc(item.key)}">Excluir</button></div></figure>`).join('') : '<div class="mass-manager-empty"><b>Nenhuma foto adicionada</b><p>Envie até 8 imagens JPG, PNG ou WebP.</p></div>';
+  }
+  function openMassMediaManager(row) {
+    if (!row || row.status === 'success') return;
+    editorState.mass.activeMediaRowKey = row.key;
+    $('#massMediaManager').hidden = false;
+    renderMassMediaManager();
+  }
+  function renderMassColorManager() {
+    const row = activeMassRow('activeColorRowKey'), root = $('#massColorManagerBody');
+    if (!row || !root) return closeMassColorManager();
+    const colors = (editorState.colors || []).filter(color => color.active !== false && color.type !== 'combination');
+    const selectedKeys = new Set(row.colorSelections.map(massColorSelectionKey));
+    const options = colors.map(color => {
+      const selected = selectedKeys.has(`single:${color.id}`);
+      return `<button type="button" class="mass-color-option ${selected ? 'is-selected' : ''}" data-mass-color-toggle="${esc(color.id)}" aria-pressed="${selected}"><span style="background:${colorSwatchBackground(color)}"></span><b>${esc(color.name)}</b>${selected ? '<i>✓</i>' : ''}</button>`;
+    }).join('');
+    const colorOptions = colors.map(color => `<option value="${esc(color.id)}">${esc(color.name)}</option>`).join('');
+    const selected = row.colorSelections.length ? `<div class="mass-selected-colors">${row.colorSelections.map(selection => { const { primary, secondary } = massColorSelectionDetails(selection); return `<span><i style="background:${colorSwatchBackground(primary, secondary)}"></i><b>${esc(massColorSelectionLabel(selection))}</b><button type="button" data-mass-color-remove="${esc(massColorSelectionKey(selection))}" aria-label="Remover ${esc(massColorSelectionLabel(selection))}">×</button></span>`; }).join('')}</div>` : '<p class="mass-color-empty">Nenhuma cor selecionada. O produto pode ser salvo sem variação.</p>';
+    const colorPhotos = row.colorSelections.length ? row.colorSelections.map(selection => {
+      const key = massColorSelectionKey(selection), label = massColorSelectionLabel(selection), { primary, secondary } = massColorSelectionDetails(selection);
+      const items = selection.imageItems || [];
+      const previews = items.length ? items.map(item => `<figure><img src="${esc(item.url)}" alt="Foto de ${esc(label)}"><button type="button" data-mass-color-photo-remove="${esc(item.key)}" data-selection-key="${esc(key)}" aria-label="Excluir ${esc(item.name)}">×</button><figcaption title="${esc(item.name)}">${esc(item.name)}</figcaption></figure>`).join('') : `<p>${selection.imageNames?.length ? 'Selecione novamente as fotos desta cor.' : 'Nenhuma foto adicionada para esta cor.'}</p>`;
+      return `<article class="mass-color-photo-card"><header><span style="background:${colorSwatchBackground(primary, secondary)}"></span><div><b>${esc(label)}</b><small>${items.length} de 8 fotos · sempre secundárias</small></div><label>+ Enviar fotos<input type="file" accept="image/jpeg,image/png,image/webp" multiple data-mass-color-photo-input="${esc(key)}" hidden></label></header><div class="mass-color-photo-grid">${previews}</div></article>`;
+    }).join('') : '<p class="mass-color-empty">Selecione uma ou mais cores para adicionar as fotos de cada variação.</p>';
+    root.innerHTML = `<section class="mass-selected-colors-wrap"><header><b>Selecionadas (${row.colorSelections.length})</b></header>${selected}</section><section class="mass-color-catalog"><header><b>Cores cadastradas</b><small>Selecione uma ou várias.</small></header><div>${options}</div></section><div class="mass-color-actions"><button type="button" class="secondary" id="massShowColorCombination">+ Combinação</button><button type="button" class="secondary" id="massShowNewColor">+ Nova cor</button></div><section id="massColorCombinationBuilder" class="mass-color-builder" hidden><label>Cor 1<select id="massCombinationOne">${colorOptions}</select></label><label>Cor 2<select id="massCombinationTwo">${colorOptions}</select></label><button type="button" id="massAddColorCombination">Adicionar combinação</button></section><section id="massNewColorBuilder" class="mass-color-builder" hidden><label>Nome<input id="massNewColorName" maxlength="50" placeholder="Ex.: Champagne"></label><label>Acabamento<select id="massNewColorType"><option value="solid">Cor lisa</option><option value="wood">Madeira</option></select></label><label>Cor principal<input id="massNewColorHex" type="color" value="#d8c7a7"></label><label>Tom secundário<input id="massNewColorSecondary" type="color" value="#aa8861"></label><button type="button" id="massCreateColor">Criar e selecionar</button></section><section class="mass-color-photos"><header><div><b>Fotos por cor</b><small>As imagens ficam vinculadas somente à respectiva variação.</small></div></header><div>${colorPhotos}</div></section>`;
+    const second = $('#massCombinationTwo');
+    if (second?.options.length > 1) second.selectedIndex = 1;
+    $('#massColorManagerTitle').textContent = row.name.trim() || 'Cores do produto';
+  }
+  function closeMassColorManager() {
+    const layer = $('#massColorManager');
+    if (layer) layer.hidden = true;
+    if (editorState?.mass) editorState.mass.activeColorRowKey = null;
+  }
+  function openMassColorManager(row) {
+    if (!row || row.status === 'success') return;
+    editorState.mass.activeColorRowKey = row.key;
+    $('#massColorManager').hidden = false;
+    renderMassColorManager();
+  }
+  function closeMassOptionsManager() {
+    const layer = $('#massOptionsManager');
+    if (layer) layer.hidden = true;
+    if (editorState?.mass) editorState.mass.activeOptionsRowKey = null;
+  }
+  function renderMassOptionsManager() {
+    const row = activeMassRow('activeOptionsRowKey'), root = $('#massOptionsManagerContent');
+    if (!row || !root) return closeMassOptionsManager();
+    $('#massOptionsManagerTitle').textContent = row.name.trim() || 'Opções do produto';
+    root.innerHTML = productOptionGroupsMarkup(row.productOptions || [], 'mass');
+  }
+  function openMassOptionsManager(row) {
+    if (!row || row.status === 'success') return;
+    editorState.mass.activeOptionsRowKey = row.key;
+    $('#massOptionsManager').hidden = false;
+    renderMassOptionsManager();
+  }
+  function closeMassDescriptionManager() {
+    const layer = $('#massDescriptionManager');
+    if (layer) layer.hidden = true;
+    if (editorState?.mass) editorState.mass.activeDescriptionRowKey = null;
+  }
+  function openMassDescriptionManager(row) {
+    const mass = editorState?.mass;
+    if (!mass || !row || row.status === 'success') return;
+    mass.activeDescriptionRowKey = row.key;
+    const custom = Object.prototype.hasOwnProperty.call(row.overrides || {}, 'description');
+    const inherited = mass.base.description || '';
+    $('#massDescriptionManagerTitle').textContent = row.name.trim() || 'Descrição do produto';
+    $('#massDescriptionInput').value = custom ? row.overrides.description || '' : inherited;
+    $('#massDescriptionSource').textContent = custom
+      ? 'Esta linha possui uma descrição personalizada.'
+      : inherited
+        ? 'Esta linha está usando a descrição padrão. Ao salvar, o texto passa a ser personalizado.'
+        : 'Nenhuma descrição padrão foi informada. Escreva a descrição completa deste produto.';
+    $('#massDescriptionUseDefault').hidden = !custom;
+    $('#massDescriptionManager').hidden = false;
+    requestAnimationFrame(() => $('#massDescriptionInput')?.focus());
+  }
+  function syncMassDescriptionButtons() {
+    const mass = editorState?.mass;
+    if (!mass) return;
+    mass.rows.forEach(row => {
+      const current = $('[data-mass-description-open]', massRowElement(row.key));
+      if (current) current.outerHTML = massDescriptionButtonMarkup(row, mass);
+    });
+  }
+  function saveMassDescriptionOverride() {
+    const mass = editorState?.mass;
+    const row = activeMassRow('activeDescriptionRowKey');
+    const input = $('#massDescriptionInput');
+    if (!mass || !row || !input) return;
+    row.overrides.description = input.value;
+    row.status = 'pending'; row.errors = [];
+    closeMassDescriptionManager();
+    renderMassRows(); markMassProductDirty();
+  }
+  function restoreMassDefaultDescription() {
+    const row = activeMassRow('activeDescriptionRowKey');
+    if (!row) return;
+    delete row.overrides.description;
+    row.status = 'pending'; row.errors = [];
+    closeMassDescriptionManager();
+    renderMassRows(); markMassProductDirty();
+  }
+  function refreshMassRowManagers() {
+    renderMassRows();
+    if (!$('#massMediaManager')?.hidden) renderMassMediaManager();
+    if (!$('#massColorManager')?.hidden) renderMassColorManager();
+    if (!$('#massOptionsManager')?.hidden) renderMassOptionsManager();
+    markMassProductDirty();
+  }
+  function addMassRows(count = 1, source = null) {
+    const mass = editorState?.mass;
+    if (!mass) return;
+    const amount = Math.max(1, Math.min(100, Number(count) || 1));
+    for (let index = 0; index < amount; index++) {
+      const copy = source ? newMassProductRow({ ...source, key: undefined, name: `${source.name} — cópia`, imageNames: source.imageItems.map(item => item.name), colorSelections: source.colorSelections, productOptions: source.productOptions, overrides: source.overrides }) : newMassProductRow();
+      if (source?.imageItems?.length) {
+        copy.imageItems = source.imageItems.map(item => newMassImageItem(item.file));
+        copy.imageNames = copy.imageItems.map(item => item.name);
+        copy.coverKey = copy.imageItems[0]?.key || null;
+      }
+      copy.colorSelections.forEach((selection, selectionIndex) => {
+        const sourceSelection = source?.colorSelections?.[selectionIndex];
+        if (!sourceSelection?.imageItems?.length) return;
+        selection.imageItems = sourceSelection.imageItems.map(item => newMassImageItem(item.file));
+        selection.imageNames = selection.imageItems.map(item => item.name);
+      });
+      mass.rows.push(copy);
+    }
+    mass.dirty = true; editorState.dirty = true;
+    renderMassRows(); persistMassProductDraft();
+  }
+  function removeMassRow(row) {
+    const mass = editorState?.mass;
+    if (!mass || mass.rows.length === 1 || row.status === 'success') return;
+    row.imageItems.forEach(item => URL.revokeObjectURL(item.url));
+    row.colorSelections.forEach(revokeMassColorSelectionImages);
+    mass.selected.delete(row.key);
+    mass.rows.splice(mass.rows.indexOf(row), 1);
+    mass.dirty = true; editorState.dirty = true;
+    renderMassRows(); persistMassProductDraft();
+  }
+  function syncMassCategoryOptions() {
+    const mass = editorState?.mass;
+    const select = $('[data-mass-base="category_id"]');
+    if (!mass || !select) return;
+    const allowed = mass.categories.filter(item => !mass.base.environment_id || String(item.environment_id) === String(mass.base.environment_id));
+    if (!allowed.some(item => String(item.id) === String(mass.base.category_id))) mass.base.category_id = '';
+    select.innerHTML = massSelectOptions(allowed, mass.base.category_id, 'Selecione a subcategoria');
+  }
+  function applyMassBulkEdit() {
+    const mass = editorState?.mass;
+    const field = $('#massBulkField')?.value;
+    const input = $('[data-mass-bulk-value]');
+    if (!mass || !field || !input || input.value === '') return toast('Informe o valor que será aplicado.', 'error');
+    let value = input.value;
+    if (['free_city_shipping', 'free_assembly', 'on_sale', 'featured'].includes(field)) value = value === 'true';
+    mass.rows.filter(row => mass.selected.has(row.key) && row.status !== 'success').forEach(row => {
+      if (['price', 'promotional_price', 'stock_quantity'].includes(field)) row[field] = value;
+      else {
+        row.overrides[field] = value;
+        if (field === 'category_id') row.overrides.environment_id = mass.categories.find(item => String(item.id) === String(value))?.environment_id || row.overrides.environment_id;
+        if (field === 'environment_id') {
+          const currentCategory = massEffectiveValues(row, mass.base).category_id;
+          const category = mass.categories.find(item => String(item.id) === String(currentCategory));
+          if (category && String(category.environment_id) !== String(value)) row.overrides.category_id = '';
+        }
+      }
+    });
+    mass.dirty = true; editorState.dirty = true;
+    renderMassRows(); persistMassProductDraft(); toast(`Valor aplicado a ${mass.selected.size} produtos.`);
+  }
+  function bindMassProductEditor() {
+    const mass = editorState.mass;
+    const workspace = $('.mass-product-workspace');
+    $('#massAddLine').onclick = () => addMassRows(1);
+    $('#massAddManyLines').onclick = () => addMassRows($('#massLineCount').value);
+    $('#massBulkField').onchange = event => { $('#massBulkValueWrap').innerHTML = `Valor${massBulkInputMarkup(mass, event.target.value)}`; };
+    $('#massBulkApply').onclick = applyMassBulkEdit;
+    $('#massDuplicateSelected').onclick = () => {
+      const selected = mass.rows.filter(row => mass.selected.has(row.key) && row.status !== 'success');
+      if (!selected.length) return;
+      selected.forEach(row => addMassRows(1, row));
+      mass.selected.clear(); renderMassRows();
+    };
+    workspace.addEventListener('input', event => {
+      const optionGroupName = event.target.dataset.massOptionGroupName;
+      if (optionGroupName) {
+        const row = activeMassRow('activeOptionsRowKey'), group = optionGroupByKey(row?.productOptions, optionGroupName);
+        if (group) { group.name = event.target.value; group.slug = slugify(event.target.value); markMassProductDirty(); }
+        return;
+      }
+      const optionValueLabel = event.target.dataset.massOptionValueLabel;
+      if (optionValueLabel) {
+        const row = activeMassRow('activeOptionsRowKey'), group = optionGroupByKey(row?.productOptions, event.target.dataset.optionGroupKey);
+        const value = group?.values.find(item => item.key === optionValueLabel);
+        if (value) { value.label = event.target.value; value.slug = slugify(event.target.value); markMassProductDirty(); }
+        return;
+      }
+      const baseField = event.target.dataset.massBase;
+      if (baseField) {
+        mass.base[baseField] = event.target.type === 'checkbox' ? event.target.checked : event.target.value;
+        if (baseField === 'environment_id') syncMassCategoryOptions();
+        if (baseField === 'description') syncMassDescriptionButtons();
+        mass.dirty = true; editorState.dirty = true; updateMassSummary(); persistMassProductDraft(); return;
+      }
+      const rowElement = event.target.closest('[data-mass-row]');
+      const field = event.target.dataset.massField;
+      if (!rowElement || !field) return;
+      const row = mass.rows.find(item => item.key === rowElement.dataset.massRow);
+      if (!row || row.status === 'success') return;
+      row[field] = event.target.value; row.status = 'pending'; row.errors = [];
+      mass.dirty = true; editorState.dirty = true; updateMassSummary(); persistMassProductDraft();
+    });
+    workspace.addEventListener('change', event => {
+      const optionValueKey = event.target.dataset.massOptionValueToggle;
+      if (optionValueKey) {
+        const row = activeMassRow('activeOptionsRowKey'), group = optionGroupByKey(row?.productOptions, event.target.dataset.optionGroupKey);
+        const value = group?.values.find(item => item.key === optionValueKey);
+        if (value) value.selected = event.target.checked;
+        refreshMassRowManagers(); return;
+      }
+      if (event.target.matches('[data-mass-select]')) {
+        event.target.checked ? mass.selected.add(event.target.dataset.massSelect) : mass.selected.delete(event.target.dataset.massSelect);
+        updateMassSummary(); return;
+      }
+      if (event.target.id === 'massSelectAll') {
+        mass.rows.filter(row => row.status !== 'success').forEach(row => event.target.checked ? mass.selected.add(row.key) : mass.selected.delete(row.key));
+        renderMassRows(); return;
+      }
+      if (event.target.id === 'massMediaInput') {
+        const row = activeMassRow('activeMediaRowKey');
+        const files = [...(event.target.files || [])];
+        event.target.value = '';
+        if (!row || !files.length) return;
+        try { validatePendingProductImages(files); } catch (error) { return toast(error.message, 'error'); }
+        const known = new Set(row.imageItems.map(item => productGalleryFileKey(item.file)));
+        const incoming = files.filter(file => !known.has(productGalleryFileKey(file)));
+        if (row.imageItems.length + incoming.length > 8) return toast('Cada produto aceita no máximo 8 fotos.', 'error');
+        row.imageItems.push(...incoming.map(newMassImageItem));
+        row.imageNames = row.imageItems.map(item => item.name);
+        row.coverKey = row.imageItems[0]?.key || null;
+        refreshMassRowManagers();
+        return;
+      }
+      const colorPhotoKey = event.target.dataset.massColorPhotoInput;
+      if (colorPhotoKey) {
+        const row = activeMassRow('activeColorRowKey');
+        const selection = row?.colorSelections.find(item => massColorSelectionKey(item) === colorPhotoKey);
+        const files = [...(event.target.files || [])];
+        event.target.value = '';
+        if (!row || !selection || !files.length) return;
+        try { validatePendingProductImages(files); } catch (error) { return toast(error.message, 'error'); }
+        const known = new Set((selection.imageItems || []).map(item => productGalleryFileKey(item.file)));
+        const incoming = files.filter(file => !known.has(productGalleryFileKey(file)));
+        if ((selection.imageItems || []).length + incoming.length > 8) return toast('Cada cor aceita no máximo 8 fotos.', 'error');
+        selection.imageItems.push(...incoming.map(newMassImageItem));
+        selection.imageNames = selection.imageItems.map(item => item.name);
+        refreshMassRowManagers();
+      }
+    });
+    workspace.addEventListener('click', event => {
+      if (event.target.closest('[data-mass-media-close]')) { closeMassMediaManager(); return; }
+      if (event.target.closest('[data-mass-colors-close]')) { closeMassColorManager(); return; }
+      if (event.target.closest('[data-mass-options-close]')) { closeMassOptionsManager(); return; }
+      if (event.target.closest('[data-mass-description-close]')) { closeMassDescriptionManager(); return; }
+      const mediaOpen = event.target.closest('[data-mass-media-open]');
+      if (mediaOpen) { openMassMediaManager(mass.rows.find(item => item.key === mediaOpen.dataset.massMediaOpen)); return; }
+      const colorsOpen = event.target.closest('[data-mass-colors-open]');
+      if (colorsOpen) { openMassColorManager(mass.rows.find(item => item.key === colorsOpen.dataset.massColorsOpen)); return; }
+      const optionsOpen = event.target.closest('[data-mass-options-open]');
+      if (optionsOpen) { openMassOptionsManager(mass.rows.find(item => item.key === optionsOpen.dataset.massOptionsOpen)); return; }
+      const descriptionOpen = event.target.closest('[data-mass-description-open]');
+      if (descriptionOpen) { openMassDescriptionManager(mass.rows.find(item => item.key === descriptionOpen.dataset.massDescriptionOpen)); return; }
+      if (event.target.closest('#massDescriptionSave')) { saveMassDescriptionOverride(); return; }
+      if (event.target.closest('#massDescriptionUseDefault')) { restoreMassDefaultDescription(); return; }
+      if (event.target.closest('[data-mass-option-group-add]')) {
+        const row = activeMassRow('activeOptionsRowKey'); if (!row) return;
+        addCustomProductOption(row.productOptions); refreshMassRowManagers(); return;
+      }
+      const optionValueAdd = event.target.closest('[data-mass-option-value-add]');
+      if (optionValueAdd) {
+        const row = activeMassRow('activeOptionsRowKey'), group = optionGroupByKey(row?.productOptions, optionValueAdd.dataset.massOptionValueAdd);
+        if (group) group.values.push(newProductOptionValue());
+        refreshMassRowManagers(); return;
+      }
+      const optionGroupRemove = event.target.closest('[data-mass-option-group-remove]');
+      if (optionGroupRemove) {
+        const row = activeMassRow('activeOptionsRowKey'); if (!row) return;
+        row.productOptions = row.productOptions.filter(group => group.key !== optionGroupRemove.dataset.massOptionGroupRemove);
+        refreshMassRowManagers(); return;
+      }
+      const optionValueRemove = event.target.closest('[data-mass-option-value-remove]');
+      if (optionValueRemove) {
+        const row = activeMassRow('activeOptionsRowKey'), group = optionGroupByKey(row?.productOptions, optionValueRemove.dataset.optionGroupKey);
+        if (group) group.values = group.values.filter(value => value.key !== optionValueRemove.dataset.massOptionValueRemove);
+        refreshMassRowManagers(); return;
+      }
+      const duplicate = event.target.closest('[data-mass-duplicate]');
+      if (duplicate) { const row = mass.rows.find(item => item.key === duplicate.dataset.massDuplicate); if (row) addMassRows(1, row); return; }
+      const remove = event.target.closest('[data-mass-remove]');
+      if (remove) { const row = mass.rows.find(item => item.key === remove.dataset.massRemove); if (row) removeMassRow(row); return; }
+      const move = event.target.closest('[data-mass-media-move]');
+      if (move) {
+        const row = activeMassRow('activeMediaRowKey'); if (!row) return;
+        const from = row.imageItems.findIndex(item => item.key === move.dataset.massMediaMove), to = from + Number(move.dataset.direction || 0);
+        if (from >= 0 && to >= 0 && to < row.imageItems.length) { [row.imageItems[from], row.imageItems[to]] = [row.imageItems[to], row.imageItems[from]]; row.coverKey = row.imageItems[0]?.key || null; refreshMassRowManagers(); }
+        return;
+      }
+      const mediaRemove = event.target.closest('[data-mass-media-remove]');
+      if (mediaRemove) {
+        const row = activeMassRow('activeMediaRowKey'); if (!row) return;
+        const index = row.imageItems.findIndex(item => item.key === mediaRemove.dataset.massMediaRemove); if (index < 0) return;
+        const [removed] = row.imageItems.splice(index, 1); URL.revokeObjectURL(removed.url);
+        row.imageNames = row.imageItems.map(item => item.name);
+        row.coverKey = row.imageItems[0]?.key || null;
+        refreshMassRowManagers(); return;
+      }
+      const colorPhotoRemove = event.target.closest('[data-mass-color-photo-remove]');
+      if (colorPhotoRemove) {
+        const row = activeMassRow('activeColorRowKey'); if (!row) return;
+        const selection = row.colorSelections.find(item => massColorSelectionKey(item) === colorPhotoRemove.dataset.selectionKey);
+        if (!selection) return;
+        const index = selection.imageItems.findIndex(item => item.key === colorPhotoRemove.dataset.massColorPhotoRemove);
+        if (index < 0) return;
+        const [removed] = selection.imageItems.splice(index, 1); if (removed.url) URL.revokeObjectURL(removed.url);
+        selection.imageNames = selection.imageItems.map(item => item.name);
+        refreshMassRowManagers(); return;
+      }
+      const colorToggle = event.target.closest('[data-mass-color-toggle]');
+      if (colorToggle) {
+        const row = activeMassRow('activeColorRowKey'); if (!row) return;
+        const selection = newMassColorSelection({ color_id: colorToggle.dataset.massColorToggle, combination_color_id: null }), key = massColorSelectionKey(selection);
+        const index = row.colorSelections.findIndex(item => massColorSelectionKey(item) === key);
+        if (index >= 0) { revokeMassColorSelectionImages(row.colorSelections[index]); row.colorSelections.splice(index, 1); } else row.colorSelections.push(selection);
+        refreshMassRowManagers(); return;
+      }
+      const colorRemove = event.target.closest('[data-mass-color-remove]');
+      if (colorRemove) {
+        const row = activeMassRow('activeColorRowKey'); if (!row) return;
+        const removedSelections = row.colorSelections.filter(selection => massColorSelectionKey(selection) === colorRemove.dataset.massColorRemove);
+        removedSelections.forEach(revokeMassColorSelectionImages);
+        row.colorSelections = row.colorSelections.filter(selection => massColorSelectionKey(selection) !== colorRemove.dataset.massColorRemove);
+        refreshMassRowManagers(); return;
+      }
+      if (event.target.closest('#massShowColorCombination')) { $('#massColorCombinationBuilder').hidden = !$('#massColorCombinationBuilder').hidden; $('#massNewColorBuilder').hidden = true; return; }
+      if (event.target.closest('#massShowNewColor')) { $('#massNewColorBuilder').hidden = !$('#massNewColorBuilder').hidden; $('#massColorCombinationBuilder').hidden = true; return; }
+      if (event.target.closest('#massAddColorCombination')) {
+        const row = activeMassRow('activeColorRowKey'), first = $('#massCombinationOne')?.value, second = $('#massCombinationTwo')?.value;
+        if (!row || !first || !second) return toast('Selecione as duas cores.', 'error');
+        if (first === second) return toast('Escolha duas cores diferentes.', 'error');
+        const selection = newMassColorSelection({ color_id: first, combination_color_id: second }), key = massColorSelectionKey(selection);
+        if (row.colorSelections.some(item => massColorSelectionKey(item) === key)) return toast('Essa combinação já foi adicionada.', 'error');
+        row.colorSelections.push(selection); refreshMassRowManagers(); return;
+      }
+      if (event.target.closest('#massCreateColor')) {
+        const row = activeMassRow('activeColorRowKey'), name = $('#massNewColorName')?.value.trim(), slug = slugify(name), type = $('#massNewColorType')?.value || 'solid';
+        if (!row || !name) return toast('Informe o nome da nova cor.', 'error');
+        if ((editorState.colors || []).some(color => color.slug === slug)) return toast('Essa cor já existe no catálogo.', 'error');
+        const color = { id: `local:${crypto.randomUUID()}`, name, slug, type, hex: $('#massNewColorHex').value, secondary_hex: $('#massNewColorSecondary').value, active: true, sort_order: (editorState.colors || []).length * 10 + 10, persisted: false };
+        editorState.colors.push(color); row.colorSelections.push(newMassColorSelection({ color_id: color.id, combination_color_id: null })); refreshMassRowManagers();
+      }
+    });
+    updateMassSummary();
+  }
+  async function massProductEditor() {
+    if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
+    resetEditorChrome();
+    const [environmentResult, categoryResult, colorCatalog] = await Promise.all([
+      db.from('environments').select('id,name,active').order('sort_order').order('name'),
+      db.from('categories').select('id,name,environment_id,active').order('sort_order').order('name'),
+      loadProductColorCatalog()
+    ]);
+    if (environmentResult.error) return toast(explain(environmentResult.error), 'error');
+    if (categoryResult.error) return toast(explain(categoryResult.error), 'error');
+    let draft = readMassProductDraft();
+    if (draft) {
+      const draftAction = await chooseMassDraftAction();
+      if (draftAction === 'exit') return;
+      if (draftAction === 'restart') { clearMassProductDraft(); draft = null; }
+    }
+    const rows = (draft?.rows || [null]).map(item => newMassProductRow(item || {}));
+    const colors = [...(colorCatalog.colors || [])];
+    for (const pendingColor of (draft?.colors || [])) if (!colors.some(color => color.id === pendingColor.id || color.slug === pendingColor.slug)) colors.push({ ...pendingColor });
+    editorState = {
+      view: 'mass-products', dirty: Boolean(draft), saving: false, previewObjectUrls: [], colors, colorsAvailable: colorCatalog.available,
+      mass: {
+        base: { ...massProductBaseDefaults(), ...(draft?.base || {}) }, rows, selected: new Set(), saving: false, failedOnly: false,
+        environments: environmentResult.data || [], categories: (categoryResult.data || []).filter(item => item.active !== false), draftTimer: null,
+        activeMediaRowKey: null, activeColorRowKey: null, activeOptionsRowKey: null, activeDescriptionRowKey: null
+      }
+    };
+    $('#editorDialog').classList.add('mass-product-dialog');
+    $('#dialogEyebrow').textContent = 'CATÁLOGO';
+    $('#dialogTitle').textContent = 'Cadastro em Massa';
+    $('#editorFields').innerHTML = massProductEditorMarkup(editorState.mass);
+    $('#editorForm>footer .editor-footer-spacer')?.insertAdjacentHTML('beforebegin', '<span id="productUnsavedStatus" class="product-unsaved-status" role="status">Rascunho automático ativo</span>');
+    $('#saveEditor').textContent = `Cadastrar ${rows.length} produto${rows.length === 1 ? '' : 's'}`;
+    bindMassProductEditor();
+    $('#editorDialog').showModal();
+  }
+  function massProductPayload(row, base) {
+    const common = massEffectiveValues(row, base);
+    const promotional = row.promotional_price === '' ? null : parseProductDimension(row.promotional_price);
+    const colorText = row.colorSelections.map(selection => massColorSelectionLabel(selection, ' / ')).join(', ');
+    const hasColors = row.colorSelections.length > 0;
+    return {
+      name: row.name.trim(), slug: slugify(row.name), sku: null,
+      short_description: '', description: common.description || '', category_id: common.category_id || null, environment_id: common.environment_id || null, brand_id: null,
+      price: parseProductDimension(row.price), promotional_price: promotional, stock_quantity: Number(row.stock_quantity), low_stock_threshold: 5,
+      featured: Boolean(common.featured), best_seller: false, new_arrival: false, on_sale: Boolean(common.on_sale || promotional), sort_order: 0,
+      active: false, warranty: common.warranty || '', dimensions: massProductDimensions(row), material: common.material || '', color: colorText, specifications: {},
+      installment_enabled: true, max_installments: 12, whatsapp_enabled: true, cart_enabled: true,
+      free_city_shipping: Boolean(common.free_city_shipping), free_assembly: Boolean(common.free_assembly), is_campaign: false,
+      variants_enabled: hasColors, variation_type: hasColors ? 'color' : null
+    };
+  }
+  function massProductVariantSettings(row) {
+    const variants = row.colorSelections.map((selection, index) => {
+      const { primary, secondary } = massColorSelectionDetails(selection);
+      const name = `${primary.name}${secondary ? ` / ${secondary.name}` : ''}`;
+      const draft = newVariantDraft({
+        name, color_name: name, color_id: primary.id, combination_color_id: secondary?.id || null,
+        swatch_mode: secondary ? 'composite' : 'simple', color_hex: primary.hex,
+        secondary_color_hex: secondary?.hex || primary.secondary_hex || primary.hex,
+        stock: Number(row.stock_quantity || 0), active: true, default_variant: index === 0, display_order: index
+      });
+      draft.galleryFiles = (selection.imageItems || []).map(item => item.file);
+      const productPart = slugify(row.name || 'produto').replace(/-/g, '').slice(0, 18).toUpperCase() || 'PRODUTO';
+      const colorPart = slugify(name).replace(/-/g, '').slice(0, 12).toUpperCase() || `COR${index + 1}`;
+      draft.sku = `${productPart}-${colorPart}-${crypto.randomUUID().replace(/-/g, '').slice(0, 6).toUpperCase()}`;
+      return draft;
+    });
+    return { enabled: variants.length > 0, type: variants.length ? 'color' : null, variants };
+  }
+  async function persistMassPendingColors(mass) {
+    const pendingIds = new Set(mass.rows.flatMap(row => row.colorSelections.flatMap(selection => [selection.color_id, selection.combination_color_id])).filter(id => String(id || '').startsWith('local:') || String(id || '').startsWith('preset:')));
+    if (!pendingIds.size) return;
+    if (!editorState.colorsAvailable) throw new Error('Execute a migração 20261001_product_color_catalog.sql antes de cadastrar cores.');
+    for (const pendingId of pendingIds) {
+      const color = catalogColor(pendingId);
+      if (!color) continue;
+      const values = { name: color.name, slug: color.slug, hex: color.hex, secondary_hex: color.secondary_hex || null, type: color.type || 'solid', active: true, sort_order: Number(color.sort_order || 0) };
+      const { data, error } = await db.from('product_colors').upsert(values, { onConflict: 'slug' }).select().single();
+      if (error) throw error;
+      mass.rows.forEach(row => row.colorSelections.forEach(selection => {
+        if (selection.color_id === pendingId) selection.color_id = data.id;
+        if (selection.combination_color_id === pendingId) selection.combination_color_id = data.id;
+      }));
+      Object.assign(color, data, { persisted: true });
+    }
+  }
+  function massProductFailureMessage(error) {
+    if (error?.code === '23505' || /duplicate|unique/i.test(error?.message || '')) return 'Já existe um produto com este nome ou endereço.';
+    if (/replace_product_options|product_option_groups|product_option_values/i.test(error?.message || '')) return 'Execute a migração 20261008_product_options.sql antes de salvar opções do produto.';
+    return explain(error);
+  }
+  async function persistMassProductRow(row, mass) {
+    let createdId = null;
+    let galleryUploads = [];
+    try {
+      row.status = 'saving'; row.errors = []; updateMassRowFeedback(row);
+      const { data, error } = await db.from('products').insert(massProductPayload(row, mass.base)).select().single();
+      if (error) throw error;
+      createdId = data.id; row.createdId = data.id;
+      const cover = row.imageItems[0];
+      galleryUploads = await saveGallery(data.id, null, 'products', { files: row.imageItems.map(item => item.file), coverFile: cover?.file || null });
+      const variants = massProductVariantSettings(row);
+      if (variants.enabled) await saveProductVariants(data.id, variants);
+      await saveProductOptions(data.id, selectedProductOptionPayload(row.productOptions || []));
+      row.status = 'success'; row.errors = []; row.createdId = data.id;
+      updateMassRowFeedback(row);
+      return { ok: true, row, id: data.id };
+    } catch (error) {
+      let rollbackError = null;
+      const uploadedPaths = galleryUploads.flatMap(item => [item.path, item.posterPath]).filter(Boolean);
+      if (createdId) {
+        const rollback = await db.from('products').delete().eq('id', createdId);
+        rollbackError = rollback.error;
+        if (!rollbackError && uploadedPaths.length) await db.storage.from('products').remove(uploadedPaths);
+      }
+      row.createdId = rollbackError ? createdId : null;
+      row.status = 'failed';
+      row.errors = [rollbackError ? 'Falha após criar o produto; revise-o no catálogo antes de tentar novamente.' : massProductFailureMessage(error)];
+      updateMassRowFeedback(row);
+      return { ok: false, row, error: row.errors[0] };
+    }
+  }
+  function showMassProductResult(results) {
+    const success = results.filter(item => item.ok);
+    const failed = results.filter(item => !item.ok);
+    $('#massProductResult')?.remove();
+    $('.mass-product-workspace').insertAdjacentHTML('afterbegin', `<section id="massProductResult" class="mass-product-result ${failed.length ? 'has-failures' : ''}" role="status"><b>${success.length} produto${success.length === 1 ? '' : 's'} cadastrado${success.length === 1 ? '' : 's'} com sucesso.</b><p>${failed.length ? `${failed.length} produto${failed.length === 1 ? '' : 's'} não ${failed.length === 1 ? 'foi cadastrado' : 'foram cadastrados'}.` : 'Todos os produtos foram cadastrados.'}</p>${failed.length ? `<ul>${failed.map(item => `<li><b>${esc(item.row.name || 'Produto sem nome')}</b><span>${esc(item.error)}</span></li>`).join('')}</ul>` : ''}</section>`);
+  }
+  async function saveMassProducts(event) {
+    event.preventDefault();
+    const mass = editorState?.mass;
+    if (!mass || mass.saving) return;
+    const pending = mass.rows.filter(row => row.status !== 'success' && !row.createdId);
+    pending.forEach(row => { row.errors = massProductErrors(row, mass); });
+    const invalid = pending.filter(row => row.errors.length);
+    if (!pending.length) return toast('Não há produtos pendentes para cadastrar.', 'info');
+    if (invalid.length) {
+      updateMassSummary();
+      massRowElement(invalid[0].key)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return toast(`${invalid.length} produto${invalid.length === 1 ? '' : 's'} precisam de correção.`, 'error');
+    }
+    const confirmed = await confirmAction({ title: `Cadastrar ${pending.length} produto${pending.length === 1 ? '' : 's'}?`, message: `Você está prestes a cadastrar ${pending.length} produto${pending.length === 1 ? '' : 's'} como rascunho.`, confirmLabel: 'Confirmar cadastro' });
+    if (!confirmed) return;
+    try { await persistMassPendingColors(mass); }
+    catch (error) { return toast(explain(error), 'error'); }
+    mass.saving = true; editorState.saving = true;
+    const button = $('#saveEditor'); button.disabled = true;
+    const results = [];
+    for (let index = 0; index < pending.length; index++) {
+      button.textContent = `Cadastrando ${index + 1} de ${pending.length}…`;
+      results.push(await persistMassProductRow(pending[index], mass));
+      writeMassProductDraftNow();
+      updateMassSummary();
+    }
+    mass.saving = false; editorState.saving = false; button.disabled = false;
+    const failed = results.filter(item => !item.ok);
+    showMassProductResult(results);
+    notifyStorefront('products');
+    if (!failed.length) {
+      clearMassProductDraft(); editorState.dirty = false;
+      toast(`${results.length} produtos cadastrados com sucesso.`);
+      setTimeout(() => { if ($('#editorDialog').open) $('#editorDialog').close(); render('products'); }, 700);
+      return;
+    }
+    mass.failedOnly = true;
+    mass.selected.clear();
+    persistMassProductDraft(); updateMassSummary();
+    button.textContent = `Tentar novamente ${failed.length} produto${failed.length === 1 ? '' : 's'}`;
+    toast(`${results.length - failed.length} cadastrados; ${failed.length} precisam ser tentados novamente.`, 'error');
   }
   function productStockState(row) {
     if (Number(row.stock_quantity) === 0) return { key: 'out', label: 'Sem estoque' };
@@ -2951,7 +4634,9 @@
     return { key: 'in', label: 'Em estoque' };
   }
   function productCover(row) {
-    return [...(row.product_images || [])].filter(item => item.media_type !== 'video').sort((a, b) => Number(b.is_cover) - Number(a.is_cover) || Number(a.sort_order) - Number(b.sort_order))[0]?.image_url;
+    return [...(row.product_images || [])]
+      .filter(item => item.media_type !== 'video' && !isDimensionsProductImage(item))
+      .sort((a, b) => Number(b.is_cover) - Number(a.is_cover) || Number(a.sort_order || 0) - Number(b.sort_order || 0))[0]?.image_url;
   }
   function productRow(row) {
     const image = productCover(row);
@@ -2987,7 +4672,11 @@
     return `<button type="button" data-product-page="${Math.max(1, current - 1)}" ${current === 1 ? 'disabled' : ''} aria-label="Página anterior">‹</button>${pages.map(page => page === '…' ? '<span>…</span>' : `<button type="button" data-product-page="${page}" class="${page === current ? 'current' : ''}" ${page === current ? 'aria-current="page"' : ''}>${page}</button>`).join('')}<button type="button" data-product-page="${Math.min(total, current + 1)}" ${current === total ? 'disabled' : ''} aria-label="Próxima página">›</button>`;
   }
   async function renderProducts(revision) {
-    let { data, error } = await db.from('products').select('*,categories(name),product_images(*),product_variants(*,variant_images(id,image_url,storage_path,alt_text,is_cover,sort_order))').is('deleted_at', null).order('created_at', { ascending: false }).limit(1000);
+    let { data, error } = await db.from('products').select('*,categories(name),product_images(*),product_variants(*,variant_images(id,image_url,storage_path,alt_text,is_cover,sort_order)),product_option_groups(id,name,slug,display_order,active,product_option_values(id,label,slug,display_order,active))').is('deleted_at', null).order('created_at', { ascending: false }).limit(1000);
+    if (error && (/product_option_groups|product_option_values/i.test(error.message || '') || ['42P01','PGRST200','PGRST205'].includes(error.code))) {
+      const withoutOptions = await db.from('products').select('*,categories(name),product_images(*),product_variants(*,variant_images(id,image_url,storage_path,alt_text,is_cover,sort_order))').is('deleted_at', null).order('created_at', { ascending: false }).limit(1000);
+      data = withoutOptions.data; error = withoutOptions.error;
+    }
     if (error && (/product_variants|variants_enabled|variation_type|relationship/i.test(error.message || '') || ['42703','42P01','PGRST200','PGRST205'].includes(error.code))) {
       const legacy = await db.from('products').select('*,categories(name),product_images(*)').is('deleted_at', null).order('created_at', { ascending: false }).limit(1000);
       data = legacy.data; error = legacy.error;
@@ -3009,6 +4698,8 @@
     pageAction.hidden = false;
     pageAction.textContent = '+  Novo produto';
     pageAction.onclick = () => productEditor();
+    pageAction.insertAdjacentHTML('afterend', '<button id="massProductAction" class="secondary page-action mass-product-page-action" type="button">+  Cadastro em Massa</button>');
+    $('#massProductAction').onclick = () => massProductEditor();
     $('#content').innerHTML = `<div class="product-metrics">
       <article class="product-metric total"><span class="metric-icon" aria-hidden="true">▦</span><div><b>${rows.length}</b><small>Total de produtos</small></div></article>
       <article class="product-metric active"><span class="metric-icon" aria-hidden="true">✓</span><div><b>${active}</b><small>Produtos ativos</small></div></article>
@@ -3401,6 +5092,7 @@
     $('#pageSubtitle').textContent = meta[1];
     $('#pageAction').hidden = true;
     $('#pageAction').onclick = null;
+    $('#massProductAction')?.remove();
     $('#pageBadge').hidden = true;
     $('#panelSearch').value = '';
     $$('nav button').forEach(button => button.classList.toggle('active', button.dataset.view === view));
@@ -3490,11 +5182,21 @@
       });
       if (!discard) return;
     }
+    if (editorState?.view === 'mass-products' && editorState.dirty && !editorState.saving) {
+      writeMassProductDraftNow();
+      const leave = await confirmAction({
+        title: 'Sair do cadastro em massa?',
+        message: 'O rascunho foi salvo automaticamente. Você poderá continuar quando voltar.',
+        confirmLabel: 'Sair'
+      });
+      if (!leave) return;
+    }
     dialog.close();
   }
   $$('[data-close]').forEach(button => button.onclick = requestEditorClose);
   $('#editorForm').addEventListener('submit', event => {
     if (editorState?.quick) { event.preventDefault(); return; }
+    if (editorState?.view === 'mass-products') return saveMassProducts(event);
     if (editorState?.view === 'products') return saveProduct(event);
     if (editorState?.view === 'categories') return saveCategory(event);
     if (editorState?.view === 'banners') return saveBanner(event);
@@ -3502,13 +5204,19 @@
   });
   const editorDialog = $('#editorDialog');
   new MutationObserver(() => document.body.classList.toggle('dialog-open', editorDialog.open)).observe(editorDialog, { attributes: true, attributeFilter: ['open'] });
-  editorDialog.addEventListener('click', event => { if (event.target === editorDialog) requestEditorClose(); });
-  editorDialog.addEventListener('cancel', event => { event.preventDefault(); requestEditorClose(); });
+  editorDialog.addEventListener('click', event => {
+    if (event.target === editorDialog && editorState?.view !== 'mass-products') requestEditorClose();
+  });
+  editorDialog.addEventListener('cancel', event => {
+    event.preventDefault();
+    if (editorState?.view !== 'mass-products') requestEditorClose();
+  });
   editorDialog.addEventListener('close', () => {
     document.body.classList.remove('dialog-open');
     if (editorState?.previewObjectUrl) URL.revokeObjectURL(editorState.previewObjectUrl);
     (editorState?.previewObjectUrls || []).forEach(url => URL.revokeObjectURL(url));
     if (editorState?.quick?.uploadObjectUrl) URL.revokeObjectURL(editorState.quick.uploadObjectUrl);
+    if (editorState?.mass?.draftTimer) clearTimeout(editorState.mass.draftTimer);
     editorState = null;
     $('#editorFields').replaceChildren();
     resetEditorChrome();

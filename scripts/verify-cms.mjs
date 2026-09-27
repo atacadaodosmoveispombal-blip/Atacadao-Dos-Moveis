@@ -1,11 +1,14 @@
 const url = 'https://ejcmuygnfrmytdqlyhjr.supabase.co';
 const key = 'sb_publishable__J4jaeMvdcVL9EguRpCApw_nV2ymCUP';
-const expected = {
-  products: 64,
-  categories: 8,
-  environments: 8,
-  banners: 3,
-  site_sections: 8,
+// The CMS is driven by the real catalog, not by the old development seed.
+// These floors only assert that the required areas are configured; catalog
+// quality is checked below through relationships, values and media integrity.
+const requiredRecords = {
+  products: 1,
+  categories: 1,
+  environments: 1,
+  banners: 1,
+  site_sections: 1,
   store_settings: 1
 };
 
@@ -34,16 +37,20 @@ async function verifyQuery(label, path, validate = () => true) {
   return rows;
 }
 
-for (const [table, minimum] of Object.entries(expected)) {
+for (const [table, minimum] of Object.entries(requiredRecords)) {
   const total = await count(table);
   const ok = total >= minimum;
-  console.log(`${ok ? 'OK' : 'PENDENTE'} ${table}: ${total} registro(s); esperado >= ${minimum}`);
+  console.log(`${ok ? 'OK' : 'PENDENTE'} ${table}: ${total} registro(s); mínimo operacional ${minimum}`);
   failed ||= !ok;
 }
 
 await verifyQuery(
   'schema de produtos administrativos',
   'products?select=id,whatsapp_enabled,cart_enabled,free_city_shipping,free_assembly,is_campaign&limit=1'
+);
+await verifyQuery(
+  'schema da galeria de produtos',
+  'product_images?select=id,product_id,image_url,storage_path,media_type,poster_url,poster_storage_path,is_cover,sort_order&limit=1'
 );
 await verifyQuery(
   'schema de categorias administrativas',
@@ -63,18 +70,105 @@ const bannerOrderOk = activeBanners.every((item, index) => index === 0 || Number
 console.log(`${bannerOrderOk ? 'OK' : 'PENDENTE'} ordem dos banners públicos`);
 failed ||= !bannerOrderOk;
 
-const categoryResponse = await fetch(`${url}/rest/v1/categories?select=id,name&active=eq.true&order=sort_order`, { headers: { apikey: key } });
-const productResponse = await fetch(`${url}/rest/v1/products?select=category_id&active=eq.true&deleted_at=is.null`, { headers: { apikey: key } });
-if (!categoryResponse.ok) throw new Error(`categories: HTTP ${categoryResponse.status} ${await categoryResponse.text()}`);
-if (!productResponse.ok) throw new Error(`products: HTTP ${productResponse.status} ${await productResponse.text()}`);
-const categories = await categoryResponse.json();
-const products = await productResponse.json();
-for (const category of categories) {
-  const total = products.filter(product => product.category_id === category.id).length;
-  const ok = total >= 8;
-  console.log(`${ok ? 'OK' : 'PENDENTE'} categoria ${category.name}: ${total} produto(s); esperado >= 8`);
+const [environments, categories, products, media] = await Promise.all([
+  verifyQuery('ambientes ativos legíveis', 'environments?select=id,name,slug,active&active=eq.true&order=sort_order', rows => rows.length > 0),
+  verifyQuery('categorias ativas legíveis', 'categories?select=id,name,slug,environment_id,active&active=eq.true&order=sort_order', rows => rows.length > 0),
+  verifyQuery('produtos públicos legíveis', 'products?select=id,name,slug,category_id,environment_id,price,promotional_price,stock_quantity,active,deleted_at&active=eq.true&deleted_at=is.null&limit=1000', rows => rows.length > 0),
+  verifyQuery('mídias dos produtos legíveis', 'product_images?select=id,product_id,image_url,storage_path,media_type,poster_url,poster_storage_path,is_cover,sort_order&limit=1000')
+]);
+
+function verifyIntegrity(label, issues) {
+  const ok = issues.length === 0;
+  const detail = ok ? '' : `: ${issues.length} ocorrência(s) — ${issues.slice(0, 8).join('; ')}${issues.length > 8 ? `; +${issues.length - 8} não exibida(s)` : ''}`;
+  console.log(`${ok ? 'OK' : 'PENDENTE'} ${label}${detail}`);
   failed ||= !ok;
 }
+
+function duplicateValues(rows, key) {
+  const seen = new Set();
+  const duplicates = new Set();
+  for (const row of rows) {
+    const value = String(row[key] || '').trim().toLowerCase();
+    if (!value) continue;
+    if (seen.has(value)) duplicates.add(value);
+    seen.add(value);
+  }
+  return [...duplicates];
+}
+
+function duplicateCategorySlugs(rows) {
+  const seen = new Set();
+  const duplicates = new Set();
+  for (const row of rows) {
+    const slug = String(row.slug || '').trim().toLowerCase();
+    if (!slug || !row.environment_id) continue;
+    const scopedSlug = `${row.environment_id}/${slug}`;
+    if (seen.has(scopedSlug)) duplicates.add(scopedSlug);
+    seen.add(scopedSlug);
+  }
+  return [...duplicates];
+}
+
+const environmentIds = new Set(environments.map(item => item.id));
+const categoryById = new Map(categories.map(item => [item.id, item]));
+const productIds = new Set(products.map(item => item.id));
+const mediaByProduct = new Map();
+for (const item of media) {
+  const list = mediaByProduct.get(item.product_id) || [];
+  list.push(item);
+  mediaByProduct.set(item.product_id, list);
+}
+
+verifyIntegrity('slugs únicos dos ambientes', duplicateValues(environments, 'slug').map(value => `slug duplicado ${value}`));
+verifyIntegrity('slugs únicos das categorias por ambiente', duplicateCategorySlugs(categories).map(value => `ambiente/slug duplicado ${value}`));
+verifyIntegrity('slugs únicos dos produtos públicos', duplicateValues(products, 'slug').map(value => `slug duplicado ${value}`));
+
+verifyIntegrity('relacionamentos das categorias', categories.flatMap(category => {
+  if (!category.environment_id) return [`${category.name}: sem ambiente`];
+  if (!environmentIds.has(category.environment_id)) return [`${category.name}: ambiente inativo ou inexistente`];
+  return [];
+}));
+
+verifyIntegrity('integridade dos produtos públicos', products.flatMap(product => {
+  const issues = [];
+  const category = categoryById.get(product.category_id);
+  if (!String(product.name || '').trim()) issues.push(`${product.id}: sem nome`);
+  if (!String(product.slug || '').trim()) issues.push(`${product.name || product.id}: sem slug`);
+  if (!category) issues.push(`${product.name || product.id}: categoria inativa ou inexistente`);
+  if (!environmentIds.has(product.environment_id)) issues.push(`${product.name || product.id}: ambiente inativo ou inexistente`);
+  if (category?.environment_id && product.environment_id !== category.environment_id) issues.push(`${product.name || product.id}: ambiente diverge da categoria`);
+  const price = Number(product.price);
+  const promotional = product.promotional_price == null ? null : Number(product.promotional_price);
+  if (!Number.isFinite(price) || price <= 0) issues.push(`${product.name || product.id}: preço inválido`);
+  if (promotional != null && (!Number.isFinite(promotional) || promotional <= 0 || promotional >= price)) issues.push(`${product.name || product.id}: preço promocional inválido`);
+  const stock = Number(product.stock_quantity);
+  if (!Number.isInteger(stock) || stock < 0) issues.push(`${product.name || product.id}: estoque inválido`);
+  return issues;
+}));
+
+verifyIntegrity('integridade da galeria pública', products.flatMap(product => {
+  const items = mediaByProduct.get(product.id) || [];
+  const issues = [];
+  const images = items.filter(item => (item.media_type || 'image') === 'image');
+  const covers = items.filter(item => item.is_cover);
+  if (!images.length) issues.push(`${product.name}: sem foto`);
+  if (items.length > 10) issues.push(`${product.name}: mais de 10 mídias`);
+  if (covers.length !== 1 || covers[0]?.media_type === 'video') issues.push(`${product.name}: capa inválida`);
+  return issues;
+}));
+
+verifyIntegrity('metadados das mídias', media.flatMap(item => {
+  const issues = [];
+  const type = item.media_type || 'image';
+  if (!productIds.has(item.product_id)) return [];
+  if (!['image', 'video'].includes(type)) issues.push(`${item.id}: tipo ${type} inválido`);
+  try {
+    const parsed = new URL(item.image_url);
+    if (parsed.protocol !== 'https:') issues.push(`${item.id}: URL não HTTPS`);
+  } catch { issues.push(`${item.id}: URL inválida`); }
+  if (type === 'video' && item.is_cover) issues.push(`${item.id}: vídeo marcado como capa`);
+  return issues;
+}));
 
 if (failed) {
   console.error('A integração remota ainda possui pendências. Revise as migrations e os registros indicados acima.');

@@ -163,17 +163,18 @@
       if (phone) phone.textContent = settings.phone || settings.whatsapp;
     }
   }
-  function applyHero(banner, productRows = [], promotions = []) {
+  function applyHero(banners, productRows = [], promotions = []) {
     const hero = document.querySelector('.hero');
     if (!hero) return;
-    hero.dataset.cmsHasBanner = String(Boolean(banner));
+    const slides = (Array.isArray(banners) ? banners : banners ? [banners] : []).filter(item => item.position === 'home_hero');
+    const banner = slides[0] || null;
+    hero.dataset.cmsHasBanner = String(Boolean(slides.length));
     if (!banner) {
       window.atacarejoHero?.setCmsMode(false);
       applyCampaignLook(hero, null);
       renderCampaignDecor(hero, null, productRows, promotions);
       return;
     }
-    window.atacarejoHero?.setCmsMode(true);
     const title = hero?.querySelector('h1');
     const subtitle = hero?.querySelector('.hero-copy>p:not(.eyebrow)');
     const button = hero?.querySelector('.hero-copy .btn');
@@ -184,18 +185,24 @@
     if (subtitle && banner.subtitle) subtitle.textContent = banner.subtitle;
     if (button && banner.button_text) button.firstChild.textContent = `${banner.button_text} `;
     if (button && banner.button_url) button.onclick = () => { location.href = safeNavigationUrl(banner.button_url); };
-    if (art && banner.image_desktop_url) {
-      const cleanHeroUrl = value => /editorial-room(?:-clean)?\.(?:jpg|png)/i.test(value) ? 'assets/editorial-room-clean.png?v=caption-removed-1' : value;
-      const desktopUrl = cleanHeroUrl(banner.image_desktop_url);
-      const mobileUrl = banner.image_mobile_url ? cleanHeroUrl(banner.image_mobile_url) : desktopUrl;
-      if (window.atacarejoHero?.setPrimaryImage) {
-        window.atacarejoHero.setPrimaryImage(desktopUrl, mobileUrl);
-      } else {
-        art.style.backgroundImage = `url("${desktopUrl.replace(/"/g, '%22')}")`;
-      }
-      if (banner.image_mobile_url) {
-        art.style.setProperty('--mobile-hero', `url("${mobileUrl.replace(/"/g, '%22')}")`);
-      }
+    const cleanHeroUrl = value => /editorial-room(?:-clean)?\.(?:jpg|png)/i.test(value || '') ? 'assets/editorial-room-clean.png?v=caption-removed-1' : value || '';
+    const mediaSlides = slides.map((item, index) => {
+      const video = item.media_type === 'video';
+      const desktopUrl = cleanHeroUrl(video ? item.video_desktop_url : item.image_desktop_url || item.image_mobile_url);
+      const mobileUrl = cleanHeroUrl(video ? item.video_mobile_url || item.video_desktop_url : item.image_mobile_url || item.image_desktop_url);
+      return {
+        type: video ? 'video' : 'image', desktopUrl, mobileUrl,
+        posterUrl: cleanHeroUrl(item.poster_url || item.image_desktop_url || item.image_mobile_url),
+        internalTitle: item.internal_title || item.title || `slide ${index + 1}`,
+        alt: item.internal_title || item.title || '',
+        link: item.button_url ? safeNavigationUrl(item.button_url) : '',
+        linkLabel: item.internal_title || item.title ? `Abrir ${item.internal_title || item.title}` : `Abrir slide ${index + 1}`
+      };
+    }).filter(item => item.desktopUrl);
+    if (window.atacarejoHero?.setSlides) {
+      window.atacarejoHero.setSlides(mediaSlides);
+    } else if (art && mediaSlides[0]?.desktopUrl) {
+      art.style.backgroundImage = `url("${mediaSlides[0].desktopUrl.replace(/"/g, '%22')}")`;
     }
   }
   function applySecondaryBanners(banners, productRows = [], promotions = []) {
@@ -306,8 +313,16 @@
     return 100000 + (hash >>> 0);
   }
   function mapProduct(row, index, campaignPromotions = []) {
-    const orderedMedia = [...(row.product_images || [])].sort((a, b) => Number(b.is_cover) - Number(a.is_cover) || Number(a.sort_order || 0) - Number(b.sort_order || 0));
+    const productMedia = [...(row.product_images || [])];
+    const mainOriginal = productMedia
+      .filter(item => item.media_type !== 'video' && item.image_role !== 'dimensions')
+      .sort((a, b) => Number(b.is_cover) - Number(a.is_cover) || Number(a.sort_order || 0) - Number(b.sort_order || 0))[0];
+    const orderedMedia = productMedia.sort((a, b) => {
+      const rank = item => item === mainOriginal ? 0 : item.image_role === 'dimensions' ? 1 : 2;
+      return rank(a) - rank(b) || Number(a.sort_order || 0) - Number(b.sort_order || 0);
+    });
     const orderedImages = orderedMedia.filter(item => item.media_type !== 'video');
+    const dimensionsImage = orderedImages.find(item => item.image_role === 'dimensions')?.image_url || '';
     const baseMedia = orderedMedia.map(item => ({ type: item.media_type === 'video' ? 'video' : 'image', url: item.image_url, poster: item.poster_url || '' }));
     const regularCandidate = Number(row.price);
     const regularPrice = Number.isFinite(regularCandidate) && regularCandidate > 0 ? regularCandidate : null;
@@ -316,31 +331,40 @@
     const discount = regularPrice && sellingPrice < regularPrice ? Math.round((1 - sellingPrice / regularPrice) * 100) : 0;
     const installments = Number(row.max_installments);
     const variants = [...(row.product_variants || [])].filter(item => item.active !== false).sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0)).map(item => {
-      const images = [...(item.variant_images || [])].sort((a, b) => Number(b.is_cover) - Number(a.is_cover) || Number(a.sort_order || 0) - Number(b.sort_order || 0));
+      const images = [...(item.variant_images || [])].sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0));
       const primaryColor = item.primary_color || null, secondaryColor = item.secondary_color || null;
       const explicitPrice = Number(item.price);
       const adjustment = Number(item.price_adjustment || 0);
       const price = item.price != null && Number.isFinite(explicitPrice) ? explicitPrice : (sellingPrice == null ? null : sellingPrice + adjustment);
       const old = item.price != null && Number.isFinite(explicitPrice) ? null : (regularPrice == null ? null : regularPrice + adjustment);
       const catalogName = [primaryColor?.name, secondaryColor?.name].filter(Boolean).join(' / ');
-      return { id: item.id, name: item.name || item.color_name || catalogName || 'Variação', type: item.type || 'color', sku: item.sku || '', colorName: item.color_name || catalogName || item.name || '', colorHex: primaryColor?.hex || item.color_hex || '', secondaryColorHex: secondaryColor?.hex || item.secondary_color_hex || '', swatchMode: secondaryColor ? 'composite' : (item.swatch_mode || 'simple'), swatchImage: item.swatch_image || '', swatchType: primaryColor?.type || 'solid', secondarySwatchType: secondaryColor?.type || '', price, old: old > price ? old : null, stock: Number(item.stock || 0), active: item.active !== false, isDefault: Boolean(item.default_variant), order: Number(item.display_order || 0), img: images[0]?.image_url || '', images: images.slice(1).map(image => image.image_url) };
+      return { id: item.id, name: item.name || item.color_name || catalogName || 'Variação', type: item.type || 'color', sku: item.sku || '', colorName: item.color_name || catalogName || item.name || '', colorHex: primaryColor?.hex || item.color_hex || '', secondaryColorHex: secondaryColor?.hex || item.secondary_color_hex || '', swatchMode: secondaryColor ? 'composite' : (item.swatch_mode || 'simple'), swatchImage: item.swatch_image || '', swatchType: primaryColor?.type || 'solid', secondarySwatchType: secondaryColor?.type || '', price, old: old > price ? old : null, stock: Number(item.stock || 0), active: item.active !== false, isDefault: Boolean(item.default_variant), order: Number(item.display_order || 0), img: images[0]?.image_url || '', images: [dimensionsImage, ...images.slice(1).map(image => image.image_url)].filter(Boolean) };
     });
     const defaultVariant = row.variants_enabled && variants.length ? (variants.find(item => item.isDefault) || variants[0]) : null;
+    const productOptions = [...(row.product_option_groups || [])].filter(group => group.active !== false).sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0)).map(group => ({
+      id: group.id, name: group.name, slug: group.slug,
+      values: [...(group.product_option_values || [])].filter(value => value.active !== false).sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0)).map(value => ({ id: value.id, label: value.label, slug: value.slug }))
+    })).filter(group => group.values.length);
+    const dimensionText = row.dimensions?.description || ['largura', 'altura', 'profundidade']
+      .filter(key => row.dimensions?.[key] != null)
+      .map(key => `${String(row.dimensions[key]).replace('.', ',')} cm ${key}`)
+      .join(' × ');
     return {
       id: stableProductId(row.id), dbId: row.id, n: row.name, cat: row.categories?.name || 'Móveis',
       environment: row.environments?.name || '', subcategory: row.categories?.name || '', categoryIconKey: row.categories?.icon_key || '', brand: row.brands?.name || '', keywords: row.categories?.search_keywords || '',
       price: defaultVariant?.price ?? sellingPrice, old: defaultVariant?.old ?? (sellingPrice < regularPrice ? regularPrice : null), discount,
-      img: defaultVariant?.img || orderedImages[0]?.image_url || row.og_image_url || imageFallback,
-      images: defaultVariant?.img ? defaultVariant.images : orderedImages.slice(1).map(image => image.image_url),
-      media: defaultVariant?.img ? [defaultVariant.img, ...defaultVariant.images].map(url => ({ type: 'image', url })).concat(baseMedia.filter(item => item.type === 'video')) : baseMedia,
+      img: orderedImages[0]?.image_url || row.og_image_url || imageFallback,
+      images: orderedImages.slice(1).map(image => image.image_url),
+      media: baseMedia,
       baseImg: orderedImages[0]?.image_url || row.og_image_url || imageFallback, baseImages: orderedImages.slice(1).map(image => image.image_url), baseMedia, hasVideo: baseMedia.some(item => item.type === 'video'), best: row.best_seller ? 1 : 0,
       badge: campaignPromotions.length && sellingPrice < regularPrice ? 'Campanha' : row.new_arrival ? 'Novidade' : row.on_sale ? 'Oferta' : row.featured ? 'Destaque' : '',
       description: row.short_description || row.description || '', fullDescription: row.description || row.short_description || '',
       specifications: row.specifications && typeof row.specifications === 'object' ? row.specifications : {},
-      dimensions: row.dimensions?.description || '', material: row.material || '', color: row.color || '', warranty: row.warranty || '',
+      dimensions: dimensionText, material: row.material || '', color: row.color || '', warranty: row.warranty || '',
       installmentCount: row.installment_enabled && Number.isInteger(installments) && installments > 0 && sellingPrice ? installments : null,
       installmentValue: row.installment_enabled && Number.isInteger(installments) && installments > 0 && (defaultVariant?.price ?? sellingPrice) ? (defaultVariant?.price ?? sellingPrice) / installments : null, sku: defaultVariant?.sku || row.sku || '', baseSku: row.sku || '',
       stock: defaultVariant?.stock ?? row.stock_quantity, baseStock: Number(row.stock_quantity || 0), basePrice: sellingPrice, baseOld: sellingPrice < regularPrice ? regularPrice : null, variantsEnabled: Boolean(row.variants_enabled && variants.length), variationType: row.variation_type || '', variants, campaign: Boolean(row.is_campaign || campaignPromotions.length),
+      productOptions,
       whatsappEnabled: row.whatsapp_enabled !== false, cartEnabled: row.cart_enabled !== false,
       freeCityShipping: Boolean(row.free_city_shipping), freeAssembly: Boolean(row.free_assembly)
     };
@@ -364,18 +388,21 @@
     const publicProductFields = 'id,name,sku,short_description,description,category_id,price,promotional_price,stock_quantity,best_seller,featured,new_arrival,on_sale,og_image_url,installment_enabled,max_installments,dimensions,material,color,specifications,warranty,whatsapp_enabled,cart_enabled,free_city_shipping,free_assembly,is_campaign,variants_enabled,variation_type';
     const variantRelation = 'product_variants(id,name,type,sku,color_name,color_hex,secondary_color_hex,swatch_mode,swatch_image,price,price_adjustment,stock,active,default_variant,display_order,variant_images(image_url,is_cover,sort_order))';
     const catalogVariantRelation = 'product_variants(id,name,type,sku,color_name,color_hex,secondary_color_hex,swatch_mode,swatch_image,price,price_adjustment,stock,active,default_variant,display_order,color_id,combination_color_id,primary_color:product_colors!product_variants_color_id_fkey(name,hex,secondary_hex,type),secondary_color:product_colors!product_variants_combination_color_id_fkey(name,hex,secondary_hex,type),variant_images(image_url,is_cover,sort_order))';
-    const withCatalog = await cms.from('products').select(`${publicProductFields},categories(name,search_keywords,icon_key),environments(name),brands(name),product_images(image_url,media_type,poster_url,is_cover,sort_order),${catalogVariantRelation}`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
+    const optionRelation = 'product_option_groups(id,name,slug,display_order,active,product_option_values(id,label,slug,display_order,active))';
+    const withOptions = await cms.from('products').select(`${publicProductFields},categories(name,search_keywords,icon_key),environments(name),brands(name),product_images(image_url,media_type,poster_url,is_cover,sort_order,image_role),${catalogVariantRelation},${optionRelation}`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
+    if (!withOptions.error) return withOptions;
+    const withCatalog = await cms.from('products').select(`${publicProductFields},categories(name,search_keywords,icon_key),environments(name),brands(name),product_images(image_url,media_type,poster_url,is_cover,sort_order,image_role),${catalogVariantRelation}`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
     if (!withCatalog.error) return withCatalog;
-    const withVariants = await cms.from('products').select(`${publicProductFields},categories(name,search_keywords,icon_key),environments(name),brands(name),product_images(image_url,media_type,poster_url,is_cover,sort_order),${variantRelation}`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
+    const withVariants = await cms.from('products').select(`${publicProductFields},categories(name,search_keywords,icon_key),environments(name),brands(name),product_images(image_url,media_type,poster_url,is_cover,sort_order,image_role),${variantRelation}`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
     if (!withVariants.error) return withVariants;
     const legacyProductFields = publicProductFields.replace(',variants_enabled,variation_type', '');
-    const withIcons = await cms.from('products').select(`${legacyProductFields},categories(name,search_keywords,icon_key),environments(name),brands(name),product_images(image_url,media_type,poster_url,is_cover,sort_order)`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
+    const withIcons = await cms.from('products').select(`${legacyProductFields},categories(name,search_keywords,icon_key),environments(name),brands(name),product_images(image_url,media_type,poster_url,is_cover,sort_order,image_role)`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
     if (!withIcons.error) return withIcons;
     if (withIcons.error.code !== '42703' && !/search_keywords|icon_key/i.test(withIcons.error.message || '')) return withIcons;
-    const modern = await cms.from('products').select(`${legacyProductFields},categories(name,search_keywords),environments(name),brands(name),product_images(image_url,media_type,poster_url,is_cover,sort_order)`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
+    const modern = await cms.from('products').select(`${legacyProductFields},categories(name,search_keywords),environments(name),brands(name),product_images(image_url,media_type,poster_url,is_cover,sort_order,image_role)`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
     if (!modern.error) return modern;
     if (modern.error.code !== '42703' && !/search_keywords/i.test(modern.error.message || '')) return modern;
-    return cms.from('products').select(`${legacyProductFields},categories(name),environments(name),brands(name),product_images(image_url,media_type,poster_url,is_cover,sort_order)`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
+    return cms.from('products').select(`${legacyProductFields},categories(name),environments(name),brands(name),product_images(image_url,media_type,poster_url,is_cover,sort_order,image_role)`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
   }
   async function loadStorefrontEnvironments() {
     const withIcons = await cms.from('environments').select('id,name,slug,description,image_url,icon_key,sort_order,active').eq('active', true).order('sort_order');
@@ -413,7 +440,7 @@
     if (revision !== bootRevision) return;
     applySettings(settingResult.data);
     window.applyOnlineSalesSettings?.(onlineSalesResult.data || {});
-    applyHero((bannerResult.data || []).find(item => item.position === 'home_hero'), productResult.data || [], promotionResult.data || []);
+    applyHero((bannerResult.data || []).filter(item => item.position === 'home_hero'), productResult.data || [], promotionResult.data || []);
     applySecondaryBanners(bannerResult.data || [], productResult.data || [], promotionResult.data || []);
     renderInspirations(inspirationResult.data || []);
     {
@@ -468,7 +495,7 @@
   sync?.addEventListener('message', scheduleBoot);
   window.addEventListener('storage', event => { if (event.key === 'atacarejo-cms-sync') scheduleBoot(); });
   const realtime = cms.channel('storefront-cms');
-  ['products','product_images','product_variants','variant_images','product_colors','categories','environments','brands','banners','promotions','promotion_products','site_sections','store_settings','online_sales_settings','inspirations','inspiration_images'].forEach(table => {
+  ['products','product_images','product_variants','variant_images','product_colors','product_option_groups','product_option_values','categories','environments','brands','banners','promotions','promotion_products','site_sections','store_settings','online_sales_settings','inspirations','inspiration_images'].forEach(table => {
     realtime.on('postgres_changes', { event: '*', schema: 'public', table }, scheduleBoot);
   });
   realtime.subscribe();
