@@ -14,7 +14,8 @@
       "Hero com imagem ou vídeo",
       "editor visual simplificado da Home",
       "cadastro simplificado de nova categoria",
-      "estoque exclusivamente por cor com total derivado"
+      "estoque exclusivamente por cor com total derivado",
+      "catálogo desktop com quatro cards e imagens 1280 por 1270"
     ]
   },
   "database": {
@@ -162,6 +163,14 @@
       "checks": [
         { "file": "admin.html", "contains": ["id=\"loginForm\"", "admin-app.js"] },
         { "file": "admin-app.js", "contains": ["signInWithPassword", "signOut"] }
+      ]
+    },
+    {
+      "name": "cards do catálogo responsivos",
+      "checks": [
+        { "file": "styles.css", "contains": [".catalogue .product-grid{grid-template-columns:repeat(4", "aspect-ratio:1280/1270", "object-fit:contain;object-position:center"] },
+        { "file": "app.js", "contains": ["width=\"1280\" height=\"1270\"", "official-product-price", "official-product-benefits", "product-add-bag", "product-whatsapp"] },
+        { "file": "scripts/test-catalog-cards.mjs", "contains": ["quatro colunas", "conteúdo protegido do card"] }
       ]
     },
     {
