@@ -10,19 +10,21 @@
       "cores e fotos por variação sem alterar a capa",
       "opções do produto e integração com WhatsApp",
       "características informativas de material, espelho e ripado",
+      "cor de origem obrigatória com galeria principal vinculada",
       "Hero com imagem ou vídeo"
     ]
   },
   "database": {
     "executionMode": "manual-incremental-only",
     "lastVerifiedAt": "2026-09-27",
-    "lastVerifiedSchema": "20261009_product_characteristics.sql",
+    "lastVerifiedSchema": "20261010_product_origin_color.sql",
     "appliedMigrations": [
       "20261005_product_dimensions_numeric.sql",
       "20261006_product_dimensions_image.sql",
       "20261007_hero_media_carousel.sql",
       "20261008_product_options.sql",
-      "20261009_product_characteristics.sql"
+      "20261009_product_characteristics.sql",
+      "20261010_product_origin_color.sql"
     ]
   },
   "features": [
@@ -83,6 +85,15 @@
       "checks": [
         { "file": "admin-app.js", "contains": ["function productMainImageRecord(", "previousCoverId", "image_role: 'gallery'"] },
         { "file": "storefront-cms.js", "contains": ["Number(Boolean(b.is_cover))", "baseImage", "variant_images"] }
+      ]
+    },
+    {
+      "name": "cor de origem e galeria principal vinculada",
+      "checks": [
+        { "file": "admin-app.js", "contains": ["id=\"productOriginColor\" required", "function ensureOriginVariant(", "values.origin_color_id = variantSettings.originColorId", "id=\"massOriginColor\" required", "origin_color_id: row.originColorId"] },
+        { "file": "storefront-cms.js", "contains": ["origin_color:product_colors!products_origin_color_id_fkey", "isOrigin: Boolean(row.origin_color_id", "variants.find(item => item.isOrigin)"] },
+        { "file": "app.js", "contains": ["item.isOrigin&&item.active!==false", "isOrigin?(p.baseMedia||p.media||[])", "base.variants.length===1?'COR':'ESCOLHA A COR'"] },
+        { "file": "supabase/migrations/20261010_product_origin_color.sql", "contains": ["add column if not exists origin_color_id uuid", "add column if not exists color_id uuid", "Deliberately no UPDATE/backfill"] }
       ]
     },
     {

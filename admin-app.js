@@ -1806,7 +1806,7 @@
         const mediaType = product && allowedVideoTypes.has(file.type) ? 'video' : 'image';
         const saved = mediaType === 'video' ? await uploadProductVideo(file, parentId) : await upload(bucket, file, parentId);
         const row = { [foreignKey]: parentId, image_url: saved.url, storage_path: saved.path, sort_order: (total || 0) + index };
-        if (product) Object.assign(row, { media_type: mediaType, poster_url: saved.posterUrl || null, poster_storage_path: saved.posterPath || null, is_cover: false, image_role: 'gallery' });
+        if (product) Object.assign(row, { media_type: mediaType, poster_url: saved.posterUrl || null, poster_storage_path: saved.posterPath || null, is_cover: false, image_role: 'gallery', color_id: options.colorId || null });
         const { data, error } = await db.from(table).insert(row).select('id').single();
         if (error) { await db.storage.from(bucket).remove([saved.path, saved.posterPath].filter(Boolean)); throw error; }
         created.push({ id: data.id, path: saved.path, posterPath: saved.posterPath || null, file, mediaType });
@@ -2468,7 +2468,7 @@
       ['price', 'Preço normal', 'number', true], ['promotional_price', 'Preço promocional (opcional)', 'number'],
       ['installment_enabled', 'Permitir parcelamento', 'checkbox'], ['max_installments', 'Máximo de parcelas', 'number']
     ] },
-    { key: 'photos', label: 'Mídia', help: 'Adicione fotos e vídeos, organize a ordem e escolha a imagem de capa.', fields: [
+    { key: 'photos', label: 'Mídia', help: 'Adicione a capa e a galeria principal. Essas mídias sempre pertencem à cor de origem definida na aba Cores.', fields: [
       ['gallery', 'Galeria de Mídia do Produto', 'productmedia'],
       ['og_image_url', 'Imagem de compartilhamento (opcional)', 'file']
     ] },
@@ -3451,8 +3451,29 @@
     const first = draft.color_hex || '#ffffff', second = draft.secondary_color_hex || first;
     return draft.swatch_mode === 'composite' ? `style="background:linear-gradient(90deg,${first} 0 50%,${second} 50% 100%)"` : `style="background:${first}"`;
   }
+  function productOriginColorOptions(selected = '') {
+    return `<option value="">Selecione a cor real das fotos principais</option>${(editorState?.colors || []).filter(color => color.active !== false && color.type !== 'combination').map(color => `<option value="${esc(color.id)}" ${String(color.id) === String(selected || '') ? 'selected' : ''}>${esc(color.name)}</option>`).join('')}`;
+  }
+  function isOriginVariant(draft) {
+    return Boolean(editorState?.originColorId) && !draft?.combination_color_id && String(draft?.color_id || '') === String(editorState.originColorId);
+  }
+  function ensureOriginVariant() {
+    const color = catalogColor(editorState?.originColorId);
+    if (!color) return null;
+    let origin = (editorState.variants || []).find(item => !item.combination_color_id && String(item.color_id || '') === String(color.id));
+    if (!origin) {
+      origin = (editorState.variants || []).find(item => !item.combination_color_id && !item.color_id && slugify(item.color_name || item.name || '') === color.slug);
+      if (origin) origin.color_id = color.id;
+    }
+    if (!origin) { origin = variantFromColors(color); editorState.variants.unshift(origin); }
+    origin.active = true;
+    editorState.variants = [origin, ...editorState.variants.filter(item => item !== origin)];
+    editorState.variants.forEach((item, index) => { item.default_variant = index === 0; item.display_order = index; });
+    return origin;
+  }
   function productVariationsEditorHtml(record = {}) {
-    return `<section class="variation-editor"><div class="variation-enable-row"><div><h3>Cores disponíveis</h3><p>Selecione as cores disponíveis para este produto.</p></div><label class="product-switch variation-master"><input id="productHasVariants" name="variants_enabled" type="checkbox" ${record.variants_enabled ? 'checked' : ''}><span></span><em>Este produto possui cores</em></label></div><div id="variationWorkspace" ${record.variants_enabled ? '' : 'hidden'}><div id="productColorCatalog" class="product-color-catalog"></div><div class="color-builder-actions"><button id="showCustomColor" type="button">+ Adicionar outra cor</button><button id="showColorCombination" type="button">+ Criar combinação de duas cores</button></div><div id="customColorBuilder" class="color-builder" hidden><label>Nome da cor<input id="customColorName" maxlength="50" placeholder="Ex.: Champagne"></label><label>Acabamento<select id="customColorType"><option value="solid">Cor lisa</option><option value="wood">Madeira</option></select></label><label>Cor principal<input id="customColorHex" type="color" value="#d8c7a7"></label><label>Tom secundário<input id="customColorSecondary" type="color" value="#aa8861"></label><button id="confirmCustomColor" type="button">Adicionar cor</button></div><div id="combinationBuilder" class="color-builder combination-builder" hidden><label>Cor 1<select id="combinationColorOne"></select></label><label>Cor 2<select id="combinationColorTwo"></select></label><button id="confirmColorCombination" type="button">Adicionar combinação</button></div><div class="selected-colors-heading"><b id="selectedColorsCount">Cores selecionadas (0)</b><small>Informe apenas estoque e fotos. O restante é opcional.</small></div><div id="productVariantList" class="variant-admin-list"></div></div></section>`;
+    const legacyWarning = record.id && !record.origin_color_id ? '<div class="origin-color-warning" role="alert"><b>Produto antigo sem cor de origem</b><span>Confirme manualmente a cor real mostrada nas fotos principais antes de salvar. Nenhuma cor foi atribuída automaticamente.</span></div>' : '';
+    return `<section class="variation-editor"><input id="productHasVariants" name="variants_enabled" type="checkbox" checked hidden><div class="origin-color-panel"><div><small>COR PRINCIPAL / COR DE ORIGEM</small><h3>Qual é a cor real das fotos da aba Mídia?</h3><p>A capa e toda a galeria principal pertencem a esta cor. Essa escolha é obrigatória e não será substituída pelas variações.</p></div><label>Cor de origem *<select id="productOriginColor" required>${productOriginColorOptions(editorState?.originColorId)}</select></label>${legacyWarning}</div><div id="variationWorkspace"><div class="variation-enable-row"><div><h3>Outras cores do produto</h3><p>Selecione somente cores adicionais. As fotos enviadas abaixo permanecem secundárias e vinculadas à variação.</p></div></div><div id="productColorCatalog" class="product-color-catalog"></div><div class="color-builder-actions"><button id="showCustomColor" type="button">+ Adicionar outra cor</button><button id="showColorCombination" type="button">+ Criar combinação de duas cores</button></div><div id="customColorBuilder" class="color-builder" hidden><label>Nome da cor<input id="customColorName" maxlength="50" placeholder="Ex.: Champagne"></label><label>Acabamento<select id="customColorType"><option value="solid">Cor lisa</option><option value="wood">Madeira</option></select></label><label>Cor principal<input id="customColorHex" type="color" value="#d8c7a7"></label><label>Tom secundário<input id="customColorSecondary" type="color" value="#aa8861"></label><button id="confirmCustomColor" type="button">Adicionar cor</button></div><div id="combinationBuilder" class="color-builder combination-builder" hidden><label>Cor 1<select id="combinationColorOne"></select></label><label>Cor 2<select id="combinationColorTwo"></select></label><button id="confirmColorCombination" type="button">Adicionar combinação</button></div><div class="selected-colors-heading"><b id="selectedColorsCount">Cores do produto (0)</b><small>A cor de origem usa a galeria principal; as demais usam fotos próprias opcionais.</small></div><div id="productVariantList" class="variant-admin-list"></div></div></section>`;
   }
   function syncVariantDraftsFromDom() {
     if (editorState?.view !== 'products') return;
@@ -3477,12 +3498,12 @@
     const root = $('#productColorCatalog');
     if (!root) return;
     const colors = (editorState.colors || []).filter(color => color.active !== false && color.type !== 'combination');
-    root.innerHTML = colors.map(color => `<button type="button" class="product-color-option ${colorIsSelected(color) ? 'is-selected' : ''}" data-color-option="${esc(color.id)}" aria-pressed="${colorIsSelected(color)}"><span style="background:${colorSwatchBackground(color)}"></span><b>${esc(color.name)}</b>${colorIsSelected(color) ? '<i>✓</i>' : ''}</button>`).join('');
+    root.innerHTML = colors.map(color => { const selected = colorIsSelected(color), origin = String(color.id) === String(editorState.originColorId || ''); return `<button type="button" class="product-color-option ${selected ? 'is-selected' : ''} ${origin ? 'is-origin' : ''}" data-color-option="${esc(color.id)}" aria-pressed="${selected}" ${origin ? 'disabled title="Cor de origem — não pode ser removida"' : ''}><span style="background:${colorSwatchBackground(color)}"></span><b>${esc(color.name)}</b>${origin ? '<i>ORIGEM</i>' : selected ? '<i>✓</i>' : ''}</button>`; }).join('');
     const options = colors.map(color => `<option value="${esc(color.id)}">${esc(color.name)}</option>`).join('');
     const first = $('#combinationColorOne'), second = $('#combinationColorTwo');
     if (first) first.innerHTML = options;
     if (second) { second.innerHTML = options; if (second.options.length > 1) second.selectedIndex = 1; }
-    if ($('#selectedColorsCount')) $('#selectedColorsCount').textContent = `Cores selecionadas (${editorState.variants.length})`;
+    if ($('#selectedColorsCount')) $('#selectedColorsCount').textContent = `Cores do produto (${editorState.variants.length})`;
   }
   function variantFallbackImage() {
     const images = [...(editorState?.record?.product_images || [])].sort((a,b) => Number(b.is_cover) - Number(a.is_cover) || Number(a.sort_order || 0) - Number(b.sort_order || 0));
@@ -3502,11 +3523,35 @@
       const fallback = variantFallbackImage(), cover = gallery[0]?.url || fallback;
       return `<article class="variant-admin-card compact-variant-card" data-variant-card="${draft.key}"><header><span class="variant-admin-swatch" ${variantSwatchPreview(draft)}></span><div><b>${esc(draft.color_name || draft.name || `Cor ${index + 1}`)}</b><small>${draft.default_variant ? 'Cor padrão · ' : ''}${draft.active ? 'Disponível' : 'Indisponível'}</small></div><button class="variant-remove" type="button" data-variant-delete aria-label="Remover ${esc(draft.color_name || draft.name)}">×</button></header><div class="variant-compact-body"><div class="variant-cover-preview">${cover ? `<img src="${esc(cover)}" alt="Prévia de ${esc(draft.color_name || draft.name)}">` : '<span>Sem foto</span>'}${!gallery.length && fallback ? '<small>Galeria principal</small>' : ''}</div><label>Estoque<input data-variant-field="stock" type="number" min="0" step="1" value="${Number(draft.stock || 0)}"></label><label>Preço<select data-variant-field="priceMode"><option value="main" ${draft.priceMode === 'main' ? 'selected' : ''}>Usar preço principal</option><option value="specific" ${draft.priceMode === 'specific' ? 'selected' : ''}>Preço específico</option><option value="adjustment" ${draft.priceMode === 'adjustment' ? 'selected' : ''}>Acréscimo ao principal</option></select></label>${draft.priceMode === 'specific' ? `<label>Valor específico<input data-variant-field="price" type="number" min="0" step="0.01" value="${esc(draft.price)}" placeholder="R$ 0,00"></label>` : ''}${draft.priceMode === 'adjustment' ? `<label>Acréscimo<input data-variant-field="price_adjustment" type="number" min="0" step="0.01" value="${esc(draft.price_adjustment)}" placeholder="R$ 0,00"></label>` : ''}<label class="variant-gallery-add">+ Enviar fotos<input data-variant-gallery type="file" accept="image/jpeg,image/png,image/webp" multiple></label></div><div class="variant-gallery-grid compact-gallery">${gallery.map(image => `<figure><img src="${esc(image.url)}" alt=""><figcaption>${esc(image.label)}</figcaption><button type="button" ${image.id ? `data-variant-image-delete="${image.id}"` : `data-variant-new-image-delete="${image.fileIndex}"`}>×</button></figure>`).join('') || '<p>Nenhuma foto específica — será usada a galeria principal.</p>'}</div><details class="variant-advanced"><summary>Configurações avançadas</summary><div><label>SKU da variação<input data-variant-field="sku" value="${esc(draft.sku)}" placeholder="Gerado automaticamente ao salvar"></label><label>Alerta de estoque baixo<input data-variant-field="low_stock_threshold" type="number" min="0" step="1" value="${Number(draft.low_stock_threshold || 0)}"></label><label class="check-field"><input data-variant-field="active" type="checkbox" ${draft.active ? 'checked' : ''}> Disponível para venda</label><button type="button" data-variant-default ${draft.default_variant ? 'disabled' : ''}>${draft.default_variant ? 'Cor padrão atual' : 'Definir como padrão'}</button><small>Código da cor: ${esc(draft.color_id || 'legado')} ${draft.combination_color_id ? `+ ${esc(draft.combination_color_id)}` : ''}</small></div></details></article>`;
     }).join('');
+    variants.forEach(draft => {
+      if (!isOriginVariant(draft)) return;
+      const card = root.querySelector(`[data-variant-card="${CSS.escape(draft.key)}"]`);
+      if (!card) return;
+      card.classList.add('is-origin-variant');
+      card.querySelector('[data-variant-delete]')?.remove();
+      card.querySelector('.variant-gallery-add')?.remove();
+      card.querySelector('[data-variant-default]')?.remove();
+      const activeInput = card.querySelector('[data-variant-field="active"]'); if (activeInput) { activeInput.checked = true; activeInput.disabled = true; }
+      const status = card.querySelector('header small');
+      if (status) status.textContent = `Cor de origem · Galeria principal · ${draft.active ? 'Disponível' : 'Indisponível'}`;
+      card.querySelector('header')?.insertAdjacentHTML('beforeend', '<span class="origin-variant-lock">ORIGEM</span>');
+      card.querySelector('.variant-gallery-grid')?.insertAdjacentHTML('afterbegin', '<p class="origin-gallery-note"><b>Galeria principal / capa</b><br>As fotos desta cor são gerenciadas exclusivamente na aba Mídia.</p>');
+    });
   }
   function bindVariantEditor() {
     const toggle = $('#productHasVariants'), workspace = $('#variationWorkspace');
     if (!toggle || !workspace) return;
-    toggle.onchange = () => { workspace.hidden = !toggle.checked; setProductEditorDirty(); };
+    const originSelect = $('#productOriginColor');
+    if (originSelect) originSelect.onchange = () => {
+      syncVariantDraftsFromDom();
+      const next = originSelect.value;
+      const existing = editorState.variants.find(item => !item.combination_color_id && String(item.color_id || '') === String(next));
+      const hasSecondaryPhotos = existing && ((existing.galleryFiles || []).length || (existing.variant_images || []).some(image => !existing.removedImageIds.includes(image.id)));
+      if (hasSecondaryPhotos) { originSelect.value = editorState.originColorId || ''; return toast('Remova primeiro as fotos secundárias desta cor antes de defini-la como cor de origem.', 'error'); }
+      editorState.originColorId = next;
+      ensureOriginVariant();
+      renderVariantEditor(); setProductEditorDirty();
+    };
     workspace.addEventListener('change', event => {
       const card = event.target.closest('[data-variant-card]'), draft = card && editorState.variants.find(item => item.key === card.dataset.variantCard);
       if (!draft) return;
@@ -3533,8 +3578,11 @@
         if (!name) return toast('Informe o nome da nova cor.', 'error');
         if (editorState.colors.some(color => color.slug === slug)) return toast('Essa cor já existe no catálogo.', 'error');
         const color = { id: `local:${crypto.randomUUID()}`, name, slug, type, hex: $('#customColorHex').value, secondary_hex: $('#customColorSecondary').value, active: true, sort_order: editorState.colors.length * 10 + 10, persisted: false };
-        editorState.colors.push(color); editorState.variants.push(variantFromColors(color));
-        if (!editorState.variants.some(item => item.default_variant)) editorState.variants[0].default_variant = true;
+        editorState.colors.push(color);
+        if (!editorState.originColorId) { editorState.originColorId = color.id; ensureOriginVariant(); }
+        else editorState.variants.push(variantFromColors(color));
+        const originSelect = $('#productOriginColor'); if (originSelect) originSelect.innerHTML = productOriginColorOptions(editorState.originColorId);
+        ensureOriginVariant();
         renderVariantEditor(); setProductEditorDirty(); return;
       }
       if (button.id === 'confirmColorCombination') {
@@ -3565,9 +3613,12 @@
   }
   function validatedProductVariants() {
     syncVariantDraftsFromDom();
-    const enabled = Boolean($('#productHasVariants')?.checked), variants = editorState?.variants || [];
-    if (!enabled) return { enabled: false, type: null, variants };
-    if (!variants.length) throw new Error('Selecione pelo menos uma cor ou desative as cores.');
+    const originColorId = editorState?.originColorId || $('#productOriginColor')?.value || '';
+    if (!originColorId || !catalogColor(originColorId)) throw new Error('Selecione a COR PRINCIPAL / COR DE ORIGEM do produto.');
+    editorState.originColorId = originColorId;
+    const origin = ensureOriginVariant();
+    if (!origin) throw new Error('A cor de origem selecionada não foi encontrada no catálogo.');
+    const variants = editorState?.variants || [];
     const seen = new Set();
     variants.forEach((draft, index) => {
       draft.name = String(draft.color_name || draft.name || '').trim(); draft.color_name = draft.name; draft.display_order = index;
@@ -3578,8 +3629,8 @@
       if (draft.price !== '' && (!Number.isFinite(Number(draft.price)) || Number(draft.price) < 0)) throw new Error(`Revise o preço de “${draft.name}”.`);
       if (draft.price_adjustment !== '' && (!Number.isFinite(Number(draft.price_adjustment)) || Number(draft.price_adjustment) < 0)) throw new Error(`Revise o acréscimo de “${draft.name}”.`);
     });
-    if (!variants.some(item => item.default_variant)) variants[0].default_variant = true;
-    return { enabled: true, type: 'color', variants };
+    variants.forEach((item, index) => { item.default_variant = index === 0; item.display_order = index; });
+    return { enabled: true, type: 'color', originColorId, variants };
   }
   async function persistPendingVariantColors(settings) {
     if (!settings.enabled) return;
@@ -3588,7 +3639,7 @@
       if (!draft.color_id && primary) draft.color_id = primary.id;
       if (!draft.combination_color_id && secondary) draft.combination_color_id = secondary.id;
     });
-    const pendingIds = new Set(settings.variants.flatMap(draft => [draft.color_id, draft.combination_color_id]).filter(id => String(id || '').startsWith('local:') || String(id || '').startsWith('preset:')));
+    const pendingIds = new Set([settings.originColorId, ...settings.variants.flatMap(draft => [draft.color_id, draft.combination_color_id])].filter(id => String(id || '').startsWith('local:') || String(id || '').startsWith('preset:')));
     if (!pendingIds.size) return;
     if (!editorState.colorsAvailable) throw new Error('Execute a migração 20261001_product_color_catalog.sql antes de cadastrar cores.');
     for (const pendingId of pendingIds) {
@@ -3601,6 +3652,8 @@
         if (draft.color_id === pendingId) draft.color_id = data.id;
         if (draft.combination_color_id === pendingId) draft.combination_color_id = data.id;
       });
+      if (settings.originColorId === pendingId) settings.originColorId = data.id;
+      if (editorState.originColorId === pendingId) editorState.originColorId = data.id;
       Object.assign(color, data, { persisted: true });
     }
   }
@@ -3674,9 +3727,11 @@
       view: 'products', record: record ? editRecord : null, activeTab: 'basic', dirty: false, saving: false,
       existingGalleryCount: record?.product_images?.length || 0, pendingGalleryFiles: [], pendingCoverFile: null,
       previewObjectUrls: [], variantPreviewUrls: [], colors: colorCatalog.colors, colorsAvailable: colorCatalog.available,
+      originColorId: record?.origin_color_id || '',
       variants: [...(record?.product_variants || [])].sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0)).map(newVariantDraft),
       productOptions: normaliseProductOptionGroups(record?.product_option_groups || [])
     };
+    if (editorState.originColorId) ensureOriginVariant();
     $('#editorDialog').classList.add('product-editor-dialog');
     $('#dialogEyebrow').textContent = 'CATÁLOGO';
     $('#dialogTitle').textContent = record ? 'Editar produto' : 'Novo produto';
@@ -3798,6 +3853,7 @@
       values.dimensions = productDimensionsFromForm(form);
       values.specifications = parseSpecificationsText(values.specifications_text);
       values.sku = values.sku || null;
+      values.origin_color_id = variantSettings.originColorId;
       values.variants_enabled = variantSettings.enabled;
       values.variation_type = variantSettings.type;
       if (variantSettings.enabled) values.stock_quantity = variantSettings.variants.filter(item => item.active).reduce((total, item) => total + Number(item.stock || 0), 0);
@@ -3812,8 +3868,10 @@
       persisted = true;
       if (!record) createdProductId = result.data.id;
       if (uploadedOgImage && record?.og_image_url && record.og_image_url !== uploadedOgImage.url) await removeStoredUrl(record.og_image_url, 'products');
+      const galleryColorUpdate = await db.from('product_images').update({ color_id: variantSettings.originColorId }).eq('product_id', result.data.id).or('image_role.is.null,image_role.neq.dimensions');
+      if (galleryColorUpdate.error) throw galleryColorUpdate.error;
       await saveGallery(result.data.id, form.elements.gallery, 'products', {
-        files: editorState?.pendingGalleryFiles || [], coverFile: editorState?.pendingCoverFile || null
+        files: editorState?.pendingGalleryFiles || [], coverFile: editorState?.pendingCoverFile || null, colorId: variantSettings.originColorId
       });
       await saveProductVariants(result.data.id, variantSettings);
       await saveProductOptions(result.data.id, productOptions);
@@ -3827,6 +3885,7 @@
       } else if (uploadedOgImage && !persisted) await db.storage.from(uploadedOgImage.bucket).remove([uploadedOgImage.path]);
       if (error?.code === '23502' && /sku/i.test(error?.message || error?.details || '')) toast('Execute a migration 20260922_complete_product_editor.sql no Supabase para permitir produtos sem SKU.', 'error');
       else if (/media_type|poster_url|poster_storage_path/i.test(error?.message || '')) toast('Execute a migração 20261002_product_media_gallery.sql no Supabase antes de enviar vídeos.', 'error');
+      else if (/origin_color_id|product_images_color_id_fkey/i.test(error?.message || '')) toast('Execute a migração 20261010_product_origin_color.sql no Supabase antes de salvar a cor de origem.', 'error');
       else if (/product_colors|color_id|combination_color_id/i.test(error?.message || '')) toast('Execute a migração 20261001_product_color_catalog.sql no Supabase antes de cadastrar cores.', 'error');
       else if (/product_variants|variant_images|variants_enabled|variation_type/i.test(error?.message || '')) toast('Execute a migração 20260930_product_variants.sql no Supabase antes de salvar variações.', 'error');
       else if (/mirror_feature|ribbed_feature/i.test(error?.message || '')) toast('Execute a migração 20261009_product_characteristics.sql no Supabase antes de salvar as características.', 'error');
@@ -3859,6 +3918,7 @@
       key: source.key || crypto.randomUUID(), name: source.name || '', price: source.price ?? '', promotional_price: source.promotional_price ?? '',
       altura: source.altura ?? '', largura: source.largura ?? '', profundidade: source.profundidade ?? '', stock_quantity: source.stock_quantity ?? '',
       imageItems: [], imageNames, coverKey: null,
+      originColorId: source.originColorId || '',
       colorSelections: Array.isArray(source.colorSelections) ? source.colorSelections.map(newMassColorSelection) : [],
       productOptions: normaliseProductOptionGroups(source.productOptions || []),
       status: 'pending', createdId: null, errors: [], overrides: { ...(source.overrides || {}) }
@@ -3872,19 +3932,19 @@
   function readMassProductDraft() {
     try {
       const draft = JSON.parse(localStorage.getItem(MASS_PRODUCT_DRAFT_KEY) || 'null');
-      return [1, 2, 3, 4].includes(draft?.version) && Array.isArray(draft.rows) && draft.rows.length ? draft : null;
+      return [1, 2, 3, 4, 5].includes(draft?.version) && Array.isArray(draft.rows) && draft.rows.length ? draft : null;
     } catch { return null; }
   }
   function massProductDraftSnapshot() {
     const mass = editorState?.mass;
     if (!mass) return null;
     return {
-      version: 4, savedAt: new Date().toISOString(), base: mass.base,
+      version: 5, savedAt: new Date().toISOString(), base: mass.base,
       colors: (editorState.colors || []).filter(color => String(color.id || '').startsWith('local:')).map(color => ({ ...color })),
       rows: mass.rows.filter(row => row.status !== 'success').map(row => ({
         key: row.key, name: row.name, price: row.price, promotional_price: row.promotional_price,
         altura: row.altura, largura: row.largura, profundidade: row.profundidade, stock_quantity: row.stock_quantity,
-        imageNames: row.imageItems.length ? row.imageItems.map(item => item.name) : row.imageNames,
+        imageNames: row.imageItems.length ? row.imageItems.map(item => item.name) : row.imageNames, originColorId: row.originColorId,
         coverIndex: 0,
         colorSelections: row.colorSelections.map(selection => ({
           color_id: selection.color_id,
@@ -3942,6 +4002,7 @@
     if (promotional !== null && (promotional <= 0 || promotional >= price)) errors.push('Preço promocional inválido');
     if (!row.imageItems.length) errors.push(row.imageNames.length ? 'Selecione as imagens novamente' : 'Falta imagem');
     if (row.imageItems.length > 8) errors.push('Máximo de 8 fotos');
+    if (!row.originColorId || !catalogColor(row.originColorId)) errors.push('Falta cor de origem');
     if (row.colorSelections.some(selection => !catalogColor(selection.color_id) || (selection.combination_color_id && !catalogColor(selection.combination_color_id)))) errors.push('Revise as cores');
     const colorPhotosToReselect = row.colorSelections.find(selection => selection.imageNames?.length && !selection.imageItems?.length);
     if (colorPhotosToReselect) errors.push(`Selecione novamente as fotos de ${massColorSelectionLabel(colorPhotosToReselect)}`);
@@ -3981,10 +4042,9 @@
   }
   function massColorCellMarkup(row) {
     const selections = row.colorSelections || [];
-    if (!selections.length) return `<button type="button" class="mass-color-picker is-empty" data-mass-colors-open="${esc(row.key)}"><span>＋</span><b>Cor</b></button>`;
-    const first = selections[0], { primary, secondary } = massColorSelectionDetails(first);
-    const label = massColorSelectionLabel(first);
-    return `<button type="button" class="mass-color-picker" data-mass-colors-open="${esc(row.key)}" title="${esc(selections.map(selection => massColorSelectionLabel(selection)).join(', '))}"><span class="mass-color-picker-swatch" style="background:${colorSwatchBackground(primary, secondary)}"></span><b>${esc(label)}</b>${selections.length > 1 ? `<small>+${selections.length - 1}</small>` : ''}</button>`;
+    const origin = catalogColor(row.originColorId);
+    if (!origin) return `<button type="button" class="mass-color-picker is-empty" data-mass-colors-open="${esc(row.key)}"><span>＋</span><b>Cor de origem *</b></button>`;
+    return `<button type="button" class="mass-color-picker" data-mass-colors-open="${esc(row.key)}" title="${esc([origin.name, ...selections.map(selection => massColorSelectionLabel(selection))].join(', '))}"><span class="mass-color-picker-swatch" style="background:${colorSwatchBackground(origin)}"></span><b>${esc(origin.name)}</b><small>ORIGEM${selections.length ? ` +${selections.length}` : ''}</small></button>`;
   }
   function massImageCellMarkup(row, index) {
     const items = row.imageItems || [], cover = items[0];
@@ -4017,7 +4077,7 @@
     return `<div class="mass-characteristics-cell"><label>Material<select data-mass-override="material">${massCharacteristicOverrideOptions(row, mass, 'material', [['MDF', 'MDF'], ['MDP', 'MDP']])}</select></label><label>Espelho<select data-mass-override="mirror_feature">${massCharacteristicOverrideOptions(row, mass, 'mirror_feature', [['with', 'Com espelho'], ['without', 'Sem espelho']])}</select></label><label>Ripado<select data-mass-override="ribbed_feature">${massCharacteristicOverrideOptions(row, mass, 'ribbed_feature', [['with', 'Com ripado'], ['without', 'Sem ripado']])}</select></label></div>`;
   }
   function massProductManagersMarkup() {
-    return `<div id="massMediaManager" class="mass-manager-layer" hidden><button type="button" class="mass-manager-backdrop" data-mass-media-close aria-label="Fechar fotos"></button><section class="mass-manager-panel" role="dialog" aria-modal="true" aria-labelledby="massMediaManagerTitle"><header><div><small>GALERIA DO PRODUTO</small><h3 id="massMediaManagerTitle">Fotos</h3></div><button type="button" data-mass-media-close aria-label="Fechar">×</button></header><div class="mass-manager-toolbar"><span id="massMediaCount">0 de 8 fotos</span><label class="secondary">+ Adicionar fotos<input id="massMediaInput" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden></label></div><div id="massMediaGrid" class="mass-media-manager-grid"></div><footer><small>A primeira foto é sempre a capa. As demais ficam na galeria do produto.</small><button type="button" data-mass-media-close>Concluir</button></footer></section></div>
+    return `<div id="massMediaManager" class="mass-manager-layer" hidden><button type="button" class="mass-manager-backdrop" data-mass-media-close aria-label="Fechar fotos"></button><section class="mass-manager-panel" role="dialog" aria-modal="true" aria-labelledby="massMediaManagerTitle"><header><div><small>GALERIA PRINCIPAL / COR DE ORIGEM</small><h3 id="massMediaManagerTitle">Fotos</h3></div><button type="button" data-mass-media-close aria-label="Fechar">×</button></header><div class="mass-manager-toolbar"><span id="massMediaCount">0 de 8 fotos</span><label class="secondary">+ Adicionar fotos<input id="massMediaInput" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden></label></div><div id="massMediaGrid" class="mass-media-manager-grid"></div><footer><small>A primeira foto é sempre a capa. Todas pertencem à cor de origem definida nesta linha.</small><button type="button" data-mass-media-close>Concluir</button></footer></section></div>
     <div id="massColorManager" class="mass-manager-layer" hidden><button type="button" class="mass-manager-backdrop" data-mass-colors-close aria-label="Fechar cores"></button><section class="mass-manager-panel mass-color-manager-panel" role="dialog" aria-modal="true" aria-labelledby="massColorManagerTitle"><header><div><small>CORES DO PRODUTO</small><h3 id="massColorManagerTitle">Selecionar cores</h3></div><button type="button" data-mass-colors-close aria-label="Fechar">×</button></header><div id="massColorManagerBody"></div><footer><small>As cores usam o mesmo catálogo e as mesmas variações do cadastro normal.</small><button type="button" data-mass-colors-close>Concluir</button></footer></section></div>
     <div id="massOptionsManager" class="mass-manager-layer" hidden><button type="button" class="mass-manager-backdrop" data-mass-options-close aria-label="Fechar opções"></button><section class="mass-manager-panel mass-options-manager-panel" role="dialog" aria-modal="true" aria-labelledby="massOptionsManagerTitle"><header><div><small>OPÇÕES DO PRODUTO</small><h3 id="massOptionsManagerTitle">Configurar opções</h3></div><button type="button" data-mass-options-close aria-label="Fechar">×</button></header><div class="mass-options-manager-body"><p>Marque somente as alternativas disponíveis. Estas opções não alteram cores, fotos, preço ou estoque.</p><div id="massOptionsManagerContent"></div></div><footer><small>Opções sem alternativas marcadas não aparecem no site.</small><button type="button" data-mass-options-close>Concluir</button></footer></section></div>
     <div id="massDescriptionManager" class="mass-manager-layer" hidden><button type="button" class="mass-manager-backdrop" data-mass-description-close aria-label="Fechar descrição"></button><section class="mass-manager-panel mass-description-manager-panel" role="dialog" aria-modal="true" aria-labelledby="massDescriptionManagerTitle"><header><div><small>DESCRIÇÃO COMPLETA</small><h3 id="massDescriptionManagerTitle">Descrição do produto</h3></div><button type="button" data-mass-description-close aria-label="Fechar">×</button></header><div class="mass-description-manager-body"><label for="massDescriptionInput">Descrição completa</label><textarea id="massDescriptionInput" rows="7" placeholder="Apresente o produto e seus principais diferenciais."></textarea><small id="massDescriptionSource"></small></div><footer><button id="massDescriptionUseDefault" type="button" class="secondary">Usar descrição padrão</button><span></span><button type="button" class="secondary" data-mass-description-close>Cancelar</button><button id="massDescriptionSave" type="button">Salvar descrição</button></footer></section></div>`;
@@ -4075,7 +4135,7 @@
     const pending = mass.rows.filter(row => row.status !== 'success');
     const complete = pending.filter(row => !row.errors.length).length;
     const summary = $('#massProductSummary');
-    if (summary) summary.innerHTML = `<span><b>${mass.rows.length}</b> produtos na grade</span><span class="is-ok">✓ ${mass.rows.filter(row => row.status === 'success').length} cadastrados</span><span>✓ ${pending.filter(row => row.name.trim()).length} nomes</span><span>✓ ${pending.filter(row => parseProductDimension(row.price) > 0).length} preços</span><span>✓ ${pending.filter(row => row.imageItems.length).length} com fotos</span><span>✓ ${pending.filter(row => row.colorSelections.length).length} com cores</span>${pending.length - complete ? `<span class="is-warning">⚠ ${pending.length - complete} precisam de correção</span>` : `<span class="is-ok">✓ ${complete} prontos</span>`}`;
+    if (summary) summary.innerHTML = `<span><b>${mass.rows.length}</b> produtos na grade</span><span class="is-ok">✓ ${mass.rows.filter(row => row.status === 'success').length} cadastrados</span><span>✓ ${pending.filter(row => row.name.trim()).length} nomes</span><span>✓ ${pending.filter(row => parseProductDimension(row.price) > 0).length} preços</span><span>✓ ${pending.filter(row => row.imageItems.length).length} com fotos</span><span>✓ ${pending.filter(row => row.originColorId).length} com cor de origem</span>${pending.length - complete ? `<span class="is-warning">⚠ ${pending.length - complete} precisam de correção</span>` : `<span class="is-ok">✓ ${complete} prontos</span>`}`;
     const save = $('#saveEditor');
     if (save && !mass.saving) save.textContent = mass.failedOnly ? `Tentar novamente ${pending.length} produto${pending.length === 1 ? '' : 's'}` : `Cadastrar ${pending.length} produto${pending.length === 1 ? '' : 's'}`;
     const selected = mass.selected.size;
@@ -4130,20 +4190,22 @@
     const row = activeMassRow('activeColorRowKey'), root = $('#massColorManagerBody');
     if (!row || !root) return closeMassColorManager();
     const colors = (editorState.colors || []).filter(color => color.active !== false && color.type !== 'combination');
+    const additionalColors = colors.filter(color => String(color.id) !== String(row.originColorId || ''));
     const selectedKeys = new Set(row.colorSelections.map(massColorSelectionKey));
-    const options = colors.map(color => {
+    const options = additionalColors.map(color => {
       const selected = selectedKeys.has(`single:${color.id}`);
       return `<button type="button" class="mass-color-option ${selected ? 'is-selected' : ''}" data-mass-color-toggle="${esc(color.id)}" aria-pressed="${selected}"><span style="background:${colorSwatchBackground(color)}"></span><b>${esc(color.name)}</b>${selected ? '<i>✓</i>' : ''}</button>`;
     }).join('');
     const colorOptions = colors.map(color => `<option value="${esc(color.id)}">${esc(color.name)}</option>`).join('');
-    const selected = row.colorSelections.length ? `<div class="mass-selected-colors">${row.colorSelections.map(selection => { const { primary, secondary } = massColorSelectionDetails(selection); return `<span><i style="background:${colorSwatchBackground(primary, secondary)}"></i><b>${esc(massColorSelectionLabel(selection))}</b><button type="button" data-mass-color-remove="${esc(massColorSelectionKey(selection))}" aria-label="Remover ${esc(massColorSelectionLabel(selection))}">×</button></span>`; }).join('')}</div>` : '<p class="mass-color-empty">Nenhuma cor selecionada. O produto pode ser salvo sem variação.</p>';
+    const originOptions = `<option value="">Selecione a cor real das fotos principais</option>${colors.map(color => `<option value="${esc(color.id)}" ${String(color.id) === String(row.originColorId || '') ? 'selected' : ''}>${esc(color.name)}</option>`).join('')}`;
+    const selected = row.colorSelections.length ? `<div class="mass-selected-colors">${row.colorSelections.map(selection => { const { primary, secondary } = massColorSelectionDetails(selection); return `<span><i style="background:${colorSwatchBackground(primary, secondary)}"></i><b>${esc(massColorSelectionLabel(selection))}</b><button type="button" data-mass-color-remove="${esc(massColorSelectionKey(selection))}" aria-label="Remover ${esc(massColorSelectionLabel(selection))}">×</button></span>`; }).join('')}</div>` : '<p class="mass-color-empty">Nenhuma cor adicional. O produto terá somente a cor de origem.</p>';
     const colorPhotos = row.colorSelections.length ? row.colorSelections.map(selection => {
       const key = massColorSelectionKey(selection), label = massColorSelectionLabel(selection), { primary, secondary } = massColorSelectionDetails(selection);
       const items = selection.imageItems || [];
       const previews = items.length ? items.map(item => `<figure><img src="${esc(item.url)}" alt="Foto de ${esc(label)}"><button type="button" data-mass-color-photo-remove="${esc(item.key)}" data-selection-key="${esc(key)}" aria-label="Excluir ${esc(item.name)}">×</button><figcaption title="${esc(item.name)}">${esc(item.name)}</figcaption></figure>`).join('') : `<p>${selection.imageNames?.length ? 'Selecione novamente as fotos desta cor.' : 'Nenhuma foto adicionada para esta cor.'}</p>`;
       return `<article class="mass-color-photo-card"><header><span style="background:${colorSwatchBackground(primary, secondary)}"></span><div><b>${esc(label)}</b><small>${items.length} de 8 fotos · sempre secundárias</small></div><label>+ Enviar fotos<input type="file" accept="image/jpeg,image/png,image/webp" multiple data-mass-color-photo-input="${esc(key)}" hidden></label></header><div class="mass-color-photo-grid">${previews}</div></article>`;
     }).join('') : '<p class="mass-color-empty">Selecione uma ou mais cores para adicionar as fotos de cada variação.</p>';
-    root.innerHTML = `<section class="mass-selected-colors-wrap"><header><b>Selecionadas (${row.colorSelections.length})</b></header>${selected}</section><section class="mass-color-catalog"><header><b>Cores cadastradas</b><small>Selecione uma ou várias.</small></header><div>${options}</div></section><div class="mass-color-actions"><button type="button" class="secondary" id="massShowColorCombination">+ Combinação</button><button type="button" class="secondary" id="massShowNewColor">+ Nova cor</button></div><section id="massColorCombinationBuilder" class="mass-color-builder" hidden><label>Cor 1<select id="massCombinationOne">${colorOptions}</select></label><label>Cor 2<select id="massCombinationTwo">${colorOptions}</select></label><button type="button" id="massAddColorCombination">Adicionar combinação</button></section><section id="massNewColorBuilder" class="mass-color-builder" hidden><label>Nome<input id="massNewColorName" maxlength="50" placeholder="Ex.: Champagne"></label><label>Acabamento<select id="massNewColorType"><option value="solid">Cor lisa</option><option value="wood">Madeira</option></select></label><label>Cor principal<input id="massNewColorHex" type="color" value="#d8c7a7"></label><label>Tom secundário<input id="massNewColorSecondary" type="color" value="#aa8861"></label><button type="button" id="massCreateColor">Criar e selecionar</button></section><section class="mass-color-photos"><header><div><b>Fotos por cor</b><small>As imagens ficam vinculadas somente à respectiva variação.</small></div></header><div>${colorPhotos}</div></section>`;
+    root.innerHTML = `<section class="mass-origin-color"><header><b>COR PRINCIPAL / COR DE ORIGEM *</b><small>As fotos principais desta linha pertencem a esta cor.</small></header><label>Cor de origem<select id="massOriginColor" required>${originOptions}</select></label><p>A capa e a galeria principal nunca serão substituídas pelas fotos das outras cores.</p></section><section class="mass-selected-colors-wrap"><header><b>Outras cores (${row.colorSelections.length})</b></header>${selected}</section><section class="mass-color-catalog"><header><b>Cores adicionais</b><small>Selecione uma ou várias, se existirem.</small></header><div>${options}</div></section><div class="mass-color-actions"><button type="button" class="secondary" id="massShowColorCombination">+ Combinação</button><button type="button" class="secondary" id="massShowNewColor">+ Nova cor</button></div><section id="massColorCombinationBuilder" class="mass-color-builder" hidden><label>Cor 1<select id="massCombinationOne">${colorOptions}</select></label><label>Cor 2<select id="massCombinationTwo">${colorOptions}</select></label><button type="button" id="massAddColorCombination">Adicionar combinação</button></section><section id="massNewColorBuilder" class="mass-color-builder" hidden><label>Nome<input id="massNewColorName" maxlength="50" placeholder="Ex.: Champagne"></label><label>Acabamento<select id="massNewColorType"><option value="solid">Cor lisa</option><option value="wood">Madeira</option></select></label><label>Cor principal<input id="massNewColorHex" type="color" value="#d8c7a7"></label><label>Tom secundário<input id="massNewColorSecondary" type="color" value="#aa8861"></label><button type="button" id="massCreateColor">Criar e selecionar</button></section><section class="mass-color-photos"><header><div><b>Fotos das cores adicionais</b><small>São sempre secundárias e vinculadas somente à respectiva variação.</small></div></header><div>${colorPhotos}</div></section>`;
     const second = $('#massCombinationTwo');
     if (second?.options.length > 1) second.selectedIndex = 1;
     $('#massColorManagerTitle').textContent = row.name.trim() || 'Cores do produto';
@@ -4347,6 +4409,18 @@
       mass.dirty = true; editorState.dirty = true; updateMassSummary(); persistMassProductDraft();
     });
     workspace.addEventListener('change', event => {
+      if (event.target.id === 'massOriginColor') {
+        const row = activeMassRow('activeColorRowKey'); if (!row) return;
+        const next = event.target.value;
+        const duplicated = row.colorSelections.find(selection => !selection.combination_color_id && String(selection.color_id) === String(next));
+        if (duplicated && ((duplicated.imageItems || []).length || (duplicated.imageNames || []).length)) {
+          event.target.value = row.originColorId || '';
+          return toast('Remova primeiro as fotos secundárias desta cor antes de defini-la como cor de origem.', 'error');
+        }
+        if (duplicated) row.colorSelections = row.colorSelections.filter(selection => selection !== duplicated);
+        row.originColorId = next; row.status = 'pending'; row.errors = [];
+        refreshMassRowManagers(); return;
+      }
       const optionValueKey = event.target.dataset.massOptionValueToggle;
       if (optionValueKey) {
         const row = activeMassRow('activeOptionsRowKey'), group = optionGroupByKey(row?.productOptions, event.target.dataset.optionGroupKey);
@@ -4464,6 +4538,7 @@
       const colorToggle = event.target.closest('[data-mass-color-toggle]');
       if (colorToggle) {
         const row = activeMassRow('activeColorRowKey'); if (!row) return;
+        if (String(colorToggle.dataset.massColorToggle) === String(row.originColorId || '')) return;
         const selection = newMassColorSelection({ color_id: colorToggle.dataset.massColorToggle, combination_color_id: null }), key = massColorSelectionKey(selection);
         const index = row.colorSelections.findIndex(item => massColorSelectionKey(item) === key);
         if (index >= 0) { revokeMassColorSelectionImages(row.colorSelections[index]); row.colorSelections.splice(index, 1); } else row.colorSelections.push(selection);
@@ -4492,7 +4567,10 @@
         if (!row || !name) return toast('Informe o nome da nova cor.', 'error');
         if ((editorState.colors || []).some(color => color.slug === slug)) return toast('Essa cor já existe no catálogo.', 'error');
         const color = { id: `local:${crypto.randomUUID()}`, name, slug, type, hex: $('#massNewColorHex').value, secondary_hex: $('#massNewColorSecondary').value, active: true, sort_order: (editorState.colors || []).length * 10 + 10, persisted: false };
-        editorState.colors.push(color); row.colorSelections.push(newMassColorSelection({ color_id: color.id, combination_color_id: null })); refreshMassRowManagers();
+        editorState.colors.push(color);
+        if (!row.originColorId) row.originColorId = color.id;
+        else row.colorSelections.push(newMassColorSelection({ color_id: color.id, combination_color_id: null }));
+        refreshMassRowManagers();
       }
     });
     updateMassSummary();
@@ -4536,8 +4614,9 @@
   function massProductPayload(row, base) {
     const common = massEffectiveValues(row, base);
     const promotional = row.promotional_price === '' ? null : parseProductDimension(row.promotional_price);
-    const colorText = row.colorSelections.map(selection => massColorSelectionLabel(selection, ' / ')).join(', ');
-    const hasColors = row.colorSelections.length > 0;
+    const origin = catalogColor(row.originColorId);
+    const colorText = [origin?.name, ...row.colorSelections.map(selection => massColorSelectionLabel(selection, ' / '))].filter(Boolean).join(', ');
+    const hasColors = Boolean(origin);
     return {
       name: row.name.trim(), slug: slugify(row.name), sku: null,
       short_description: '', description: common.description || '', category_id: common.category_id || null, environment_id: common.environment_id || null, brand_id: null,
@@ -4545,13 +4624,16 @@
       featured: Boolean(common.featured), best_seller: false, new_arrival: false, on_sale: Boolean(common.on_sale || promotional), sort_order: 0,
       active: false, warranty: common.warranty || '', dimensions: massProductDimensions(row), material: common.material || '',
       mirror_feature: common.mirror_feature || null, ribbed_feature: common.ribbed_feature || null, color: colorText, specifications: {},
+      origin_color_id: row.originColorId,
       installment_enabled: true, max_installments: 12, whatsapp_enabled: true, cart_enabled: true,
       free_city_shipping: Boolean(common.free_city_shipping), free_assembly: Boolean(common.free_assembly), is_campaign: false,
       variants_enabled: hasColors, variation_type: hasColors ? 'color' : null
     };
   }
   function massProductVariantSettings(row) {
-    const variants = row.colorSelections.map((selection, index) => {
+    const origin = catalogColor(row.originColorId);
+    const selections = [newMassColorSelection({ color_id: origin.id }), ...row.colorSelections.filter(selection => selection.combination_color_id || String(selection.color_id) !== String(row.originColorId))];
+    const variants = selections.map((selection, index) => {
       const { primary, secondary } = massColorSelectionDetails(selection);
       const name = `${primary.name}${secondary ? ` / ${secondary.name}` : ''}`;
       const draft = newVariantDraft({
@@ -4560,16 +4642,16 @@
         secondary_color_hex: secondary?.hex || primary.secondary_hex || primary.hex,
         stock: Number(row.stock_quantity || 0), active: true, default_variant: index === 0, display_order: index
       });
-      draft.galleryFiles = (selection.imageItems || []).map(item => item.file);
+      draft.galleryFiles = index === 0 ? [] : (selection.imageItems || []).map(item => item.file);
       const productPart = slugify(row.name || 'produto').replace(/-/g, '').slice(0, 18).toUpperCase() || 'PRODUTO';
       const colorPart = slugify(name).replace(/-/g, '').slice(0, 12).toUpperCase() || `COR${index + 1}`;
       draft.sku = `${productPart}-${colorPart}-${crypto.randomUUID().replace(/-/g, '').slice(0, 6).toUpperCase()}`;
       return draft;
     });
-    return { enabled: variants.length > 0, type: variants.length ? 'color' : null, variants };
+    return { enabled: true, type: 'color', originColorId: row.originColorId, variants };
   }
   async function persistMassPendingColors(mass) {
-    const pendingIds = new Set(mass.rows.flatMap(row => row.colorSelections.flatMap(selection => [selection.color_id, selection.combination_color_id])).filter(id => String(id || '').startsWith('local:') || String(id || '').startsWith('preset:')));
+    const pendingIds = new Set(mass.rows.flatMap(row => [row.originColorId, ...row.colorSelections.flatMap(selection => [selection.color_id, selection.combination_color_id])]).filter(id => String(id || '').startsWith('local:') || String(id || '').startsWith('preset:')));
     if (!pendingIds.size) return;
     if (!editorState.colorsAvailable) throw new Error('Execute a migração 20261001_product_color_catalog.sql antes de cadastrar cores.');
     for (const pendingId of pendingIds) {
@@ -4578,10 +4660,13 @@
       const values = { name: color.name, slug: color.slug, hex: color.hex, secondary_hex: color.secondary_hex || null, type: color.type || 'solid', active: true, sort_order: Number(color.sort_order || 0) };
       const { data, error } = await db.from('product_colors').upsert(values, { onConflict: 'slug' }).select().single();
       if (error) throw error;
-      mass.rows.forEach(row => row.colorSelections.forEach(selection => {
-        if (selection.color_id === pendingId) selection.color_id = data.id;
-        if (selection.combination_color_id === pendingId) selection.combination_color_id = data.id;
-      }));
+      mass.rows.forEach(row => {
+        if (row.originColorId === pendingId) row.originColorId = data.id;
+        row.colorSelections.forEach(selection => {
+          if (selection.color_id === pendingId) selection.color_id = data.id;
+          if (selection.combination_color_id === pendingId) selection.combination_color_id = data.id;
+        });
+      });
       Object.assign(color, data, { persisted: true });
     }
   }
@@ -4589,6 +4674,7 @@
     if (error?.code === '23505' || /duplicate|unique/i.test(error?.message || '')) return 'Já existe um produto com este nome ou endereço.';
     if (/mirror_feature|ribbed_feature/i.test(error?.message || '')) return 'Execute a migração 20261009_product_characteristics.sql antes de salvar as características.';
     if (/replace_product_options|product_option_groups|product_option_values/i.test(error?.message || '')) return 'Execute a migração 20261009_product_characteristics.sql antes de salvar opções do produto.';
+    if (/origin_color_id|product_images_color_id_fkey/i.test(error?.message || '')) return 'Execute a migração 20261010_product_origin_color.sql antes de salvar a cor de origem.';
     return explain(error);
   }
   async function persistMassProductRow(row, mass) {
@@ -4600,7 +4686,7 @@
       if (error) throw error;
       createdId = data.id; row.createdId = data.id;
       const cover = row.imageItems[0];
-      galleryUploads = await saveGallery(data.id, null, 'products', { files: row.imageItems.map(item => item.file), coverFile: cover?.file || null });
+      galleryUploads = await saveGallery(data.id, null, 'products', { files: row.imageItems.map(item => item.file), coverFile: cover?.file || null, colorId: row.originColorId });
       const variants = massProductVariantSettings(row);
       if (variants.enabled) await saveProductVariants(data.id, variants);
       await saveProductOptions(data.id, selectedProductOptionPayload(row.productOptions || []));
@@ -4699,7 +4785,7 @@
     });
     return `<tr data-product-id="${row.id}">
       <td class="product-select-cell"><input type="checkbox" data-product-select="${row.id}" aria-label="Selecionar ${esc(row.name)}" ${productViewState.selected.has(row.id) ? 'checked' : ''}></td>
-      <td><div class="product-identity">${image ? `<img class="thumb" src="${esc(image)}" alt="${esc(row.name)}">` : '<span class="product-thumb-placeholder" aria-hidden="true">▦</span>'}<span><b>${esc(row.name)}</b><small>${row.sku ? `SKU: ${esc(row.sku)}` : 'SKU não informado'}</small></span></div></td>
+      <td><div class="product-identity">${image ? `<img class="thumb" src="${esc(image)}" alt="${esc(row.name)}">` : '<span class="product-thumb-placeholder" aria-hidden="true">▦</span>'}<span><b>${esc(row.name)}</b><small>${row.sku ? `SKU: ${esc(row.sku)}` : 'SKU não informado'}</small>${row.origin_color_id ? '' : '<small class="origin-color-pending">⚠ Cor de origem pendente</small>'}</span></div></td>
       <td><span class="product-category-chip">${esc(row.categories?.name || 'Sem categoria')}</span></td>
       <td class="product-price">${row.promotional_price ? `<del>${brl(row.price)}</del>` : ''}<strong>${brl(currentPrice)}</strong></td>
       <td class="product-stock"><b>${Number(row.stock_quantity)}</b><span class="stock-chip ${stock.key}">${stock.label}</span></td>
