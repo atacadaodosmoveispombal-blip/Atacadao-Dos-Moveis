@@ -1,37 +1,54 @@
 begin;
 
 -- Every product with a confirmed origin colour must have a sellable origin
--- variant. For legacy rows, preserve the existing aggregate quantity by
--- assigning only the still-unrepresented remainder to the origin colour.
-create temporary table stock_by_color_origin_backfill on commit drop as
-select
-  product.id as product_id,
-  product.origin_color_id as color_id,
-  color.name as color_name,
-  color.hex as color_hex,
-  color.secondary_hex,
-  greatest(
-    coalesce(product.stock_quantity, 0) - coalesce(sum(variant.stock), 0),
-    0
-  )::integer as preserved_stock
-from public.products product
-join public.product_colors color on color.id = product.origin_color_id
-left join public.product_variants variant on variant.product_id = product.id
-where product.deleted_at is null
-  and not exists (
-    select 1
-    from public.product_variants origin_variant
-    where origin_variant.product_id = product.id
-      and origin_variant.color_id = product.origin_color_id
-      and origin_variant.combination_color_id is null
-  )
-group by product.id, product.origin_color_id, color.name, color.hex, color.secondary_hex, product.stock_quantity;
-
+-- variant. The statements deliberately avoid temporary tables because hosted
+-- SQL executors may run each statement in a different database session.
 update public.product_variants variant
 set default_variant = false
-where variant.product_id in (select product_id from stock_by_color_origin_backfill)
-  and variant.default_variant;
+where variant.default_variant
+  and exists (
+    select 1
+    from public.products product
+    where product.id = variant.product_id
+      and product.deleted_at is null
+      and product.origin_color_id is not null
+      and not exists (
+        select 1
+        from public.product_variants origin_variant
+        where origin_variant.product_id = product.id
+          and origin_variant.color_id = product.origin_color_id
+          and origin_variant.combination_color_id is null
+      )
+  );
 
+-- For legacy rows, preserve the existing aggregate quantity by assigning only
+-- the still-unrepresented remainder to the newly-created origin colour.
+with missing_origin as (
+  select
+    product.id as product_id,
+    product.origin_color_id as color_id,
+    color.name as color_name,
+    color.hex as color_hex,
+    color.secondary_hex,
+    greatest(
+      coalesce(product.stock_quantity, 0) - coalesce((
+        select sum(existing_variant.stock)::integer
+        from public.product_variants existing_variant
+        where existing_variant.product_id = product.id
+      ), 0),
+      0
+    )::integer as preserved_stock
+  from public.products product
+  join public.product_colors color on color.id = product.origin_color_id
+  where product.deleted_at is null
+    and not exists (
+      select 1
+      from public.product_variants origin_variant
+      where origin_variant.product_id = product.id
+        and origin_variant.color_id = product.origin_color_id
+        and origin_variant.combination_color_id is null
+    )
+)
 insert into public.product_variants (
   product_id, name, type, sku, color_name, swatch_mode, color_hex,
   secondary_color_hex, stock, low_stock_threshold, active,
@@ -53,7 +70,7 @@ select
   0,
   backfill.color_id,
   null
-from stock_by_color_origin_backfill backfill;
+from missing_origin backfill;
 
 -- A selected colour remains visible on the storefront. Quantity zero is the
 -- only availability switch, so one colour can sell out without hiding others.
