@@ -57,7 +57,7 @@
     {
       "name": "cadastro simplificado de nova categoria",
       "checks": [
-        { "file": "admin-app.js", "contains": ["async function openSimpleCategoryCreate(", "SIMPLE_CATEGORY_IMAGE_PRESETS", "data-simple-category-image", "if (!record) return openSimpleCategoryCreate();"] },
+        { "file": "admin-app.js", "contains": ["async function openSimpleCategoryCreate(", "storedImages", "CategoryIcons.keys.map", "data-simple-category-image", "visual_selected", "if (!record) return openSimpleCategoryCreate();"] },
         { "file": "admin.css", "contains": [".simple-category-layout", ".simple-category-preview"] },
         { "file": "scripts/test-simple-category-editor.mjs", "contains": ["nova categoria simples"] }
       ]
