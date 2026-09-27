@@ -7,3 +7,10 @@ npm-debug.log*
 !.env.example
 .vercel/
 supabase/.temp/
+supabase/backups/
+supabase/migrations/*demo*.sql
+output/
+tmp/
+*.zip
+camisa-atacarejo-costas-final.png
+prancha-uniforme-atacarejo-cliente.png

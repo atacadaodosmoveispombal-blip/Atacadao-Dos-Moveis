@@ -1,4 +1,6 @@
-import { copyFileSync, cpSync, mkdirSync, rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { copyFileSync, cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -47,4 +49,29 @@ for (const file of publicFiles) {
 
 cpSync(join(root, 'assets'), join(output, 'assets'), { recursive: true });
 
-console.log(`Vercel build pronto: ${publicFiles.length} arquivos e assets copiados para dist/.`);
+const contract = JSON.parse(readFileSync(join(root, 'config', 'admin-feature-contract.json'), 'utf8'));
+const gitValue = args => {
+  try { return execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); }
+  catch { return ''; }
+};
+const commit = process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || gitValue(['rev-parse', 'HEAD']) || 'unknown';
+const branch = process.env.VERCEL_GIT_COMMIT_REF || process.env.GITHUB_REF_NAME || gitValue(['branch', '--show-current']) || 'unknown';
+const artifactFiles = ['index.html', 'admin.html', 'admin-app.js', 'admin.css', 'app.js', 'storefront-cms.js', 'hero-carousel.js', 'styles.css'];
+const artifacts = Object.fromEntries(artifactFiles.map(file => [
+  file,
+  createHash('sha256').update(readFileSync(join(output, file))).digest('hex')
+]));
+const manifest = {
+  schemaVersion: 1,
+  project: 'atacarejo-dos-moveis',
+  commit,
+  branch,
+  builtAt: new Date().toISOString(),
+  release: contract.release,
+  protectedFeatures: contract.features.map(feature => feature.name),
+  database: contract.database,
+  artifacts
+};
+writeFileSync(join(output, 'deploy-manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+
+console.log(`Vercel build pronto: ${publicFiles.length} arquivos, assets e manifesto do commit ${commit} copiados para dist/.`);

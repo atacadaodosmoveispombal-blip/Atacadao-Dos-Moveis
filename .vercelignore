@@ -2,7 +2,10 @@
 .vercel
 node_modules
 dist
-supabase
+supabase/.temp
+supabase/backups
+supabase/audits
+supabase/migrations/*demo*.sql
 CMS_SETUP.md
 *.log
 *.zip

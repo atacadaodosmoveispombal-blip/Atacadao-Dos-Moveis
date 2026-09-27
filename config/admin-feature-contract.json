@@ -1,0 +1,124 @@
+{
+  "version": 1,
+  "productionBranch": "main",
+  "release": {
+    "name": "recuperacao-admin-e-protecao-antirregressao",
+    "featuresAdded": [
+      "recuperação do cadastro em massa",
+      "medidas estruturadas e imagem de medidas",
+      "materiais MDF/MDP",
+      "cores e fotos por variação sem alterar a capa",
+      "opções do produto e integração com WhatsApp",
+      "Hero com imagem ou vídeo"
+    ]
+  },
+  "database": {
+    "executionMode": "manual-incremental-only",
+    "lastVerifiedAt": "2026-09-27",
+    "lastVerifiedSchema": "20261008_product_options.sql",
+    "appliedMigrations": [
+      "20261005_product_dimensions_numeric.sql",
+      "20261006_product_dimensions_image.sql",
+      "20261007_hero_media_carousel.sql",
+      "20261008_product_options.sql"
+    ]
+  },
+  "features": [
+    {
+      "name": "cadastro de produto",
+      "checks": [{ "file": "admin-app.js", "contains": ["async function productEditor(", "async function saveProduct("] }]
+    },
+    {
+      "name": "edição de produto",
+      "checks": [{ "file": "admin-app.js", "contains": ["productEditor(rowFor", "data-product-edit"] }]
+    },
+    {
+      "name": "exclusão segura",
+      "checks": [{ "file": "admin-app.js", "contains": ["deleted_at: new Date().toISOString()", ".is('deleted_at', null)"] }]
+    },
+    {
+      "name": "cadastro em massa",
+      "checks": [{ "file": "admin-app.js", "contains": ["function massProductEditorMarkup(", "async function massProductEditor(", "async function saveMassProducts("] }]
+    },
+    {
+      "name": "busca de produtos",
+      "checks": [{ "file": "admin-app.js", "contains": ["productViewState.search", "id=\"searchList\"", "Buscar produto ou SKU"] }]
+    },
+    {
+      "name": "categorias e subcategorias",
+      "checks": [{ "file": "admin-app.js", "contains": ["function categoryRow(", "Subcategoria", "search_keywords"] }]
+    },
+    {
+      "name": "ambientes",
+      "checks": [{ "file": "admin-app.js", "contains": ["environments", "environment_id", "Ambiente"] }]
+    },
+    {
+      "name": "estoque",
+      "checks": [{ "file": "admin-app.js", "contains": ["function stockRow(", "stock_quantity", "product_variants"] }]
+    },
+    {
+      "name": "promoções",
+      "checks": [{ "file": "admin-app.js", "contains": ["promotions", "promotion_products", "Produto em promoção"] }]
+    },
+    {
+      "name": "medidas altura largura profundidade",
+      "checks": [{ "file": "admin-app.js", "contains": ["function productDimensionsEditorHtml(", "function productDimensionsFromForm(", "largura", "altura", "profundidade"] }]
+    },
+    {
+      "name": "materiais MDF e MDP",
+      "checks": [{ "file": "admin-app.js", "contains": ["function productMaterialsEditorHtml(", "material_mdf", "material_mdp", "MDF / MDP"] }]
+    },
+    {
+      "name": "cores e variações",
+      "checks": [{ "file": "admin-app.js", "contains": ["function productVariationsEditorHtml(", "product_colors", "async function saveProductVariants("] }]
+    },
+    {
+      "name": "imagens por cor secundárias",
+      "checks": [{ "file": "admin-app.js", "contains": ["data-variant-gallery", "db.from('variant_images').insert", "is_cover: false"] }]
+    },
+    {
+      "name": "imagem principal independente",
+      "checks": [
+        { "file": "admin-app.js", "contains": ["function productMainImageRecord(", "previousCoverId", "image_role: 'gallery'"] },
+        { "file": "storefront-cms.js", "contains": ["Number(Boolean(b.is_cover))", "baseImage", "variant_images"] }
+      ]
+    },
+    {
+      "name": "opções espelho e ripado",
+      "checks": [{ "file": "admin-app.js", "contains": ["Com espelho", "Sem espelho", "Com ripado", "Sem ripado", "function productOptionsEditorHtml(", "async function saveProductOptions("] }]
+    },
+    {
+      "name": "opções no cadastro em massa",
+      "checks": [{ "file": "admin-app.js", "contains": ["selectedProductOptionPayload(row.productOptions", "await saveProductOptions(data.id", "mass-options-picker"] }]
+    },
+    {
+      "name": "opções no site e WhatsApp",
+      "checks": [
+        { "file": "storefront-cms.js", "contains": ["product_option_groups", "productOptions"] },
+        { "file": "app.js", "contains": ["selectedProductOptions", "productOptionMessage", "buyProductWhatsAppWithOptions", "data-product-option-value"] }
+      ]
+    },
+    {
+      "name": "Hero com imagem ou vídeo",
+      "checks": [
+        { "file": "admin-app.js", "contains": ["Hero da Home", "video_desktop_url", "video_mobile_url", "poster_url"] },
+        { "file": "hero-carousel.js", "contains": ["playsInline", "addEventListener('ended'"] },
+        { "file": "styles.css", "contains": [".hero-slide img,.hero-slide video", "object-fit:cover"] }
+      ]
+    },
+    {
+      "name": "login administrativo",
+      "checks": [
+        { "file": "admin.html", "contains": ["id=\"loginForm\"", "admin-app.js"] },
+        { "file": "admin-app.js", "contains": ["signInWithPassword", "signOut"] }
+      ]
+    },
+    {
+      "name": "site público",
+      "checks": [
+        { "file": "index.html", "contains": ["app.js", "storefront-cms.js", "hero-carousel.js"] },
+        { "file": "storefront-cms.js", "contains": ["loadStorefrontProducts", "product_images", "product_variants"] }
+      ]
+    }
+  ]
+}
