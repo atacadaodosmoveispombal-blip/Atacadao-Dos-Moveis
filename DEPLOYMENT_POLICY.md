@@ -10,10 +10,11 @@ registradas em `config/admin-feature-contract.json`.
 2. Confirme que `HEAD` e `origin/main` são o mesmo commit.
 3. Crie um commit de segurança antes de mudanças estruturais.
 4. Faça alterações apenas sobre a versão atual e adicione testes ao contrato.
-5. Execute `npm run build`. Qualquer regressão interrompe o build.
-6. Faça commit e push para `main` somente após a validação.
-7. Publique com `npm run deploy:production` quando um deploy manual for necessário.
-8. O comando valida o domínio, o manifesto, o commit e o CMS após a publicação.
+5. Envie a alteração por uma branch; a `main` exige o check `verify-admin` aprovado.
+6. Execute `npm run build`. Qualquer regressão interrompe o build.
+7. Faça merge em `main` somente após a validação.
+8. Publique com `npm run deploy:production` quando um deploy manual for necessário.
+9. O comando valida o domínio, o manifesto, o commit e o CMS após a publicação.
 
 ## Banco de dados
 
