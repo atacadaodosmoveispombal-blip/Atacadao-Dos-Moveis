@@ -530,41 +530,32 @@
     status.classList.toggle('is-live', active);
     status.textContent = active ? '● Publicada no site' : '● Não publicada';
   }
-  const SIMPLE_CATEGORY_IMAGE_PRESETS = [
-    { label: 'Sala aconchegante', environment: 'sala', url: 'assets/editorial-room-clean.png?v=caption-removed-1' },
-    { label: 'Sala com sofá', environment: 'sala', url: 'assets/hero-sofa.png' },
-    { label: 'Sala moderna', environment: 'sala', url: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=900&q=80' },
-    { label: 'Quarto', environment: 'quarto', url: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=900&q=80' },
-    { label: 'Cozinha', environment: 'cozinha', url: 'https://images.unsplash.com/photo-1556911220-bff31c812dba?auto=format&fit=crop&w=900&q=80' },
-    { label: 'Escritório', environment: 'escritorio', url: 'https://images.unsplash.com/photo-1497366811353-6870744d04b2?auto=format&fit=crop&w=900&q=80' },
-    { label: 'Infantil', environment: 'infantil', url: 'https://images.unsplash.com/photo-1567538096630-e0c55bd6374c?auto=format&fit=crop&w=900&q=80' },
-    { label: 'Eletros', environment: 'eletros', url: 'https://images.unsplash.com/photo-1626806819282-2c1dc01a5e0c?auto=format&fit=crop&w=900&q=80' }
-  ];
   async function openSimpleCategoryCreate() {
     resetEditorChrome();
     const [categoryResult, environmentResult] = await Promise.all([
-      db.from('categories').select('id,name,sort_order,environment_id').order('sort_order').order('created_at'),
+      db.from('categories').select('id,name,sort_order,environment_id,image_url,icon_key').order('sort_order').order('created_at'),
       db.from('environments').select('id,name,slug,active,sort_order').eq('active', true).order('sort_order').order('name')
     ]);
     if (categoryResult.error) return toast(explain(categoryResult.error));
     if (environmentResult.error) return toast(explain(environmentResult.error));
     const categories = categoryResult.data || [];
     const environments = environmentResult.data || [];
-    const normalized = value => slugify(value).replace(/^escritorio$/, 'escritorio');
-    const availablePresets = SIMPLE_CATEGORY_IMAGE_PRESETS.map(preset => {
-      const environment = environments.find(item => normalized(item.slug || item.name) === preset.environment)
-        || environments.find(item => normalized(item.name).includes(preset.environment));
-      return environment ? { ...preset, environmentId: environment.id, environmentName: environment.name } : null;
-    }).filter(Boolean);
-    if (!availablePresets.length) return toast('Cadastre pelo menos um ambiente ativo antes de criar uma categoria.', 'error');
-    const firstPreset = availablePresets[0];
+    if (!environments.length) return toast('Cadastre pelo menos um ambiente ativo antes de criar uma categoria.', 'error');
+    const storedImages = [...new Map(categories.filter(item => item.image_url).map(item => [item.image_url, {
+      type: 'image', url: item.image_url, iconKey: item.icon_key || '', label: item.name
+    }])).values()];
+    const visualChoices = [
+      ...storedImages,
+      ...CategoryIcons.keys.map(key => ({ type: 'icon', key, label: key.replaceAll('-', ' ') }))
+    ];
     const positionOptions = environmentId => {
+      if (!environmentId) return '<option value="">Escolha o ambiente primeiro</option>';
       const count = categories.filter(item => String(item.environment_id) === String(environmentId)).length + 1;
       return Array.from({ length: Math.max(1, count) }, (_, index) => `<option value="${index + 1}" ${index === count - 1 ? 'selected' : ''}>${index + 1}ª</option>`).join('');
     };
     editorState = {
       view: 'categories', config: configs.categories, record: null, saveMode: 'publish', simpleCreate: true,
-      categories, environments, selectedEnvironmentName: firstPreset.environmentName, removeImage: false, previewObjectUrl: null
+      categories, environments, selectedEnvironmentName: '', removeImage: false, previewObjectUrl: null
     };
     $('#editorDialog').classList.add('category-editor-dialog', 'simple-category-dialog');
     $('#dialogEyebrow').textContent = 'NOVA CATEGORIA';
@@ -574,24 +565,28 @@
     $('#saveEditor').textContent = 'Salvar e publicar';
     $('#editorFields').innerHTML = `<div class="simple-category-layout">
       <section class="simple-category-form">
-        <label>Nome da categoria<input name="name" type="text" required autocomplete="off" placeholder="Ex.: Poltronas"></label>
-        <label>Descrição curta<textarea name="description" maxlength="180" placeholder="Descreva em poucas palavras o que o cliente encontrará."></textarea></label>
-        <fieldset class="simple-category-images"><legend>Escolha uma imagem</legend><p>Clique em uma das imagens que já existem no site.</p><div>${availablePresets.map((preset, index) => `<button type="button" class="${index === 0 ? 'is-selected' : ''}" data-simple-category-image="${index}" aria-pressed="${index === 0 ? 'true' : 'false'}"><img src="${esc(preset.url)}" alt="${esc(preset.label)}"><span>${esc(preset.label)}</span><i aria-hidden="true">✓</i></button>`).join('')}</div></fieldset>
-        <div class="simple-category-row"><label>Posição<select name="position_index">${positionOptions(firstPreset.environmentId)}</select></label><label>Categoria ativa<select name="active"><option value="true" selected>Sim</option><option value="false">Não</option></select></label></div>
-        <input name="environment_id" type="hidden" value="${esc(firstPreset.environmentId)}"><input name="preset_image_url" type="hidden" value="${esc(firstPreset.url)}"><input name="slug" type="hidden" value=""><input name="search_keywords" type="hidden" value=""><input name="icon_key" type="hidden" value=""><input name="show_on_homepage" type="checkbox" checked hidden><input name="show_in_menu" type="checkbox" checked hidden>
+        <label>1. Ambiente<select name="environment_id" required><option value="">Selecione o ambiente</option>${environments.map(environment => `<option value="${environment.id}">${esc(environment.name)}</option>`).join('')}</select></label>
+        <label>2. Nome da categoria/subcategoria<input name="name" type="text" required autocomplete="off" placeholder="Ex.: Poltronas"></label>
+        <label>3. Descrição curta<textarea name="description" maxlength="180" placeholder="Descreva em poucas palavras o que o cliente encontrará."></textarea></label>
+        <fieldset class="simple-category-images"><legend>4. Escolher imagem</legend><p>Clique em uma imagem ou ícone que já existe no projeto.</p><div>${visualChoices.map((choice, index) => `<button type="button" data-simple-category-image="${index}" aria-pressed="false">${choice.type === 'image' ? `<img src="${esc(choice.url)}" alt="">` : `<b class="simple-category-choice-icon" aria-hidden="true">${CategoryIcons.icon(choice.key, { size: 42 })}</b>`}<span>${esc(choice.label)}</span><i aria-hidden="true">✓</i></button>`).join('')}</div></fieldset>
+        <div class="simple-category-row"><label>Posição<select name="position_index" required>${positionOptions('')}</select></label><label>Categoria ativa<select name="active"><option value="true" selected>Sim</option><option value="false">Não</option></select></label></div>
+        <input name="preset_image_url" type="hidden" value=""><input name="visual_selected" type="hidden" value="false"><input name="slug" type="hidden" value=""><input name="search_keywords" type="hidden" value=""><input name="icon_key" type="hidden" value=""><input name="show_on_homepage" type="checkbox" checked hidden><input name="show_in_menu" type="checkbox" checked hidden>
       </section>
-      <aside class="category-live-preview simple-category-preview"><div class="category-preview-heading"><span>PRÉVIA</span><b>Como aparecerá no site</b></div><div class="category-site-card"><div class="category-site-image"><img data-category-live-image src="${esc(firstPreset.url)}" alt=""></div><div class="category-site-card-footer"><span id="categoryPreviewIcon" aria-hidden="true">${CategoryIcons.icon('sofa',{size:28})}</span><div><strong id="categoryPreviewName">Nome da categoria</strong><small id="categoryPreviewDescription">A descrição curta aparecerá aqui.</small></div><i aria-hidden="true">→</i></div></div><p>A prévia é atualizada enquanto você preenche o formulário.</p></aside>
+      <aside class="category-live-preview simple-category-preview"><div class="category-preview-heading"><span>PRÉVIA</span><b>Como aparecerá no site</b></div><div class="category-site-card"><div class="category-site-image simple-category-preview-visual" id="simpleCategoryPreviewVisual"><div>Escolha uma imagem ou ícone</div></div><div class="category-site-card-footer"><span id="categoryPreviewIcon" aria-hidden="true">${CategoryIcons.icon('categoria',{size:28})}</span><div><strong id="categoryPreviewName">Nome da categoria</strong><small id="categoryPreviewDescription">A descrição curta aparecerá aqui.</small></div><i aria-hidden="true">→</i></div></div><p>A prévia é atualizada enquanto você preenche o formulário.</p></aside>
     </div>`;
     const nameInput = $('[name="name"]');
     const descriptionInput = $('[name="description"]');
     const environmentInput = $('[name="environment_id"]');
     const imageInput = $('[name="preset_image_url"]');
+    const iconInput = $('[name="icon_key"]');
+    const visualSelectedInput = $('[name="visual_selected"]');
     const positionInput = $('[name="position_index"]');
     const syncSimplePreview = () => {
       $('[name="slug"]').value = slugify(nameInput.value);
       $('#categoryPreviewName').textContent = nameInput.value.trim() || 'Nome da categoria';
       $('#categoryPreviewDescription').textContent = descriptionInput.value.trim() || 'A descrição curta aparecerá aqui.';
-      $('#categoryPreviewIcon').innerHTML = CategoryIcons.icon(CategoryIcons.keyFor(nameInput.value, editorState.selectedEnvironmentName), { size: 28 });
+      const previewKey = iconInput.value || CategoryIcons.keyFor(nameInput.value, editorState.selectedEnvironmentName);
+      $('#categoryPreviewIcon').innerHTML = CategoryIcons.icon(previewKey, { size: 28 });
       const isActive = $('[name="active"]').value === 'true';
       $('#dialogEyebrow').textContent = isActive ? '● SERÁ PUBLICADA' : '● FICARÁ INATIVA';
       $('#dialogEyebrow').className = isActive ? 'is-live' : 'is-draft';
@@ -599,15 +594,21 @@
     nameInput.addEventListener('input', syncSimplePreview);
     descriptionInput.addEventListener('input', syncSimplePreview);
     $('[name="active"]').addEventListener('change', syncSimplePreview);
+    environmentInput.addEventListener('change', () => {
+      editorState.selectedEnvironmentName = environmentInput.selectedOptions[0]?.textContent || '';
+      positionInput.innerHTML = positionOptions(environmentInput.value);
+      syncSimplePreview();
+    });
     $$('[data-simple-category-image]').forEach(button => button.onclick = () => {
-      const preset = availablePresets[Number(button.dataset.simpleCategoryImage)];
-      if (!preset) return;
+      const choice = visualChoices[Number(button.dataset.simpleCategoryImage)];
+      if (!choice) return;
       $$('[data-simple-category-image]').forEach(item => { const selected = item === button; item.classList.toggle('is-selected', selected); item.setAttribute('aria-pressed', String(selected)); });
-      environmentInput.value = preset.environmentId;
-      imageInput.value = preset.url;
-      editorState.selectedEnvironmentName = preset.environmentName;
-      positionInput.innerHTML = positionOptions(preset.environmentId);
-      categoryPreviewImage(preset.url);
+      imageInput.value = choice.type === 'image' ? choice.url : '';
+      iconInput.value = choice.type === 'icon' ? choice.key : choice.iconKey || CategoryIcons.keyFor(nameInput.value, editorState.selectedEnvironmentName);
+      visualSelectedInput.value = 'true';
+      $('#simpleCategoryPreviewVisual').innerHTML = choice.type === 'image'
+        ? `<img src="${esc(choice.url)}" alt="${esc(choice.label)}">`
+        : `<b class="simple-category-preview-icon" aria-hidden="true">${CategoryIcons.icon(choice.key, { size: 64 })}</b>`;
       syncSimplePreview();
     });
     syncSimplePreview();
@@ -2011,6 +2012,9 @@
     let completed = false;
     try {
       const form = event.currentTarget;
+      if (editorState.simpleCreate && form.elements.visual_selected?.value !== 'true') {
+        throw new Error('Escolha uma imagem ou ícone antes de salvar.');
+      }
       const environmentId = form.elements.environment_id.value;
       const environmentName = form.elements.environment_id.selectedOptions?.[0]?.textContent
         || editorState.environments?.find(item => String(item.id) === String(environmentId))?.name
