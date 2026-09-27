@@ -12,7 +12,8 @@
       "características informativas de material, espelho e ripado",
       "cor de origem obrigatória com galeria principal vinculada",
       "Hero com imagem ou vídeo",
-      "editor visual simplificado da Home"
+      "editor visual simplificado da Home",
+      "cadastro simplificado de nova categoria"
     ]
   },
   "database": {
@@ -52,6 +53,14 @@
     {
       "name": "categorias e subcategorias",
       "checks": [{ "file": "admin-app.js", "contains": ["function categoryRow(", "Subcategoria", "search_keywords"] }]
+    },
+    {
+      "name": "cadastro simplificado de nova categoria",
+      "checks": [
+        { "file": "admin-app.js", "contains": ["async function openSimpleCategoryCreate(", "SIMPLE_CATEGORY_IMAGE_PRESETS", "data-simple-category-image", "if (!record) return openSimpleCategoryCreate();"] },
+        { "file": "admin.css", "contains": [".simple-category-layout", ".simple-category-preview"] },
+        { "file": "scripts/test-simple-category-editor.mjs", "contains": ["nova categoria simples"] }
+      ]
     },
     {
       "name": "ambientes",
