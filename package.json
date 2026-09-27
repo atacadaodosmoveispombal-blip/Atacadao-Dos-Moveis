@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "npm run check && npm run test:hero && npm run test:product-options && npm run verify:regression && node scripts/build-vercel.mjs",
+    "build": "npm run check && npm run test:hero && npm run test:product-options && npm run test:product-characteristics && npm run verify:regression && node scripts/build-vercel.mjs",
     "dev": "node server.js",
     "start": "node server.js",
     "check": "node --check category-icons.js && node --check app.js && node --check mobile-navigation.js && node --check hero-carousel.js && node --check storefront-cms.js && node --check customer-account.js && node --check reset-password.js && node --check virtual-assistant-loader.js && node --check virtual-assistant.js && node --check virtual-assistant-catalog.js && node --check virtual-assistant-voice.js && node --check admin-app.js && node --check server.js",
@@ -12,6 +12,7 @@
     "test:assistant": "node scripts/test-virtual-assistant-catalog.mjs",
     "test:hero": "node scripts/test-hero-carousel.mjs",
     "test:product-options": "node scripts/test-product-options.mjs",
+    "test:product-characteristics": "node scripts/test-product-characteristics.mjs",
     "test:voice": "node scripts/test-virtual-assistant-voice.mjs",
     "verify:regression": "node scripts/check-admin-regressions.mjs",
     "verify:production": "node scripts/verify-production-deploy.mjs",

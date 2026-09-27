@@ -15,8 +15,8 @@ const colorsTab = admin.indexOf("key: 'variations', label: 'Cores'");
 const optionsTab = admin.indexOf("key: 'product_options', label: 'Opções do Produto'");
 const benefitsTab = admin.indexOf("key: 'benefits', label: 'Benefícios / Selos'");
 assert(colorsTab >= 0 && colorsTab < optionsTab && optionsTab < benefitsTab, 'A aba Opções do Produto não está logo após Cores.');
-assert(admin.includes("{ name: 'Espelho', slug: 'espelho'"), 'Opção inicial Espelho ausente.');
-assert(admin.includes("{ name: 'Ripado', slug: 'ripado'"), 'Opção inicial Ripado ausente.');
+assert(admin.includes("const reservedProductOptionSlugs = new Set(['espelho', 'ripado'])"), 'Espelho e Ripado não estão protegidos contra uso como opções selecionáveis.');
+assert(!admin.includes("{ name: 'Espelho', slug: 'espelho'") && !admin.includes("{ name: 'Ripado', slug: 'ripado'"), 'Espelho/Ripado ainda estão configurados como opções selecionáveis.');
 assert(admin.includes("db.rpc('replace_product_options'"), 'Cadastro individual não usa a persistência estruturada compartilhada.');
 assert(admin.includes("await saveProductOptions(data.id, selectedProductOptionPayload(row.productOptions || []))"), 'Cadastro em Massa não usa a persistência compartilhada.');
 assert(admin.includes('data-mass-options-open'), 'Configuração rápida das opções no Cadastro em Massa ausente.');
@@ -34,7 +34,7 @@ assert(app.includes('const missingOption=missingProductOptionGroup(base)'), 'Wha
 assert(app.includes('productOptions:selectedProductOptionDetails(base)'), 'Evento de WhatsApp não registra as opções escolhidas.');
 
 console.log('OK aba individual após Cores');
-console.log('OK Espelho, Ripado e opções futuras');
+console.log('OK Espelho/Ripado informativos e opções futuras preservadas');
 console.log('OK Cadastro em Massa na mesma estrutura');
 console.log('OK banco relacional e substituição atômica');
 console.log('OK exibição condicional no site');
