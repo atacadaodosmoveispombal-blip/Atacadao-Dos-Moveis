@@ -341,7 +341,9 @@
       return { id: item.id, name: item.name || item.color_name || catalogName || 'Variação', type: item.type || 'color', sku: item.sku || '', colorName: item.color_name || catalogName || item.name || '', colorHex: primaryColor?.hex || item.color_hex || '', secondaryColorHex: secondaryColor?.hex || item.secondary_color_hex || '', swatchMode: secondaryColor ? 'composite' : (item.swatch_mode || 'simple'), swatchImage: item.swatch_image || '', swatchType: primaryColor?.type || 'solid', secondarySwatchType: secondaryColor?.type || '', price, old: old > price ? old : null, stock: Number(item.stock || 0), active: item.active !== false, isDefault: Boolean(item.default_variant), order: Number(item.display_order || 0), img: images[0]?.image_url || '', images: [dimensionsImage, ...images.slice(1).map(image => image.image_url)].filter(Boolean) };
     });
     const defaultVariant = row.variants_enabled && variants.length ? (variants.find(item => item.isDefault) || variants[0]) : null;
-    const productOptions = [...(row.product_option_groups || [])].filter(group => group.active !== false).sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0)).map(group => ({
+    const productOptions = [...(row.product_option_groups || [])]
+      .filter(group => group.active !== false && !['espelho', 'ripado'].includes(String(group.slug || '').toLowerCase()))
+      .sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0)).map(group => ({
       id: group.id, name: group.name, slug: group.slug,
       values: [...(group.product_option_values || [])].filter(value => value.active !== false).sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0)).map(value => ({ id: value.id, label: value.label, slug: value.slug }))
     })).filter(group => group.values.length);
@@ -360,7 +362,7 @@
       badge: campaignPromotions.length && sellingPrice < regularPrice ? 'Campanha' : row.new_arrival ? 'Novidade' : row.on_sale ? 'Oferta' : row.featured ? 'Destaque' : '',
       description: row.short_description || row.description || '', fullDescription: row.description || row.short_description || '',
       specifications: row.specifications && typeof row.specifications === 'object' ? row.specifications : {},
-      dimensions: dimensionText, material: row.material || '', color: row.color || '', warranty: row.warranty || '',
+      dimensions: dimensionText, material: row.material || '', mirrorFeature: row.mirror_feature || '', ribbedFeature: row.ribbed_feature || '', color: row.color || '', warranty: row.warranty || '',
       installmentCount: row.installment_enabled && Number.isInteger(installments) && installments > 0 && sellingPrice ? installments : null,
       installmentValue: row.installment_enabled && Number.isInteger(installments) && installments > 0 && (defaultVariant?.price ?? sellingPrice) ? (defaultVariant?.price ?? sellingPrice) / installments : null, sku: defaultVariant?.sku || row.sku || '', baseSku: row.sku || '',
       stock: defaultVariant?.stock ?? row.stock_quantity, baseStock: Number(row.stock_quantity || 0), basePrice: sellingPrice, baseOld: sellingPrice < regularPrice ? regularPrice : null, variantsEnabled: Boolean(row.variants_enabled && variants.length), variationType: row.variation_type || '', variants, campaign: Boolean(row.is_campaign || campaignPromotions.length),
@@ -385,17 +387,22 @@
     return legacy;
   }
   async function loadStorefrontProducts() {
-    const publicProductFields = 'id,name,sku,short_description,description,category_id,price,promotional_price,stock_quantity,best_seller,featured,new_arrival,on_sale,og_image_url,installment_enabled,max_installments,dimensions,material,color,specifications,warranty,whatsapp_enabled,cart_enabled,free_city_shipping,free_assembly,is_campaign,variants_enabled,variation_type';
+    const compatibleProductFields = 'id,name,sku,short_description,description,category_id,price,promotional_price,stock_quantity,best_seller,featured,new_arrival,on_sale,og_image_url,installment_enabled,max_installments,dimensions,material,color,specifications,warranty,whatsapp_enabled,cart_enabled,free_city_shipping,free_assembly,is_campaign,variants_enabled,variation_type';
+    const publicProductFields = `${compatibleProductFields},mirror_feature,ribbed_feature`;
     const variantRelation = 'product_variants(id,name,type,sku,color_name,color_hex,secondary_color_hex,swatch_mode,swatch_image,price,price_adjustment,stock,active,default_variant,display_order,variant_images(image_url,is_cover,sort_order))';
     const catalogVariantRelation = 'product_variants(id,name,type,sku,color_name,color_hex,secondary_color_hex,swatch_mode,swatch_image,price,price_adjustment,stock,active,default_variant,display_order,color_id,combination_color_id,primary_color:product_colors!product_variants_color_id_fkey(name,hex,secondary_hex,type),secondary_color:product_colors!product_variants_combination_color_id_fkey(name,hex,secondary_hex,type),variant_images(image_url,is_cover,sort_order))';
     const optionRelation = 'product_option_groups(id,name,slug,display_order,active,product_option_values(id,label,slug,display_order,active))';
     const withOptions = await cms.from('products').select(`${publicProductFields},categories(name,search_keywords,icon_key),environments(name),brands(name),product_images(image_url,media_type,poster_url,is_cover,sort_order,image_role),${catalogVariantRelation},${optionRelation}`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
     if (!withOptions.error) return withOptions;
-    const withCatalog = await cms.from('products').select(`${publicProductFields},categories(name,search_keywords,icon_key),environments(name),brands(name),product_images(image_url,media_type,poster_url,is_cover,sort_order,image_role),${catalogVariantRelation}`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
+    if (withOptions.error.code === '42703' || /mirror_feature|ribbed_feature/i.test(withOptions.error.message || '')) {
+      const compatibleWithOptions = await cms.from('products').select(`${compatibleProductFields},categories(name,search_keywords,icon_key),environments(name),brands(name),product_images(image_url,media_type,poster_url,is_cover,sort_order,image_role),${catalogVariantRelation},${optionRelation}`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
+      if (!compatibleWithOptions.error) return compatibleWithOptions;
+    }
+    const withCatalog = await cms.from('products').select(`${compatibleProductFields},categories(name,search_keywords,icon_key),environments(name),brands(name),product_images(image_url,media_type,poster_url,is_cover,sort_order,image_role),${catalogVariantRelation}`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
     if (!withCatalog.error) return withCatalog;
-    const withVariants = await cms.from('products').select(`${publicProductFields},categories(name,search_keywords,icon_key),environments(name),brands(name),product_images(image_url,media_type,poster_url,is_cover,sort_order,image_role),${variantRelation}`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
+    const withVariants = await cms.from('products').select(`${compatibleProductFields},categories(name,search_keywords,icon_key),environments(name),brands(name),product_images(image_url,media_type,poster_url,is_cover,sort_order,image_role),${variantRelation}`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
     if (!withVariants.error) return withVariants;
-    const legacyProductFields = publicProductFields.replace(',variants_enabled,variation_type', '');
+    const legacyProductFields = compatibleProductFields.replace(',variants_enabled,variation_type', '');
     const withIcons = await cms.from('products').select(`${legacyProductFields},categories(name,search_keywords,icon_key),environments(name),brands(name),product_images(image_url,media_type,poster_url,is_cover,sort_order,image_role)`).eq('active', true).is('deleted_at', null).order('sort_order').order('created_at', { ascending: false });
     if (!withIcons.error) return withIcons;
     if (withIcons.error.code !== '42703' && !/search_keywords|icon_key/i.test(withIcons.error.message || '')) return withIcons;

@@ -469,6 +469,7 @@
     const value = record[key] ?? '';
     if (type === 'dimensions') return productDimensionsEditorHtml(record);
     if (type === 'materials') return productMaterialsEditorHtml(record);
+    if (type === 'productcharacteristics') return productCharacteristicsEditorHtml(record);
     if (type === 'checkbox') return `<label class="check-field"><input name="${key}" type="checkbox" ${value ? 'checked' : ''}> ${esc(label)}</label>`;
     if (type === 'textarea') return `<div class="field full"><label for="f-${key}">${esc(label)}</label><textarea id="f-${key}" name="${key}" ${required ? 'required' : ''}>${esc(value)}</textarea></div>`;
     if (type === 'select') return `<div class="field"><label for="f-${key}">${esc(label)}</label><select id="f-${key}" name="${key}">${choices.map(([v, text]) => `<option value="${v}" ${value === v ? 'selected' : ''}>${esc(text)}</option>`).join('')}</select></div>`;
@@ -1763,6 +1764,11 @@
     const values = {};
     fields.forEach(([key, , type]) => {
       if (type === 'materials') { values[key] = productMaterialValueFromForm(form); return; }
+      if (type === 'productcharacteristics') {
+        values.mirror_feature = form.elements.mirror_feature?.value || null;
+        values.ribbed_feature = form.elements.ribbed_feature?.value || null;
+        return;
+      }
       const input = form.elements[key];
       if (!input || ['file', 'multifile', 'productmedia'].includes(type)) return;
       if (type === 'checkbox') values[key] = input.checked;
@@ -2472,7 +2478,7 @@
     { key: 'variations', label: 'Cores', help: 'Selecione acabamentos e informe estoque e fotos de cada opção.', fields: [
       ['variations_ui', 'Variações do produto']
     ] },
-    { key: 'product_options', label: 'Opções do Produto', help: 'Características selecionáveis independentes das cores, como espelho e ripado.', fields: [
+    { key: 'product_options', label: 'Opções do Produto', help: 'Opções realmente escolhidas pelo cliente, como pés, portas ou LED. Espelho e ripado são características informativas.', fields: [
       ['product_options_ui', 'Opções do Produto']
     ] },
     { key: 'benefits', label: 'Benefícios / Selos', help: 'Escolha nenhum, um ou os dois benefícios.', fields: [
@@ -2481,7 +2487,8 @@
     { key: 'description', label: 'Descrição', help: 'Apresente o produto e registre suas especificações.', fields: [
       ['short_description', 'Descrição curta', 'textarea'], ['description', 'Descrição completa', 'textarea'],
       ['specifications_text', 'Especificações — uma por linha (ex.: Lugares: 3)', 'textarea'],
-      ['dimensions', 'Medidas do produto', 'dimensions'], ['material', 'Material', 'materials'], ['warranty', 'Garantia', 'text']
+      ['dimensions', 'Medidas do produto', 'dimensions'], ['material', 'Material', 'materials'],
+      ['product_characteristics', 'Características do produto', 'productcharacteristics'], ['warranty', 'Garantia', 'text']
     ] },
     { key: 'publication', label: 'Publicação', help: 'Venda, destaques e visibilidade no site.', fields: [
       ['whatsapp_enabled', 'Permitir compra pelo WhatsApp', 'checkbox'], ['cart_enabled', 'Permitir adicionar à sacola', 'checkbox'],
@@ -2493,10 +2500,8 @@
     ] }
   ];
   const productFields = productEditorSections.flatMap(section => section.fields);
-  const productOptionTemplates = [
-    { name: 'Espelho', slug: 'espelho', values: [{ label: 'Com espelho', slug: 'com-espelho' }, { label: 'Sem espelho', slug: 'sem-espelho' }] },
-    { name: 'Ripado', slug: 'ripado', values: [{ label: 'Com ripado', slug: 'com-ripado' }, { label: 'Sem ripado', slug: 'sem-ripado' }] }
-  ];
+  const reservedProductOptionSlugs = new Set(['espelho', 'ripado']);
+  const productOptionTemplates = [];
   function newProductOptionValue(source = {}, selectedByDefault = false) {
     return {
       key: source.key || source.id || crypto.randomUUID(), id: source.id || null,
@@ -2514,7 +2519,9 @@
     };
   }
   function normaliseProductOptionGroups(source = [], includeTemplates = true) {
-    const incoming = [...(Array.isArray(source) ? source : [])].sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0)).map(group => {
+    const incoming = [...(Array.isArray(source) ? source : [])]
+      .filter(group => !reservedProductOptionSlugs.has(slugify(group.slug || group.name || '')))
+      .sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0)).map(group => {
       const values = [...(group.values || group.product_option_values || [])].sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0));
       return newProductOptionGroup({ ...group, values }, Boolean(group.id || group.product_option_values));
     });
@@ -2538,6 +2545,7 @@
       if (!selected.length) continue;
       const name = String(group.name || '').trim(), slug = slugify(group.slug || name);
       if (!name || !slug) { if (strict) throw new Error(`Informe o nome da opção ${groupIndex + 1}.`); continue; }
+      if (reservedProductOptionSlugs.has(slug)) throw new Error('Espelho e Ripado devem ser preenchidos em Características do Produto.');
       if (groupSlugs.has(slug)) throw new Error(`A opção “${name}” está repetida.`);
       groupSlugs.add(slug);
       const valueSlugs = new Set(), values = selected.map((value, valueIndex) => {
@@ -2561,7 +2569,7 @@
     }).join('')}</div><button type="button" class="secondary product-option-add-group" data-${prefix}-group-add>+ Adicionar outra opção</button>`;
   }
   function productOptionsEditorHtml() {
-    return `<div class="product-options-editor"><div class="product-options-intro"><b>Características selecionáveis do móvel</b><p>Marque somente as alternativas realmente disponíveis. Se nada for marcado, a opção não aparecerá no site.</p></div><div id="productOptionsEditorBody"></div></div>`;
+    return `<div class="product-options-editor"><div class="product-options-intro"><b>Opções escolhidas pelo cliente</b><p>Use esta área somente para opções de compra, como pés, portas ou LED. Material, espelho e ripado ficam em Características do Produto.</p></div><div id="productOptionsEditorBody"></div></div>`;
   }
   function renderProductOptionsEditor() {
     const root = $('#productOptionsEditorBody');
@@ -2609,16 +2617,19 @@
   function productMaterialsEditorHtml(record = {}) {
     const original = String(record.material || '');
     const selected = productMaterialFlags(original);
-    return `<fieldset class="field product-material-field"><legend>Material</legend><p>Selecione MDF, MDP ou os dois.</p><div class="product-material-options"><label><input name="material_mdf" type="checkbox" ${selected.mdf ? 'checked' : ''}><span class="admin-material-seal is-mdf" aria-hidden="true">MDF</span><b>MDF</b></label><label><input name="material_mdp" type="checkbox" ${selected.mdp ? 'checked' : ''}><span class="admin-material-seal is-mdp" aria-hidden="true">MDP</span><b>MDP</b></label></div><input type="hidden" name="material_original" value="${esc(original)}"></fieldset>`;
+    const legacy = original && (selected.mdf === selected.mdp);
+    return `<fieldset class="field product-material-field"><legend>Material</legend><p>Escolha uma única característica informativa.</p><div class="product-material-options"><label><input name="material_feature" value="MDF" type="radio" ${selected.mdf && !selected.mdp ? 'checked' : ''}><span class="admin-material-seal is-mdf" aria-hidden="true">MDF</span><b>MDF</b></label><label><input name="material_feature" value="MDP" type="radio" ${selected.mdp && !selected.mdf ? 'checked' : ''}><span class="admin-material-seal is-mdp" aria-hidden="true">MDP</span><b>MDP</b></label></div>${legacy ? `<small class="product-characteristic-legacy">Valor anterior “${esc(original)}” preservado. Escolha MDF ou MDP para atualizar sem perda silenciosa.</small>` : ''}<input type="hidden" name="material_original" value="${esc(original)}"></fieldset>`;
   }
   function productMaterialValueFromForm(form) {
     const original = form.elements.material_original?.value?.trim() || '';
-    const originalFlags = productMaterialFlags(original);
-    const selectedFlags = { mdf: Boolean(form.elements.material_mdf?.checked), mdp: Boolean(form.elements.material_mdp?.checked) };
-    if (original && originalFlags.mdf === selectedFlags.mdf && originalFlags.mdp === selectedFlags.mdp) return original;
-    const selected = [selectedFlags.mdf ? 'MDF' : '', selectedFlags.mdp ? 'MDP' : ''].filter(Boolean);
-    if (original && !originalFlags.mdf && !originalFlags.mdp && selected.length) return [original, ...selected].join(' / ');
-    return selected.join(' / ');
+    const selected = form.elements.material_feature?.value || '';
+    return selected || original;
+  }
+  function productCharacteristicsEditorHtml(record = {}) {
+    const mirror = record.mirror_feature || '';
+    const ribbed = record.ribbed_feature || '';
+    const choices = (name, current, withLabel, withoutLabel) => `<div class="product-characteristic-group"><b>${name === 'mirror_feature' ? 'Espelho' : 'Ripado'}</b><div><label><input type="radio" name="${name}" value="with" ${current === 'with' ? 'checked' : ''}> ${withLabel}</label><label><input type="radio" name="${name}" value="without" ${current === 'without' ? 'checked' : ''}> ${withoutLabel}</label><label><input type="radio" name="${name}" value="" ${!current ? 'checked' : ''}> Não informar</label></div></div>`;
+    return `<fieldset class="field full product-characteristics-field"><legend>Características do produto</legend><p>Estas etiquetas são apenas informativas e não criam escolhas para o cliente.</p><div class="product-characteristics-options">${choices('mirror_feature', mirror, 'Com espelho', 'Sem espelho')}${choices('ribbed_feature', ribbed, 'Com ripado', 'Sem ripado')}</div></fieldset>`;
   }
   function formatSpecificationsText(specifications) {
     if (!specifications || typeof specifications !== 'object' || Array.isArray(specifications)) return '';
@@ -3818,7 +3829,8 @@
       else if (/media_type|poster_url|poster_storage_path/i.test(error?.message || '')) toast('Execute a migração 20261002_product_media_gallery.sql no Supabase antes de enviar vídeos.', 'error');
       else if (/product_colors|color_id|combination_color_id/i.test(error?.message || '')) toast('Execute a migração 20261001_product_color_catalog.sql no Supabase antes de cadastrar cores.', 'error');
       else if (/product_variants|variant_images|variants_enabled|variation_type/i.test(error?.message || '')) toast('Execute a migração 20260930_product_variants.sql no Supabase antes de salvar variações.', 'error');
-      else if (/replace_product_options|product_option_groups|product_option_values/i.test(error?.message || '')) toast('Execute a migração 20261008_product_options.sql no Supabase antes de salvar as opções do produto.', 'error');
+      else if (/mirror_feature|ribbed_feature/i.test(error?.message || '')) toast('Execute a migração 20261009_product_characteristics.sql no Supabase antes de salvar as características.', 'error');
+      else if (/replace_product_options|product_option_groups|product_option_values/i.test(error?.message || '')) toast('Execute a migração 20261009_product_characteristics.sql no Supabase antes de salvar as opções do produto.', 'error');
       else if (/whatsapp_enabled|cart_enabled|free_city_shipping|free_assembly|is_campaign/i.test(error?.message || '')) toast('Execute a migration 20260920_product_commerce_cards.sql no Supabase antes de salvar estes campos.', 'error');
       else toast(explain(error), 'error');
       if (editorState) { editorState.saving = false; setProductEditorDirty(true); }
@@ -3826,7 +3838,7 @@
     finally { button.disabled = false; button.textContent = 'Salvar alterações'; if (editorState) editorState.saving = false; }
   }
   const MASS_PRODUCT_DRAFT_KEY = 'atacarejo.mass-product-draft.v1';
-  const massProductBaseDefaults = () => ({ environment_id: '', category_id: '', material: '', warranty: '', description: '', free_city_shipping: false, free_assembly: false, on_sale: false, featured: false });
+  const massProductBaseDefaults = () => ({ environment_id: '', category_id: '', material: '', mirror_feature: '', ribbed_feature: '', warranty: '', description: '', free_city_shipping: false, free_assembly: false, on_sale: false, featured: false });
   function newMassColorSelection(source = {}) {
     const imageNames = Array.isArray(source.imageNames)
       ? source.imageNames.filter(Boolean)
@@ -3909,6 +3921,8 @@
       environment_id: override.environment_id ?? base.environment_id,
       category_id: override.category_id ?? base.category_id,
       material: override.material ?? base.material,
+      mirror_feature: override.mirror_feature ?? base.mirror_feature,
+      ribbed_feature: override.ribbed_feature ?? base.ribbed_feature,
       warranty: override.warranty ?? base.warranty,
       description: override.description ?? base.description,
       free_city_shipping: override.free_city_shipping ?? base.free_city_shipping,
@@ -3989,6 +4003,19 @@
     const title = description ? description.replace(/\s+/g, ' ').trim().slice(0, 160) : 'Adicionar descrição completa';
     return `<button type="button" class="mass-description-button ${description ? 'has-description' : ''} ${custom ? 'is-custom' : ''}" data-mass-description-open="${esc(row.key)}" title="${esc(title)}" ${row.status === 'success' ? 'disabled' : ''}><span aria-hidden="true">✎</span><b>Descrição</b><small>${status}</small></button>`;
   }
+  function massCharacteristicOptions(current, values, emptyLabel = 'Não informar') {
+    return `<option value="">${emptyLabel}</option>${values.map(([value, label]) => `<option value="${value}" ${current === value ? 'selected' : ''}>${label}</option>`).join('')}`;
+  }
+  function massCharacteristicOverrideOptions(row, mass, field, values) {
+    const custom = Object.prototype.hasOwnProperty.call(row.overrides || {}, field);
+    const inherited = mass.base[field] || '';
+    const current = custom ? row.overrides[field] : inherited;
+    const inheritedLabel = values.find(([value]) => value === inherited)?.[1] || 'Não informar';
+    return `<option value="__inherit__" ${!custom ? 'selected' : ''}>Padrão: ${esc(inheritedLabel)}</option><option value="" ${custom && current === '' ? 'selected' : ''}>Não informar</option>${values.map(([value, label]) => `<option value="${value}" ${custom && current === value ? 'selected' : ''}>${label}</option>`).join('')}`;
+  }
+  function massCharacteristicsCellMarkup(row, mass) {
+    return `<div class="mass-characteristics-cell"><label>Material<select data-mass-override="material">${massCharacteristicOverrideOptions(row, mass, 'material', [['MDF', 'MDF'], ['MDP', 'MDP']])}</select></label><label>Espelho<select data-mass-override="mirror_feature">${massCharacteristicOverrideOptions(row, mass, 'mirror_feature', [['with', 'Com espelho'], ['without', 'Sem espelho']])}</select></label><label>Ripado<select data-mass-override="ribbed_feature">${massCharacteristicOverrideOptions(row, mass, 'ribbed_feature', [['with', 'Com ripado'], ['without', 'Sem ripado']])}</select></label></div>`;
+  }
   function massProductManagersMarkup() {
     return `<div id="massMediaManager" class="mass-manager-layer" hidden><button type="button" class="mass-manager-backdrop" data-mass-media-close aria-label="Fechar fotos"></button><section class="mass-manager-panel" role="dialog" aria-modal="true" aria-labelledby="massMediaManagerTitle"><header><div><small>GALERIA DO PRODUTO</small><h3 id="massMediaManagerTitle">Fotos</h3></div><button type="button" data-mass-media-close aria-label="Fechar">×</button></header><div class="mass-manager-toolbar"><span id="massMediaCount">0 de 8 fotos</span><label class="secondary">+ Adicionar fotos<input id="massMediaInput" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden></label></div><div id="massMediaGrid" class="mass-media-manager-grid"></div><footer><small>A primeira foto é sempre a capa. As demais ficam na galeria do produto.</small><button type="button" data-mass-media-close>Concluir</button></footer></section></div>
     <div id="massColorManager" class="mass-manager-layer" hidden><button type="button" class="mass-manager-backdrop" data-mass-colors-close aria-label="Fechar cores"></button><section class="mass-manager-panel mass-color-manager-panel" role="dialog" aria-modal="true" aria-labelledby="massColorManagerTitle"><header><div><small>CORES DO PRODUTO</small><h3 id="massColorManagerTitle">Selecionar cores</h3></div><button type="button" data-mass-colors-close aria-label="Fechar">×</button></header><div id="massColorManagerBody"></div><footer><small>As cores usam o mesmo catálogo e as mesmas variações do cadastro normal.</small><button type="button" data-mass-colors-close>Concluir</button></footer></section></div>
@@ -3996,13 +4023,15 @@
     <div id="massDescriptionManager" class="mass-manager-layer" hidden><button type="button" class="mass-manager-backdrop" data-mass-description-close aria-label="Fechar descrição"></button><section class="mass-manager-panel mass-description-manager-panel" role="dialog" aria-modal="true" aria-labelledby="massDescriptionManagerTitle"><header><div><small>DESCRIÇÃO COMPLETA</small><h3 id="massDescriptionManagerTitle">Descrição do produto</h3></div><button type="button" data-mass-description-close aria-label="Fechar">×</button></header><div class="mass-description-manager-body"><label for="massDescriptionInput">Descrição completa</label><textarea id="massDescriptionInput" rows="7" placeholder="Apresente o produto e seus principais diferenciais."></textarea><small id="massDescriptionSource"></small></div><footer><button id="massDescriptionUseDefault" type="button" class="secondary">Usar descrição padrão</button><span></span><button type="button" class="secondary" data-mass-description-close>Cancelar</button><button id="massDescriptionSave" type="button">Salvar descrição</button></footer></section></div>`;
   }
   function massProductBaseMarkup(mass) {
-    return `<section class="mass-product-base card"><header><div><h3>Informações aplicadas a todos</h3><p>Os dados abaixo serão herdados pelas linhas. Você poderá editar cada produto individualmente depois.</p></div><span id="massBaseCount">${mass.rows.length} linhas</span></header><div class="mass-product-base-grid"><label>Ambiente<select data-mass-base="environment_id">${massSelectOptions(mass.environments, mass.base.environment_id, 'Selecione o ambiente', item => item.active !== false)}</select></label><label>Subcategoria<select data-mass-base="category_id">${massSelectOptions(mass.categories, mass.base.category_id, 'Selecione a subcategoria', item => !mass.base.environment_id || String(item.environment_id) === String(mass.base.environment_id))}</select></label><label>Material<select data-mass-base="material"><option value="" ${!mass.base.material ? 'selected' : ''}>Nenhum</option><option value="MDF" ${mass.base.material === 'MDF' ? 'selected' : ''}>MDF</option><option value="MDP" ${mass.base.material === 'MDP' ? 'selected' : ''}>MDP</option><option value="MDF / MDP" ${mass.base.material === 'MDF / MDP' ? 'selected' : ''}>MDF e MDP</option></select></label><label>Garantia<input data-mass-base="warranty" value="${esc(mass.base.warranty)}" placeholder="Ex.: 3 meses"></label><label class="mass-description-default">Descrição padrão <small>Opcional. Será herdada pelas linhas sem descrição personalizada.</small><textarea data-mass-base="description" rows="3" placeholder="Descrição completa aplicada inicialmente a todos os produtos.">${esc(mass.base.description || '')}</textarea></label><label class="mass-check"><input type="checkbox" data-mass-base="free_city_shipping" ${mass.base.free_city_shipping ? 'checked' : ''}> Frete grátis</label><label class="mass-check"><input type="checkbox" data-mass-base="free_assembly" ${mass.base.free_assembly ? 'checked' : ''}> Armação gratuita</label><label class="mass-check"><input type="checkbox" data-mass-base="on_sale" ${mass.base.on_sale ? 'checked' : ''}> Produto em promoção</label><label class="mass-check"><input type="checkbox" data-mass-base="featured" ${mass.base.featured ? 'checked' : ''}> Produto em destaque</label></div></section>`;
+    return `<section class="mass-product-base card"><header><div><h3>Informações aplicadas a todos</h3><p>Os dados abaixo serão herdados pelas linhas. Você poderá editar cada produto individualmente depois.</p></div><span id="massBaseCount">${mass.rows.length} linhas</span></header><div class="mass-product-base-grid"><label>Ambiente<select data-mass-base="environment_id">${massSelectOptions(mass.environments, mass.base.environment_id, 'Selecione o ambiente', item => item.active !== false)}</select></label><label>Subcategoria<select data-mass-base="category_id">${massSelectOptions(mass.categories, mass.base.category_id, 'Selecione a subcategoria', item => !mass.base.environment_id || String(item.environment_id) === String(mass.base.environment_id))}</select></label><label>Material<select data-mass-base="material">${massCharacteristicOptions(mass.base.material, [['MDF', 'MDF'], ['MDP', 'MDP']])}</select></label><label>Espelho<select data-mass-base="mirror_feature">${massCharacteristicOptions(mass.base.mirror_feature, [['with', 'Com espelho'], ['without', 'Sem espelho']])}</select></label><label>Ripado<select data-mass-base="ribbed_feature">${massCharacteristicOptions(mass.base.ribbed_feature, [['with', 'Com ripado'], ['without', 'Sem ripado']])}</select></label><label>Garantia<input data-mass-base="warranty" value="${esc(mass.base.warranty)}" placeholder="Ex.: 3 meses"></label><label class="mass-description-default">Descrição padrão <small>Opcional. Será herdada pelas linhas sem descrição personalizada.</small><textarea data-mass-base="description" rows="3" placeholder="Descrição completa aplicada inicialmente a todos os produtos.">${esc(mass.base.description || '')}</textarea></label><label class="mass-check"><input type="checkbox" data-mass-base="free_city_shipping" ${mass.base.free_city_shipping ? 'checked' : ''}> Frete grátis</label><label class="mass-check"><input type="checkbox" data-mass-base="free_assembly" ${mass.base.free_assembly ? 'checked' : ''}> Armação gratuita</label><label class="mass-check"><input type="checkbox" data-mass-base="on_sale" ${mass.base.on_sale ? 'checked' : ''}> Produto em promoção</label><label class="mass-check"><input type="checkbox" data-mass-base="featured" ${mass.base.featured ? 'checked' : ''}> Produto em destaque</label></div></section>`;
   }
-  const massBulkFields = [['price', 'Preço normal'], ['promotional_price', 'Preço promocional'], ['stock_quantity', 'Estoque'], ['environment_id', 'Ambiente'], ['category_id', 'Subcategoria'], ['material', 'Material'], ['warranty', 'Garantia'], ['free_city_shipping', 'Frete grátis'], ['free_assembly', 'Armação gratuita'], ['on_sale', 'Promoção'], ['featured', 'Destaque']];
+  const massBulkFields = [['price', 'Preço normal'], ['promotional_price', 'Preço promocional'], ['stock_quantity', 'Estoque'], ['environment_id', 'Ambiente'], ['category_id', 'Subcategoria'], ['material', 'Material'], ['mirror_feature', 'Espelho'], ['ribbed_feature', 'Ripado'], ['warranty', 'Garantia'], ['free_city_shipping', 'Frete grátis'], ['free_assembly', 'Armação gratuita'], ['on_sale', 'Promoção'], ['featured', 'Destaque']];
   function massBulkInputMarkup(mass, field) {
     if (field === 'environment_id') return `<select data-mass-bulk-value>${massSelectOptions(mass.environments, '', 'Selecione o ambiente', item => item.active !== false)}</select>`;
     if (field === 'category_id') return `<select data-mass-bulk-value>${massSelectOptions(mass.categories, '', 'Selecione a subcategoria')}</select>`;
-    if (field === 'material') return '<select data-mass-bulk-value><option value="">Nenhum</option><option value="MDF">MDF</option><option value="MDP">MDP</option><option value="MDF / MDP">MDF e MDP</option></select>';
+    if (field === 'material') return '<select data-mass-bulk-value><option value="">Não informar</option><option value="MDF">MDF</option><option value="MDP">MDP</option></select>';
+    if (field === 'mirror_feature') return '<select data-mass-bulk-value><option value="">Não informar</option><option value="with">Com espelho</option><option value="without">Sem espelho</option></select>';
+    if (field === 'ribbed_feature') return '<select data-mass-bulk-value><option value="">Não informar</option><option value="with">Com ripado</option><option value="without">Sem ripado</option></select>';
     if (['free_city_shipping', 'free_assembly', 'on_sale', 'featured'].includes(field)) return '<select data-mass-bulk-value><option value="">Escolha</option><option value="true">Ativar</option><option value="false">Desativar</option></select>';
     const number = ['price', 'promotional_price', 'stock_quantity'].includes(field);
     return `<input data-mass-bulk-value type="${number ? 'number' : 'text'}" ${number ? 'min="0" step="any"' : ''} placeholder="Informe o valor">`;
@@ -4018,10 +4047,10 @@
   }
   function massProductRowMarkup(row, index, mass) {
     row.errors = massProductErrors(row, mass);
-    return `<tr data-mass-row="${esc(row.key)}" class="${row.errors.length ? 'has-errors' : ''} ${row.status === 'success' ? 'is-success' : ''}"><td class="mass-select-cell"><input type="checkbox" data-mass-select="${esc(row.key)}" ${mass.selected.has(row.key) ? 'checked' : ''} ${row.status === 'success' ? 'disabled' : ''} aria-label="Selecionar linha ${index + 1}"></td><td class="mass-image-cell">${massImageCellMarkup(row, index)}</td><td class="mass-name-cell"><input data-mass-field="name" value="${esc(row.name)}" placeholder="Nome do produto" ${row.status === 'success' ? 'disabled' : ''}>${massDescriptionButtonMarkup(row, mass)}<small data-mass-row-errors>${esc(row.errors.join(' · '))}</small></td><td class="mass-color-cell">${massColorCellMarkup(row)}</td><td class="mass-options-cell">${massOptionsCellMarkup(row)}</td><td><input data-mass-field="price" type="number" min="0.01" step="0.01" value="${esc(row.price)}" placeholder="0,00" ${row.status === 'success' ? 'disabled' : ''}></td><td><input data-mass-field="promotional_price" type="number" min="0" step="0.01" value="${esc(row.promotional_price)}" placeholder="Opcional" ${row.status === 'success' ? 'disabled' : ''}></td><td><input data-mass-field="altura" type="number" min="0" step="any" value="${esc(row.altura)}" placeholder="cm" ${row.status === 'success' ? 'disabled' : ''}></td><td><input data-mass-field="largura" type="number" min="0" step="any" value="${esc(row.largura)}" placeholder="cm" ${row.status === 'success' ? 'disabled' : ''}></td><td><input data-mass-field="profundidade" type="number" min="0" step="any" value="${esc(row.profundidade)}" placeholder="cm" ${row.status === 'success' ? 'disabled' : ''}></td><td><input data-mass-field="stock_quantity" type="number" min="0" step="1" value="${esc(row.stock_quantity)}" placeholder="0" ${row.status === 'success' ? 'disabled' : ''}></td><td class="mass-actions">${massRowStatusMarkup(row, row.errors)}<button type="button" class="small-action" data-mass-duplicate="${esc(row.key)}">Duplicar</button><button type="button" class="small-action danger" data-mass-remove="${esc(row.key)}" ${mass.rows.length === 1 || row.status === 'success' ? 'disabled' : ''}>Remover</button></td></tr>`;
+    return `<tr data-mass-row="${esc(row.key)}" class="${row.errors.length ? 'has-errors' : ''} ${row.status === 'success' ? 'is-success' : ''}"><td class="mass-select-cell"><input type="checkbox" data-mass-select="${esc(row.key)}" ${mass.selected.has(row.key) ? 'checked' : ''} ${row.status === 'success' ? 'disabled' : ''} aria-label="Selecionar linha ${index + 1}"></td><td class="mass-image-cell">${massImageCellMarkup(row, index)}</td><td class="mass-name-cell"><input data-mass-field="name" value="${esc(row.name)}" placeholder="Nome do produto" ${row.status === 'success' ? 'disabled' : ''}>${massDescriptionButtonMarkup(row, mass)}<small data-mass-row-errors>${esc(row.errors.join(' · '))}</small></td><td class="mass-color-cell">${massColorCellMarkup(row)}</td><td class="mass-characteristics-column">${massCharacteristicsCellMarkup(row, mass)}</td><td class="mass-options-cell">${massOptionsCellMarkup(row)}</td><td><input data-mass-field="price" type="number" min="0.01" step="0.01" value="${esc(row.price)}" placeholder="0,00" ${row.status === 'success' ? 'disabled' : ''}></td><td><input data-mass-field="promotional_price" type="number" min="0" step="0.01" value="${esc(row.promotional_price)}" placeholder="Opcional" ${row.status === 'success' ? 'disabled' : ''}></td><td><input data-mass-field="altura" type="number" min="0" step="any" value="${esc(row.altura)}" placeholder="cm" ${row.status === 'success' ? 'disabled' : ''}></td><td><input data-mass-field="largura" type="number" min="0" step="any" value="${esc(row.largura)}" placeholder="cm" ${row.status === 'success' ? 'disabled' : ''}></td><td><input data-mass-field="profundidade" type="number" min="0" step="any" value="${esc(row.profundidade)}" placeholder="cm" ${row.status === 'success' ? 'disabled' : ''}></td><td><input data-mass-field="stock_quantity" type="number" min="0" step="1" value="${esc(row.stock_quantity)}" placeholder="0" ${row.status === 'success' ? 'disabled' : ''}></td><td class="mass-actions">${massRowStatusMarkup(row, row.errors)}<button type="button" class="small-action" data-mass-duplicate="${esc(row.key)}">Duplicar</button><button type="button" class="small-action danger" data-mass-remove="${esc(row.key)}" ${mass.rows.length === 1 || row.status === 'success' ? 'disabled' : ''}>Remover</button></td></tr>`;
   }
   function massProductRowsMarkup(mass) {
-    return `<section class="mass-product-grid card"><div class="mass-product-grid-toolbar"><div><b>Produtos</b><small>Uma linha representa um produto.</small></div><div class="mass-add-lines"><label>Quantidade<input id="massLineCount" type="number" min="1" max="100" value="10"></label><button type="button" class="secondary" id="massAddLine">+ Adicionar linha</button><button type="button" class="secondary" id="massAddManyLines">Criar linhas</button></div></div><div class="mass-product-table-wrap"><table class="mass-product-table"><thead><tr><th><input id="massSelectAll" type="checkbox" aria-label="Selecionar todas"></th><th>Fotos</th><th>Nome do produto</th><th>Cor</th><th>Opções</th><th>Preço normal</th><th>Preço promocional</th><th>Altura</th><th>Largura</th><th>Profundidade</th><th>Estoque</th><th>Ações</th></tr></thead><tbody id="massProductRows">${mass.rows.map((row, index) => massProductRowMarkup(row, index, mass)).join('')}</tbody></table></div><div class="mass-product-summary" id="massProductSummary"></div></section>`;
+    return `<section class="mass-product-grid card"><div class="mass-product-grid-toolbar"><div><b>Produtos</b><small>Uma linha representa um produto.</small></div><div class="mass-add-lines"><label>Quantidade<input id="massLineCount" type="number" min="1" max="100" value="10"></label><button type="button" class="secondary" id="massAddLine">+ Adicionar linha</button><button type="button" class="secondary" id="massAddManyLines">Criar linhas</button></div></div><div class="mass-product-table-wrap"><table class="mass-product-table"><thead><tr><th><input id="massSelectAll" type="checkbox" aria-label="Selecionar todas"></th><th>Fotos</th><th>Nome do produto</th><th>Cor</th><th>Características</th><th>Opções</th><th>Preço normal</th><th>Preço promocional</th><th>Altura</th><th>Largura</th><th>Profundidade</th><th>Estoque</th><th>Ações</th></tr></thead><tbody id="massProductRows">${mass.rows.map((row, index) => massProductRowMarkup(row, index, mass)).join('')}</tbody></table></div><div class="mass-product-summary" id="massProductSummary"></div></section>`;
   }
   function massProductEditorMarkup(mass) {
     return `<div class="mass-product-workspace">${massProductBaseMarkup(mass)}${massProductBulkMarkup(mass)}${massProductRowsMarkup(mass)}<p class="mass-product-note">Os produtos são criados como rascunhos. Fotos usam a galeria principal, cores usam as variações existentes e medidas usam o mesmo JSONB do cadastro individual.</p>${massProductManagersMarkup()}</div>`;
@@ -4246,7 +4275,8 @@
     const mass = editorState?.mass;
     const field = $('#massBulkField')?.value;
     const input = $('[data-mass-bulk-value]');
-    if (!mass || !field || !input || input.value === '') return toast('Informe o valor que será aplicado.', 'error');
+    const optionalCharacteristic = ['material', 'mirror_feature', 'ribbed_feature'].includes(field);
+    if (!mass || !field || !input || (input.value === '' && !optionalCharacteristic)) return toast('Informe o valor que será aplicado.', 'error');
     let value = input.value;
     if (['free_city_shipping', 'free_assembly', 'on_sale', 'featured'].includes(field)) value = value === 'true';
     mass.rows.filter(row => mass.selected.has(row.key) && row.status !== 'success').forEach(row => {
@@ -4299,6 +4329,16 @@
         mass.dirty = true; editorState.dirty = true; updateMassSummary(); persistMassProductDraft(); return;
       }
       const rowElement = event.target.closest('[data-mass-row]');
+      const overrideField = event.target.dataset.massOverride;
+      if (rowElement && overrideField) {
+        const row = mass.rows.find(item => item.key === rowElement.dataset.massRow);
+        if (!row || row.status === 'success') return;
+        if (event.target.value === '__inherit__') delete row.overrides[overrideField];
+        else row.overrides[overrideField] = event.target.value;
+        row.status = 'pending'; row.errors = [];
+        mass.dirty = true; editorState.dirty = true; updateMassSummary(); persistMassProductDraft();
+        return;
+      }
       const field = event.target.dataset.massField;
       if (!rowElement || !field) return;
       const row = mass.rows.find(item => item.key === rowElement.dataset.massRow);
@@ -4503,7 +4543,8 @@
       short_description: '', description: common.description || '', category_id: common.category_id || null, environment_id: common.environment_id || null, brand_id: null,
       price: parseProductDimension(row.price), promotional_price: promotional, stock_quantity: Number(row.stock_quantity), low_stock_threshold: 5,
       featured: Boolean(common.featured), best_seller: false, new_arrival: false, on_sale: Boolean(common.on_sale || promotional), sort_order: 0,
-      active: false, warranty: common.warranty || '', dimensions: massProductDimensions(row), material: common.material || '', color: colorText, specifications: {},
+      active: false, warranty: common.warranty || '', dimensions: massProductDimensions(row), material: common.material || '',
+      mirror_feature: common.mirror_feature || null, ribbed_feature: common.ribbed_feature || null, color: colorText, specifications: {},
       installment_enabled: true, max_installments: 12, whatsapp_enabled: true, cart_enabled: true,
       free_city_shipping: Boolean(common.free_city_shipping), free_assembly: Boolean(common.free_assembly), is_campaign: false,
       variants_enabled: hasColors, variation_type: hasColors ? 'color' : null
@@ -4546,7 +4587,8 @@
   }
   function massProductFailureMessage(error) {
     if (error?.code === '23505' || /duplicate|unique/i.test(error?.message || '')) return 'Já existe um produto com este nome ou endereço.';
-    if (/replace_product_options|product_option_groups|product_option_values/i.test(error?.message || '')) return 'Execute a migração 20261008_product_options.sql antes de salvar opções do produto.';
+    if (/mirror_feature|ribbed_feature/i.test(error?.message || '')) return 'Execute a migração 20261009_product_characteristics.sql antes de salvar as características.';
+    if (/replace_product_options|product_option_groups|product_option_values/i.test(error?.message || '')) return 'Execute a migração 20261009_product_characteristics.sql antes de salvar opções do produto.';
     return explain(error);
   }
   async function persistMassProductRow(row, mass) {
@@ -4731,7 +4773,7 @@
     };
     const duplicateProduct = async source => {
       if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
-      const allowed = ['short_description','description','category_id','brand_id','environment_id','price','promotional_price','stock_quantity','low_stock_threshold','featured','best_seller','new_arrival','on_sale','sort_order','warranty','dimensions','material','color','specifications','installment_enabled','max_installments','meta_title','meta_description','og_image_url','whatsapp_enabled','cart_enabled','free_city_shipping','free_assembly','is_campaign'];
+      const allowed = ['short_description','description','category_id','brand_id','environment_id','price','promotional_price','stock_quantity','low_stock_threshold','featured','best_seller','new_arrival','on_sale','sort_order','warranty','dimensions','material','mirror_feature','ribbed_feature','color','specifications','installment_enabled','max_installments','meta_title','meta_description','og_image_url','whatsapp_enabled','cart_enabled','free_city_shipping','free_assembly','is_campaign'];
       const copy = Object.fromEntries(allowed.map(key => [key, source[key]]));
       copy.name = `${source.name} — cópia`;
       copy.slug = `${source.slug}-copia-${Date.now().toString().slice(-6)}`;

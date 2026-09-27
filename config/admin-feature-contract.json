@@ -9,18 +9,20 @@
       "materiais MDF/MDP",
       "cores e fotos por variação sem alterar a capa",
       "opções do produto e integração com WhatsApp",
+      "características informativas de material, espelho e ripado",
       "Hero com imagem ou vídeo"
     ]
   },
   "database": {
     "executionMode": "manual-incremental-only",
     "lastVerifiedAt": "2026-09-27",
-    "lastVerifiedSchema": "20261008_product_options.sql",
+    "lastVerifiedSchema": "20261009_product_characteristics.sql",
     "appliedMigrations": [
       "20261005_product_dimensions_numeric.sql",
       "20261006_product_dimensions_image.sql",
       "20261007_hero_media_carousel.sql",
-      "20261008_product_options.sql"
+      "20261008_product_options.sql",
+      "20261009_product_characteristics.sql"
     ]
   },
   "features": [
@@ -66,7 +68,7 @@
     },
     {
       "name": "materiais MDF e MDP",
-      "checks": [{ "file": "admin-app.js", "contains": ["function productMaterialsEditorHtml(", "material_mdf", "material_mdp", "MDF / MDP"] }]
+      "checks": [{ "file": "admin-app.js", "contains": ["function productMaterialsEditorHtml(", "material_feature", "type=\"radio\"", "data-mass-override=\"material\""] }]
     },
     {
       "name": "cores e variações",
@@ -84,8 +86,13 @@
       ]
     },
     {
-      "name": "opções espelho e ripado",
-      "checks": [{ "file": "admin-app.js", "contains": ["Com espelho", "Sem espelho", "Com ripado", "Sem ripado", "function productOptionsEditorHtml(", "async function saveProductOptions("] }]
+      "name": "características espelho e ripado",
+      "checks": [
+        { "file": "admin-app.js", "contains": ["function productCharacteristicsEditorHtml(", "mirror_feature", "ribbed_feature", "data-mass-override=\"mirror_feature\"", "data-mass-override=\"ribbed_feature\""] },
+        { "file": "storefront-cms.js", "contains": ["mirrorFeature: row.mirror_feature", "ribbedFeature: row.ribbed_feature", "!['espelho', 'ripado'].includes"] },
+        { "file": "app.js", "contains": ["function productCharacteristicBadges(", "function productCharacteristicEntries(", "detail-characteristic-labels"] },
+        { "file": "supabase/migrations/20261009_product_characteristics.sql", "contains": ["add column if not exists mirror_feature", "add column if not exists ribbed_feature", "and lower(slug) not in ('espelho', 'ripado')"] }
+      ]
     },
     {
       "name": "opções no cadastro em massa",
