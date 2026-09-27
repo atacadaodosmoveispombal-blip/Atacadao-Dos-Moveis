@@ -35,6 +35,22 @@ assert(
   app.includes('width="1280" height="1270"'),
   'A marcação da imagem do card não declara a proporção intrínseca 1280 × 1270.'
 );
+assert(
+  app.includes('class="photo-badge-stack"') &&
+    app.indexOf('class="photo-material-row"') < app.indexOf('class="photo-benefits"'),
+  'A ordem dos selos do card não mantém material antes de frete e armação.'
+);
+assert(
+  styles.includes('.photo-badge-stack{position:absolute;z-index:3;top:12px;left:12px;display:flex;width:43px;') &&
+    styles.includes('flex-direction:column;align-items:flex-start;gap:3px') &&
+    styles.includes('.photo-benefits{display:flex;width:100%;flex-direction:column;align-items:flex-start;gap:3px') &&
+    styles.includes('.photo-benefit.is-assembly{width:100%;max-width:128px}'),
+  'Os três selos não possuem a mesma largura ou o intervalo vertical de 3px.'
+);
+assert(
+  !styles.includes('.photo-benefits{position:absolute'),
+  'Frete ou armação voltaram a ser posicionados na parte inferior da imagem.'
+);
 
 for (const marker of [
   'official-product-heart',
@@ -46,4 +62,4 @@ for (const marker of [
   assert(app.includes(marker), `O conteúdo protegido do card foi removido: ${marker}.`);
 }
 
-console.log('OK catálogo desktop com quatro colunas, fotos 1280 × 1270 sem corte e conteúdo dos cards preservado');
+console.log('OK selos MDF/MDP, Frete e Armação com a mesma largura e intervalo vertical de 3px');
