@@ -4,8 +4,9 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-const [admin, storefront, app, migration, contract, cmsVerification] = await Promise.all([
+const [admin, adminCss, storefront, app, migration, contract, cmsVerification] = await Promise.all([
   readFile('admin-app.js', 'utf8'),
+  readFile('admin.css', 'utf8'),
   readFile('storefront-cms.js', 'utf8'),
   readFile('app.js', 'utf8'),
   readFile('supabase/migrations/20261011_stock_by_color_source_of_truth.sql', 'utf8'),
@@ -21,6 +22,10 @@ assert(admin.includes('draft.active = true') && !admin.includes('data-variant-fi
 assert(admin.includes('values.stock_quantity = variantSettings.variants.reduce'), 'O total do produto não é calculado pela soma das cores.');
 assert(admin.includes('id="massOriginStock"') && admin.includes('data-mass-color-stock'), 'O cadastro em massa não controla estoque da origem e de cada cor separadamente.');
 assert(!admin.includes('data-mass-field="stock_quantity"') && !admin.includes("['stock_quantity', 'Estoque']"), 'O cadastro em massa ainda possui estoque global fora de Cores.');
+const individualStockLayout = adminCss.slice(adminCss.indexOf('.variation-editor>.variant-stock-summary'), adminCss.indexOf('.compact-variant-card>header'));
+const massStockLayout = adminCss.slice(adminCss.indexOf('aside.mass-color-stock-total'), adminCss.indexOf('.mass-origin-stock-field'));
+assert(individualStockLayout.includes('position:static') && individualStockLayout.includes('height:auto') && individualStockLayout.includes('padding:8px 11px'), 'O resumo de estoque individual voltou a herdar o layout gigante da barra lateral.');
+assert(massStockLayout.includes('position:static') && massStockLayout.includes('height:auto') && massStockLayout.includes('padding:8px 11px'), 'O resumo de estoque em massa voltou a herdar o layout gigante da barra lateral.');
 assert(storefront.includes('const variantStockTotal = variants.reduce') && storefront.includes('stock: row.variants_enabled && variants.length ? variantStockTotal'), 'O catálogo não usa a soma dos estoques das cores.');
 assert(app.includes('aria-disabled="${Number(variant.stock)<=0}"') && app.includes("Number(variant.stock)<=0?'disabled':''"), 'O site não mantém somente a cor zerada como indisponível.');
 assert(migration.includes('greatest(') && migration.includes('preserved_stock'), 'A migração não preserva o estoque legado ao criar a cor de origem.');
@@ -30,4 +35,4 @@ assert(migration.includes("new.active := true") && migration.includes('Zero mean
 assert(cmsVerification.includes('estoque total derivado exclusivamente das cores') && cmsVerification.includes('cor de origem sem estoque próprio'), 'A verificação pós-deploy não confere a soma e o estoque da origem.');
 assert(contract.includes('estoque exclusivamente por cor'), 'A proteção antirregressão do estoque por cor não foi registrada.');
 
-console.log('OK estoque por cor como fonte única, total derivado, origem e cadastro em massa preservados');
+console.log('OK estoque por cor como fonte única, resumo compacto, total derivado, origem e cadastro em massa preservados');

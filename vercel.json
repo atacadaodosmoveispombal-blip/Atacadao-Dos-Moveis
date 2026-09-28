@@ -5,6 +5,19 @@
   "outputDirectory": "dist",
   "cleanUrls": true,
   "trailingSlash": false,
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "atacarejomoveis.com.br"
+        }
+      ],
+      "destination": "https://www.atacarejomoveis.com.br/$1",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/admin",
