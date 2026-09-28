@@ -14,7 +14,7 @@
   }
   const cms = window.supabase.createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
   window.atacarejoDb = cms;
-  const imageFallback = 'assets/logo-atacarejo-2026.jpg';
+  const imageFallback = 'assets/logo-atacarejo-2026-v2.png';
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
   const safeNavigationUrl = value => {
     try {
@@ -122,7 +122,7 @@
     if (badge) container.insertAdjacentHTML('beforeend', `<span class="cms-campaign-badge">${escapeHtml(badge)}</span>`);
     const images = campaignVisualProducts(banner, productRows, promotions);
     const branded = ['month','super_offer','special_week','liquidation','flash','weekend','stock_clearance','complete'].includes(preset);
-    if (branded) container.insertAdjacentHTML('beforeend', '<img class="cms-campaign-logo" src="assets/logo-atacarejo-2026.jpg" alt="" loading="lazy">');
+    if (branded) container.insertAdjacentHTML('beforeend', '<img class="cms-campaign-logo" src="assets/logo-atacarejo-2026-v2.png" alt="" loading="lazy">');
     if (layout === 'dual-scene' && images[1]) container.insertAdjacentHTML('beforeend', `<div class="cms-banner-second"><img src="${escapeHtml(images[1])}" alt="" loading="lazy"></div>`);
     if (layout === 'catalog-offer' && images.length >= 2) {
       const labels = preset === 'complete' ? ['SALA','QUARTO','COZINHA','ESCRITÓRIO'] : preset === 'weekend' ? ['MESA DE JANTAR','SOFÁ RETRÁTIL','OFERTA ESPECIAL'] : ['DESTAQUE','OFERTA','IMPERDÍVEL','ESCOLHA'];

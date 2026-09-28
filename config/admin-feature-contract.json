@@ -189,10 +189,10 @@
     {
       "name": "logo oficial atualizada em todo o site e painel",
       "checks": [
-        { "file": "index.html", "contains": ["assets/logo-atacarejo-2026.jpg"] },
-        { "file": "admin.html", "contains": ["assets/logo-atacarejo-2026.jpg"] },
-        { "file": "storefront-cms.js", "contains": ["const imageFallback = 'assets/logo-atacarejo-2026.jpg'", "cms-campaign-logo\" src=\"assets/logo-atacarejo-2026.jpg"] },
-        { "file": "assets/logo-atacarejo-2026.jpg", "contains": [] }
+        { "file": "index.html", "contains": ["assets/logo-atacarejo-2026-v2.png"] },
+        { "file": "admin.html", "contains": ["assets/logo-atacarejo-2026-v2.png"] },
+        { "file": "storefront-cms.js", "contains": ["const imageFallback = 'assets/logo-atacarejo-2026-v2.png'", "cms-campaign-logo\" src=\"assets/logo-atacarejo-2026-v2.png"] },
+        { "file": "assets/logo-atacarejo-2026-v2.png", "contains": [] }
       ]
     },
     {
