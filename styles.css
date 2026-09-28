@@ -883,3 +883,11 @@ button{touch-action:manipulation}
 @media(max-width:620px){.detail-product-option{margin:10px 0;padding:12px}.detail-product-option-values{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.detail-product-option-values button{width:100%;min-height:48px}}
 @media(max-width:360px){.detail-product-option-values{grid-template-columns:minmax(0,1fr)}}
 .cart-product-options{display:grid;gap:2px;margin:5px 0;color:#55708f;font-size:.66rem}.cart-product-options span{display:block}.cart-product-options b{color:#173e73}
+
+/* Home: four administrator-selected products; categories progressively reveal eight at a time. */
+[hidden]{display:none!important}
+.catalog-load-more{display:flex;justify-content:center;padding-top:28px}
+.catalog-load-more button{min-height:46px;padding:0 24px;border:2px solid #0a4fae;border-radius:8px;background:#fff;color:#0a3f93;font-size:.76rem;font-weight:850;letter-spacing:.04em;transition:background .18s,color .18s,transform .18s}
+.catalog-load-more button:hover{background:#0a4fae;color:#fff}
+.catalog-load-more button span{margin-left:7px;font-size:1rem}
+.catalogue.is-home-catalog .catalog-breadcrumb,.catalogue.is-home-catalog .filter-pills,.catalogue.is-home-catalog .catalog-link{display:none!important}

@@ -73,7 +73,7 @@ failed ||= !bannerOrderOk;
 const [environments, categories, products, media, variants] = await Promise.all([
   verifyQuery('ambientes ativos legíveis', 'environments?select=id,name,slug,active&active=eq.true&order=sort_order', rows => rows.length > 0),
   verifyQuery('categorias ativas legíveis', 'categories?select=id,name,slug,environment_id,active&active=eq.true&order=sort_order', rows => rows.length > 0),
-  verifyQuery('produtos públicos legíveis', 'products?select=id,name,slug,category_id,environment_id,price,promotional_price,stock_quantity,variants_enabled,origin_color_id,active,deleted_at&active=eq.true&deleted_at=is.null&limit=1000', rows => rows.length > 0),
+  verifyQuery('produtos públicos legíveis', 'products?select=id,name,slug,category_id,environment_id,price,promotional_price,stock_quantity,variants_enabled,origin_color_id,home_featured,active,deleted_at&active=eq.true&deleted_at=is.null&limit=1000', rows => rows.length > 0),
   verifyQuery('mídias dos produtos legíveis', 'product_images?select=id,product_id,image_url,storage_path,media_type,poster_url,poster_storage_path,is_cover,sort_order&limit=1000'),
   verifyQuery('estoques públicos por cor legíveis', 'product_variants?select=id,product_id,color_id,combination_color_id,stock,active&limit=5000')
 ]);
@@ -129,6 +129,7 @@ for (const variant of variants) {
 verifyIntegrity('slugs únicos dos ambientes', duplicateValues(environments, 'slug').map(value => `slug duplicado ${value}`));
 verifyIntegrity('slugs únicos das categorias por ambiente', duplicateCategorySlugs(categories).map(value => `ambiente/slug duplicado ${value}`));
 verifyIntegrity('slugs únicos dos produtos públicos', duplicateValues(products, 'slug').map(value => `slug duplicado ${value}`));
+verifyIntegrity('limite de destaques manuais da Home', products.filter(product => product.home_featured).length > 4 ? [`${products.filter(product => product.home_featured).length} produtos selecionados; máximo 4`] : []);
 
 verifyIntegrity('relacionamentos das categorias', categories.flatMap(category => {
   if (!category.environment_id) return [`${category.name}: sem ambiente`];

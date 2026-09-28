@@ -36,7 +36,8 @@ const defaultEnvironmentNavigation=[
  {name:'Eletros',slug:'eletros',description:'Tecnologia e praticidade para sua rotina',image:'https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?auto=format&fit=crop&w=700&q=80',subcategories:['Ventiladores','Ferro de Passar','Liquidificador','Fogão','Lavadora e Tanquinho','Cabelo e Beleza','Espremedor','Ar-Condicionado e Climatizador']}
 ];
 let environmentNavigation=defaultEnvironmentNavigation.map(item=>({...item,subcategories:[...item.subcategories]}));
-let cart=JSON.parse(localStorage.getItem('movel-cart')||'[]'), favs=JSON.parse(localStorage.getItem('movel-favs')||'[]'), activeCat='Todas', activeEnvironment='Todas', activeSubcategory='', offersOnly=false, assistantResultIds=null;
+const HOME_PRODUCT_LIMIT=4,CATEGORY_PAGE_SIZE=8;
+let cart=JSON.parse(localStorage.getItem('movel-cart')||'[]'), favs=JSON.parse(localStorage.getItem('movel-favs')||'[]'), activeCat='Todas', activeEnvironment='Todas', activeSubcategory='', offersOnly=false, assistantResultIds=null,categoryVisibleLimit=CATEGORY_PAGE_SIZE;
 const brl=n=>n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const storeHtml=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[char]);
 const normaliseSearch=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
@@ -225,31 +226,46 @@ function renderEnvironmentNavigation(){
  desktop.querySelectorAll('button').forEach(button=>{button.onmouseenter=()=>openDesktopEnvironmentMenu(button.dataset.environment);button.onfocus=()=>openDesktopEnvironmentMenu(button.dataset.environment);button.onclick=event=>{event.stopPropagation();openDesktopEnvironmentMenu(button.dataset.environment,true)}});
  mobile.querySelectorAll('button').forEach(button=>button.onclick=()=>toggleMobileEnvironment(button.dataset.environment));
 }
-function render(){products.forEach(hydrateProductTaxonomy);const sectionLimit=8;document.querySelector('#offerGrid').innerHTML=products.slice(0,sectionLimit).map(card).join('');const bestProducts=[...products.filter(p=>p.best),...products.filter(p=>!p.best)].slice(0,sectionLimit);document.querySelector('#bestGrid').innerHTML=bestProducts.map(card).join('');const officeGrid=document.querySelector('#officeGrid');if(officeGrid)officeGrid.innerHTML=products.filter(p=>p.environment==='Escritório').slice(0,sectionLimit).map(catalogCard).join('');renderCatalog();updateCounts()}
+function render(){products.forEach(hydrateProductTaxonomy);['#offerGrid','#bestGrid','#officeGrid'].forEach(selector=>{const grid=document.querySelector(selector);if(grid)grid.innerHTML=''});renderCatalog();updateCounts()}
 function clearCatalogSearch(){const field=document.querySelector('#search');if(field){field.value='';field.setAttribute('aria-expanded','false')}const suggestions=document.querySelector('#suggestions');if(suggestions)suggestions.style.display='none'}
 function renderCatalog(){
+ const searchField=document.querySelector('#search');
+ const q=normaliseSearch(searchField?.value||'');
+ const homeMode=activeEnvironment==='Todas'&&!activeSubcategory&&!offersOnly&&!(assistantResultIds instanceof Set)&&!q;
+ const categoryMode=activeEnvironment!=='Todas'&&!offersOnly&&!(assistantResultIds instanceof Set)&&!q;
  let list=products.filter(p=>(activeEnvironment==='Todas'||p.environment===activeEnvironment)&&(!activeSubcategory||p.subcategory===activeSubcategory));
+ if(homeMode)list=products.filter(p=>p.homeFeatured===true).slice(0,HOME_PRODUCT_LIMIT);
  if(assistantResultIds instanceof Set)list=list.filter(p=>assistantResultIds.has(Number(p.id)));
  if(offersOnly)list=list.filter(p=>p.badge==='Oferta'||p.discount>=25);
- let q=normaliseSearch(document.querySelector('#search').value);
  if(q)list=list.filter(p=>normaliseSearch(p.searchTerms||'').includes(q));
  let sort=document.querySelector('#sort').value;
  if(sort==='Menor preço')list.sort((a,b)=>a.price-b.price);
  if(sort==='Maior preço')list.sort((a,b)=>b.price-a.price);
- document.querySelector('#catalogGrid').innerHTML=list.length?list.map(catalogCard).join(''):`<div class="empty">Nenhum produto encontrado.<br><a class="admin-link" href="#inicio">Voltar para a home</a></div>`;
- const singular=list.length===1;
+ const total=list.length;
+ const visibleList=categoryMode?list.slice(0,categoryVisibleLimit):list;
+ const emptyMessage=homeMode?'Os produtos destacados serão publicados aqui em breve.':'Nenhum produto encontrado.';
+ document.querySelector('#catalogGrid').innerHTML=visibleList.length?visibleList.map(catalogCard).join(''):`<div class="empty">${emptyMessage}<br><button class="admin-link" type="button" onclick="scrollToTop()">Voltar para a home</button></div>`;
+ const singular=total===1;
  const noun=offersOnly?(singular?'oferta encontrada':'ofertas encontradas'):(singular?'produto encontrado':'produtos encontrados');
- document.querySelector('#resultLabel').textContent=`${list.length} ${noun}`;
+ document.querySelector('#resultLabel').textContent=`${total} ${noun}`;
+ const catalogue=document.querySelector('#catalogo');
+ catalogue?.classList.toggle('is-home-catalog',homeMode);catalogue?.classList.toggle('is-category-catalog',categoryMode);
+ const catalogTitle=document.querySelector('#catalogTitle');
+ if(catalogTitle)catalogTitle.innerHTML=homeMode?'Encontre seu <em>próximo móvel</em>':categoryMode?storeHtml((activeSubcategory||activeEnvironment).toLocaleUpperCase('pt-BR')):'Encontre seu <em>próximo móvel</em>';
  const catalogLink=document.querySelector('#catalogLink');
- if(catalogLink)catalogLink.textContent=offersOnly?`${list.length} ${singular?'oferta selecionada':'ofertas selecionadas'}`:`Ver ${singular?'':'os '}${list.length} ${singular?'produto':'produtos'} →`;
+ if(catalogLink){catalogLink.hidden=homeMode||categoryMode;catalogLink.textContent=offersOnly?`${total} ${singular?'oferta selecionada':'ofertas selecionadas'}`:`Ver ${singular?'':'os '}${total} ${singular?'produto':'produtos'} →`}
  const currentEnvironment=environmentRecord(activeEnvironment);
  const pills=currentEnvironment?currentEnvironment.subcategories.map(item=>typeof item==='string'?item:item.name):environmentNavigation.map(item=>item.name);
- document.querySelector('#filterPills').innerHTML=[currentEnvironment?'Todo o ambiente':'Todos',...pills].map((label,index)=>{
+ const filterPills=document.querySelector('#filterPills');filterPills.hidden=homeMode;
+ filterPills.innerHTML=[currentEnvironment?'Todo o ambiente':'Todos',...pills].map((label,index)=>{
   const active=!offersOnly&&(index===0?!activeSubcategory:currentEnvironment?activeSubcategory===label:activeEnvironment===label);
   const action=index===0?(currentEnvironment?`filterEnvironment('${storeHtml(currentEnvironment.name)}')`:`filterEnvironment('Todas')`):(currentEnvironment?`filterSubcategory('${storeHtml(currentEnvironment.name)}','${storeHtml(label)}')`:`filterEnvironment('${storeHtml(label)}')`);
   return `<button class="pill ${active?'active':''}" type="button" onclick="${action}">${index===0?currentEnvironment?environmentIcon(currentEnvironment,22):'':currentEnvironment?subcategoryIcon(currentEnvironment.subcategories[index-1],currentEnvironment,22):CategoryIcons.icon(label,{size:22})}${storeHtml(label)}</button>`;
  }).join('');
  renderCatalogBreadcrumb();
+ const breadcrumb=document.querySelector('#catalogBreadcrumb');if(breadcrumb)breadcrumb.hidden=homeMode;
+ const loadMore=document.querySelector('#catalogLoadMore');
+ if(loadMore){loadMore.hidden=!categoryMode||visibleList.length>=total;loadMore.setAttribute('aria-label',`Mostrar mais produtos de ${activeSubcategory||activeEnvironment}`)}
 }
 function renderCatalogBreadcrumb(){
  const root=document.querySelector('#catalogBreadcrumb');if(!root)return;
@@ -263,11 +279,11 @@ function closeEnvironmentNavigation(){
  document.querySelectorAll('#desktopEnvironmentNav button,#categoriesMenu').forEach(button=>{button.setAttribute('aria-expanded','false');button.classList.remove('is-active')});
 }
 function filterEnvironment(value){
- const environment=environmentRecord(value);assistantResultIds=null;offersOnly=false;activeEnvironment=environment?.name||'Todas';activeSubcategory='';activeCat=activeEnvironment;clearCatalogSearch();renderCatalog();closeEnvironmentNavigation();window.MobileNav?.mark('categorias');document.querySelector('#catalogo').scrollIntoView({behavior:'smooth'});
+ const environment=environmentRecord(value);if(!environment)return scrollToTop();assistantResultIds=null;offersOnly=false;activeEnvironment=environment.name;activeSubcategory='';activeCat=activeEnvironment;categoryVisibleLimit=CATEGORY_PAGE_SIZE;clearCatalogSearch();renderCatalog();closeEnvironmentNavigation();window.MobileNav?.mark('categorias');document.querySelector('#catalogo').scrollIntoView({behavior:'smooth'});
 }
 function filterSubcategory(environmentValue,subcategory){
  const environment=environmentRecord(environmentValue);if(!environment)return;
- assistantResultIds=null;offersOnly=false;activeEnvironment=environment.name;activeSubcategory=subcategory;activeCat=subcategory;clearCatalogSearch();renderCatalog();closeEnvironmentNavigation();window.MobileNav?.mark('categorias');document.querySelector('#catalogo').scrollIntoView({behavior:'smooth'});
+ assistantResultIds=null;offersOnly=false;activeEnvironment=environment.name;activeSubcategory=subcategory;activeCat=subcategory;categoryVisibleLimit=CATEGORY_PAGE_SIZE;clearCatalogSearch();renderCatalog();closeEnvironmentNavigation();window.MobileNav?.mark('categorias');document.querySelector('#catalogo').scrollIntoView({behavior:'smooth'});
 }
 function filterCategory(value){
  if(value==='Todas')return filterEnvironment('Todas');
@@ -375,8 +391,8 @@ function openAccountFallback(){window.MobileNav?.mark('conta');openDrawer('<h2>M
 function openAccount(){if(window.CustomerAccount)window.CustomerAccount.openAccount();else openAccountFallback()}
 function openAdmin(){openDrawer('<h2>Painel administrativo</h2><p style="color:#66758c">Gestão de produtos, conteúdo e pedidos da loja.</p><a class="btn blue drawer-submit" href="admin.html">Abrir painel administrativo</a>')}
 function openWhatsApp(){openWhatsAppMessage(commerceSettings.message)}
-function scrollToTop(){window.MobileNav?.mark('inicio');window.scrollTo({top:0,behavior:'smooth'})}
-const search=document.querySelector('#search');search.addEventListener('input',()=>{assistantResultIds=null;let q=normaliseSearch(search.value);let s=document.querySelector('#suggestions');if(!q){s.style.display='none';search.setAttribute('aria-expanded','false');renderCatalog();return}activeCat='Todas';activeEnvironment='Todas';activeSubcategory='';offersOnly=false;let hits=products.filter(p=>normaliseSearch(p.searchTerms||'').includes(q)).slice(0,6);s.innerHTML=hits.map(p=>`<button class="suggestion" type="button" role="option" data-search-product="${p.id}"><b>${storeHtml(p.n)}</b><small>${storeHtml([p.environment,p.subcategory].filter(Boolean).join(' › '))} · ${productPriceText(p)}</small></button>`).join('');s.querySelectorAll('[data-search-product]').forEach(button=>button.onclick=()=>{const product=products.find(item=>item.id===Number(button.dataset.searchProduct));if(!product)return;search.value=product.n;search.setAttribute('aria-expanded','false');s.style.display='none';renderCatalog();document.querySelector('#catalogo').scrollIntoView({behavior:'smooth'})});s.style.display=hits.length?'block':'none';search.setAttribute('aria-expanded',hits.length?'true':'false');renderCatalog()});document.querySelector('#sort').addEventListener('change',renderCatalog);document.querySelector('#cartBtn').onclick=openCart;document.querySelector('#accountBtn').onclick=openAccount;document.querySelector('#favBtn').onclick=()=>{assistantResultIds=null;activeCat='Todas';activeEnvironment='Todas';activeSubcategory='';document.querySelector('#catalogo').scrollIntoView({behavior:'smooth'});document.querySelector('#search').value='';document.querySelector('#catalogGrid').innerHTML=(products.filter(p=>favs.includes(p.id)).map(card).join('')||'<div class="empty">Você ainda não favoritou nenhum produto.</div>')};document.querySelector('#drawer').addEventListener('click',e=>{if(e.target.id==='drawer')closeDrawer()});renderEnvironmentNavigation();renderCats();initCategoryCarousel();render();
+function scrollToTop(){assistantResultIds=null;offersOnly=false;activeCat='Todas';activeEnvironment='Todas';activeSubcategory='';categoryVisibleLimit=CATEGORY_PAGE_SIZE;clearCatalogSearch();renderCatalog();closeEnvironmentNavigation();window.MobileNav?.mark('inicio');window.scrollTo({top:0,behavior:'smooth'})}
+const search=document.querySelector('#search');search.addEventListener('input',()=>{assistantResultIds=null;let q=normaliseSearch(search.value);let s=document.querySelector('#suggestions');if(!q){s.style.display='none';search.setAttribute('aria-expanded','false');renderCatalog();return}activeCat='Todas';activeEnvironment='Todas';activeSubcategory='';offersOnly=false;let hits=products.filter(p=>normaliseSearch(p.searchTerms||'').includes(q)).slice(0,6);s.innerHTML=hits.map(p=>`<button class="suggestion" type="button" role="option" data-search-product="${p.id}"><b>${storeHtml(p.n)}</b><small>${storeHtml([p.environment,p.subcategory].filter(Boolean).join(' › '))} · ${productPriceText(p)}</small></button>`).join('');s.querySelectorAll('[data-search-product]').forEach(button=>button.onclick=()=>{const product=products.find(item=>item.id===Number(button.dataset.searchProduct));if(!product)return;search.value=product.n;search.setAttribute('aria-expanded','false');s.style.display='none';renderCatalog();document.querySelector('#catalogo').scrollIntoView({behavior:'smooth'})});s.style.display=hits.length?'block':'none';search.setAttribute('aria-expanded',hits.length?'true':'false');renderCatalog()});document.querySelector('#sort').addEventListener('change',()=>{categoryVisibleLimit=CATEGORY_PAGE_SIZE;renderCatalog()});document.querySelector('#catalogLoadMore')?.addEventListener('click',()=>{categoryVisibleLimit+=CATEGORY_PAGE_SIZE;renderCatalog()});document.querySelector('.brand')?.addEventListener('click',event=>{event.preventDefault();scrollToTop()});document.querySelector('#cartBtn').onclick=openCart;document.querySelector('#accountBtn').onclick=openAccount;document.querySelector('#favBtn').onclick=()=>{assistantResultIds=null;activeCat='Todas';activeEnvironment='Todas';activeSubcategory='';document.querySelector('#catalogo').scrollIntoView({behavior:'smooth'});document.querySelector('#search').value='';document.querySelector('#catalogGrid').innerHTML=(products.filter(p=>favs.includes(p.id)).map(card).join('')||'<div class="empty">Você ainda não favoritou nenhum produto.</div>')};document.querySelector('#drawer').addEventListener('click',e=>{if(e.target.id==='drawer')closeDrawer()});renderEnvironmentNavigation();renderCats();initCategoryCarousel();render();
 document.querySelector('#filterToggle').onclick=()=>document.querySelector('#filterPills').classList.toggle('show');
 document.querySelectorAll('[data-store-whatsapp]').forEach(link=>link.addEventListener('click',event=>{event.preventDefault();openWhatsApp()}));
 let cepLookupController=null,cepLookupTimer=null;
