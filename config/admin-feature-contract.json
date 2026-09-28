@@ -15,13 +15,14 @@
       "editor visual simplificado da Home",
       "cadastro simplificado de nova categoria",
       "estoque exclusivamente por cor com total derivado",
-      "catálogo desktop com quatro cards e imagens 1280 por 1270"
+      "catálogo desktop com quatro cards e imagens 1280 por 1270",
+      "quatro produtos manuais na Home e carregamento progressivo por categoria"
     ]
   },
   "database": {
     "executionMode": "manual-incremental-only",
     "lastVerifiedAt": "2026-09-27",
-    "lastVerifiedSchema": "20261011_stock_by_color_source_of_truth.sql",
+    "lastVerifiedSchema": "20261012_home_featured_products.sql",
     "pendingMigrations": [],
     "appliedMigrations": [
       "20261005_product_dimensions_numeric.sql",
@@ -30,7 +31,8 @@
       "20261008_product_options.sql",
       "20261009_product_characteristics.sql",
       "20261010_product_origin_color.sql",
-      "20261011_stock_by_color_source_of_truth.sql"
+      "20261011_stock_by_color_source_of_truth.sql",
+      "20261012_home_featured_products.sql"
     ]
   },
   "features": [
@@ -171,6 +173,16 @@
         { "file": "styles.css", "contains": [".catalogue .product-grid{grid-template-columns:repeat(4", "aspect-ratio:1280/1270", "object-fit:contain;object-position:center", ".photo-badge-stack{position:absolute", "width:43px;flex-direction:column;align-items:flex-start;gap:3px"] },
         { "file": "app.js", "contains": ["width=\"1280\" height=\"1270\"", "photo-badge-stack", "photo-material-row", "official-product-price", "official-product-benefits", "product-add-bag", "product-whatsapp"] },
         { "file": "scripts/test-catalog-cards.mjs", "contains": ["quatro colunas", "conteúdo protegido do card"] }
+      ]
+    },
+    {
+      "name": "quatro destaques manuais da Home e ver mais por categoria",
+      "checks": [
+        { "file": "admin-app.js", "contains": ["HOME_FEATURED_LIMIT = 4", "data-product-home-featured", "HOME_FEATURED_LIMIT_MESSAGE", "home_featured: input.checked"] },
+        { "file": "storefront-cms.js", "contains": ["homeFeatured: Boolean(row.home_featured)", "mirror_feature,ribbed_feature,home_featured"] },
+        { "file": "app.js", "contains": ["HOME_PRODUCT_LIMIT=4,CATEGORY_PAGE_SIZE=8", "p=>p.homeFeatured===true", "catalogLoadMore", "categoryVisibleLimit+=CATEGORY_PAGE_SIZE"] },
+        { "file": "supabase/migrations/20261012_home_featured_products.sql", "contains": ["add column if not exists home_featured", "enforce_home_featured_limit", "HOME_FEATURED_LIMIT_REACHED", "selected_count >= 4"] },
+        { "file": "scripts/test-home-featured-products.mjs", "contains": ["destaques manuais da Home"] }
       ]
     },
     {

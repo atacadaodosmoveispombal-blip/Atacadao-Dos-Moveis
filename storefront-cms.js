@@ -269,21 +269,9 @@
   }
   function renderCampaignSections(banners, productRows, promotions) {
     document.querySelectorAll('.cms-campaign-section').forEach(section => section.remove());
-    const main = document.querySelector('main');
-    if (!main) return;
-    let insertionPoint = document.querySelector('.banner-strip') || document.querySelector('#catalogo') || main.lastElementChild;
-    banners.filter(banner => ['banner_products', 'products'].includes(banner.content_mode)).forEach(banner => {
-      const promotion = promotions.find(item => item.id === banner.promotion_id);
-      let selected = productRows.filter(product => promotion && (promotion.promotion_products || []).some(item => item.product_id === product.id));
-      if ((banner.auto_include_category || promotion?.auto_include_category) && banner.category_id) selected = productRows.filter(product => product.category_id === banner.category_id);
-      if (!selected.length) return;
-      const section = document.createElement('section');
-      section.className = 'section cms-campaign-section';
-      section.dataset.cmsOrder = Number(banner.sort_order || 45) + 0.1;
-      section.innerHTML = `<div class="section-head"><div><p class="eyebrow">CAMPANHA ESPECIAL</p><h2>${escapeHtml(banner.title)}</h2><p>${escapeHtml(banner.subtitle || 'Confira os produtos selecionados para esta campanha.')}</p></div></div><div class="cms-campaign-products product-grid">${selected.slice(0, 8).map(product => officialProductCard(mapProduct(product, 0, campaignPromotionFor(product, promotions)))).join('')}</div>${banner.button_text ? `<a class="btn cms-campaign-link" href="${escapeHtml(safeNavigationUrl(banner.button_url))}">${escapeHtml(banner.button_text)} →</a>` : ''}`;
-      if (insertionPoint?.parentNode) insertionPoint.after(section); else main.append(section);
-      insertionPoint = section;
-    });
+    // A Home possui uma única vitrine de produtos: os quatro itens escolhidos
+    // pelo administrador. As campanhas continuam nos banners já existentes,
+    // sem criar linhas automáticas adicionais de produtos.
   }
   function renderInspirations(rows) {
     let section = document.querySelector('#inspiracoes');
@@ -355,7 +343,8 @@
       if (!element) return;
       if (section.section_key === 'ambient') applyAmbientSection(section, element);
       const needsBanner = ['hero', 'promo_banners'].includes(section.section_key);
-      element.hidden = !section.active || (needsBanner && element.dataset.cmsHasBanner !== 'true');
+      const legacyProductRow = ['promotions', 'best_sellers'].includes(section.section_key);
+      element.hidden = legacyProductRow || !section.active || (needsBanner && element.dataset.cmsHasBanner !== 'true');
       const title = element.querySelector('h2');
       const subtitle = element.querySelector('.section-head>div>p:not(.eyebrow):last-child');
       if (title && section.title && !placeholderTitles.has(section.title)) title.textContent = section.title;
@@ -368,9 +357,11 @@
       const element = map[key];
       if (element && element.dataset.cmsHasBanner !== 'true') element.hidden = true;
     });
-    const defaults = { hero: 10, environments: 20, office: 25, featured_products: 30, promotions: 40, promo_banners: 45, best_sellers: 50, benefits: 55, ambient: 60, inspirations: 70 };
+    const defaults = { hero: 10, environments: 20, office: 25, featured_products: 30, benefits: 40, promo_banners: 50, ambient: 60, inspirations: 70, promotions: 90, best_sellers: 91 };
     const configured = new Map(sections.map(section => [section.section_key, Number(section.sort_order)]));
-    Object.entries(map).filter(([, element]) => element).sort(([a], [b]) => (configured.get(a) ?? defaults[a] ?? 999) - (configured.get(b) ?? defaults[b] ?? 999)).forEach(([, element]) => main.append(element));
+    const requiredHomeOrder = new Set(['hero','environments','office','featured_products','benefits','promo_banners','ambient']);
+    const orderFor = key => requiredHomeOrder.has(key) ? defaults[key] : (configured.get(key) ?? defaults[key] ?? 999);
+    Object.entries(map).filter(([, element]) => element).sort(([a], [b]) => orderFor(a) - orderFor(b)).forEach(([, element]) => main.append(element));
   }
   function stableProductId(uuid) {
     let hash = 2166136261;
@@ -434,7 +425,8 @@
       stock: row.variants_enabled && variants.length ? variantStockTotal : Number(row.stock_quantity || 0), baseStock: row.variants_enabled && variants.length ? variantStockTotal : Number(row.stock_quantity || 0), basePrice: sellingPrice, baseOld: sellingPrice < regularPrice ? regularPrice : null, originColorId: row.origin_color_id || '', originColor: row.origin_color || null, variantsEnabled: Boolean(row.variants_enabled && variants.length), variationType: row.variation_type || '', variants, campaign: Boolean(row.is_campaign || campaignPromotions.length),
       productOptions,
       whatsappEnabled: row.whatsapp_enabled !== false, cartEnabled: row.cart_enabled !== false,
-      freeCityShipping: Boolean(row.free_city_shipping), freeAssembly: Boolean(row.free_assembly)
+      freeCityShipping: Boolean(row.free_city_shipping), freeAssembly: Boolean(row.free_assembly),
+      homeFeatured: Boolean(row.home_featured)
     };
   }
   async function loadStorefrontCategories() {
@@ -454,7 +446,7 @@
   }
   async function loadStorefrontProducts() {
     const compatibleProductFields = 'id,name,sku,short_description,description,category_id,price,promotional_price,stock_quantity,best_seller,featured,new_arrival,on_sale,og_image_url,installment_enabled,max_installments,dimensions,material,color,specifications,warranty,whatsapp_enabled,cart_enabled,free_city_shipping,free_assembly,is_campaign,variants_enabled,variation_type';
-    const publicProductFields = `${compatibleProductFields},mirror_feature,ribbed_feature`;
+    const publicProductFields = `${compatibleProductFields},mirror_feature,ribbed_feature,home_featured`;
     const variantRelation = 'product_variants(id,name,type,sku,color_name,color_hex,secondary_color_hex,swatch_mode,swatch_image,price,price_adjustment,stock,active,default_variant,display_order,variant_images(image_url,is_cover,sort_order))';
     const catalogVariantRelation = 'product_variants(id,name,type,sku,color_name,color_hex,secondary_color_hex,swatch_mode,swatch_image,price,price_adjustment,stock,active,default_variant,display_order,color_id,combination_color_id,primary_color:product_colors!product_variants_color_id_fkey(name,hex,secondary_hex,type),secondary_color:product_colors!product_variants_combination_color_id_fkey(name,hex,secondary_hex,type),variant_images(image_url,is_cover,sort_order))';
     const optionRelation = 'product_option_groups(id,name,slug,display_order,active,product_option_values(id,label,slug,display_order,active))';
