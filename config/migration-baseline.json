@@ -27,5 +27,6 @@
   "20261008_product_options.sql": "b55149162a4cd8207fd5f91653cd580966a54d8ff1e89fb3779bdd5abb24aea1",
   "20261009_product_characteristics.sql": "96f373447a185172c3155988034bd022ae37281b0c3ffc33faff880e6e163879",
   "20261010_product_origin_color.sql": "7ac75334410849ad9eddb3eb13cd877bee8a1ac56cee9db7a166c55ce6b3e456",
-  "20261011_stock_by_color_source_of_truth.sql": "520415e254e3e27149918644be42d51d649b4d6130ab3ff9ddf4996822cbf44d"
+  "20261011_stock_by_color_source_of_truth.sql": "520415e254e3e27149918644be42d51d649b4d6130ab3ff9ddf4996822cbf44d",
+  "20261012_home_featured_products.sql": "fb438738fcd1c2bfad522b484006dccb6ee175e6be7b11d9007f2267fa42540b"
 }

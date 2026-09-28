@@ -22,10 +22,8 @@
   "database": {
     "executionMode": "manual-incremental-only",
     "lastVerifiedAt": "2026-09-27",
-    "lastVerifiedSchema": "20261011_stock_by_color_source_of_truth.sql",
-    "pendingMigrations": [
-      "20261012_home_featured_products.sql"
-    ],
+    "lastVerifiedSchema": "20261012_home_featured_products.sql",
+    "pendingMigrations": [],
     "appliedMigrations": [
       "20261005_product_dimensions_numeric.sql",
       "20261006_product_dimensions_image.sql",
@@ -33,7 +31,8 @@
       "20261008_product_options.sql",
       "20261009_product_characteristics.sql",
       "20261010_product_origin_color.sql",
-      "20261011_stock_by_color_source_of_truth.sql"
+      "20261011_stock_by_color_source_of_truth.sql",
+      "20261012_home_featured_products.sql"
     ]
   },
   "features": [
