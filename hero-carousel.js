@@ -10,7 +10,7 @@
   const dotGroup = root.querySelector('.hero-dots');
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const mobile = window.matchMedia('(max-width: 767px)');
-  const imageDuration = 6500;
+  const imageDuration = Math.max(50, Number(root.dataset.autoplayMs) || 6500);
   const defaultSlides = [...root.querySelectorAll('[data-hero-slide]')].map(slide => slide.cloneNode(true));
   let slides = [];
   let slideItems = [];
@@ -19,10 +19,53 @@
   let timer = 0;
   let pointerStart = null;
   let pausedByInteraction = false;
+  let cmsSignature = '';
+  const boundMedia = new WeakSet();
+
+  function mediaUrl(value) {
+    const source = String(value || '').trim();
+    if (!source) return '';
+    try {
+      const parsed = new URL(source, location.href);
+      return ['http:', 'https:', 'data:', 'blob:', 'file:'].includes(parsed.protocol) ? parsed.href : '';
+    } catch {
+      return '';
+    }
+  }
+
+  function itemKey(item) {
+    if (!item) return '';
+    return [item.type || 'image', item.desktopUrl || '', item.mobileUrl || '', item.internalTitle || ''].join('|');
+  }
+
+  function itemSignature(item) {
+    return JSON.stringify([
+      itemKey(item), item.posterUrl || '', item.alt || '', item.title || '', item.subtitle || '',
+      item.buttonText || '', item.buttonUrl || '', item.link || '', item.linkLabel || ''
+    ]);
+  }
+
+  function normalizeItem(item) {
+    const type = item?.type === 'video' ? 'video' : 'image';
+    const desktopUrl = mediaUrl(item?.desktopUrl);
+    if (!desktopUrl) return null;
+    return {
+      ...item,
+      type,
+      desktopUrl,
+      mobileUrl: mediaUrl(item?.mobileUrl) || desktopUrl,
+      posterUrl: mediaUrl(item?.posterUrl)
+    };
+  }
+
+  function keepHeroVisible() {
+    root.closest('.hero')?.removeAttribute('hidden');
+  }
 
   function refreshCollections() {
     slides = [...root.querySelectorAll('[data-hero-slide]')];
     dots = [...root.querySelectorAll('.hero-dots button')];
+    slides.forEach(bindSlideMedia);
     const singleSlide = slides.length < 2;
     if (previous) previous.hidden = singleSlide;
     if (next) next.hidden = singleSlide;
@@ -35,16 +78,15 @@
 
   function syncImage(image) {
     if (!image?.dataset.desktopSrc) return;
-    const source = responsiveUrl(image);
-    if (source && image.src !== new URL(source, location.href).href) image.src = source;
+    const source = mediaUrl(responsiveUrl(image));
+    if (source && image.src !== source) image.src = source;
   }
 
   function syncVideo(video, forceLoad = false) {
     if (!video?.dataset.desktopSrc) return;
-    const source = responsiveUrl(video);
+    const source = mediaUrl(responsiveUrl(video));
     if (!source || (!forceLoad && !video.src)) return;
-    const absolute = new URL(source, location.href).href;
-    if (video.src !== absolute) {
+    if (video.src !== source) {
       video.src = source;
       video.load();
     }
@@ -52,7 +94,7 @@
 
   function preload(index) {
     const slide = slides[index];
-    const image = slide?.querySelector('.hero-slide-image');
+    const image = slide?.querySelector('.hero-slide-image, img:not(.hero-video-fallback)');
     if (image) {
       syncImage(image);
       image.loading = 'eager';
@@ -78,8 +120,47 @@
 
   function scheduleImageAdvance() {
     clearTimer();
-    if (slides.length < 2 || reducedMotion.matches || document.hidden || pausedByInteraction) return;
+    if (slides.length < 2 || document.hidden || pausedByInteraction) return;
     timer = window.setTimeout(() => show(active + 1), imageDuration);
+  }
+
+  function discardBrokenSlide(slide) {
+    const brokenIndex = slides.indexOf(slide);
+    if (brokenIndex < 0) return;
+    slide.classList.add('is-media-error');
+
+    if (slides.length === 1) {
+      if (root.dataset.cmsBanner === 'true' && defaultSlides.length) restoreDefaults();
+      else {
+        slide.classList.add('is-active');
+        slide.setAttribute('aria-hidden', 'false');
+      }
+      return;
+    }
+
+    const wasActive = brokenIndex === active;
+    slideItems.splice(brokenIndex, 1);
+    slide.remove();
+    rebuildDots(slideItems);
+    refreshCollections();
+    if (brokenIndex < active) active -= 1;
+    else if (wasActive && active >= slides.length) active = 0;
+    show(active);
+  }
+
+  function bindSlideMedia(slide) {
+    const image = slide.querySelector('.hero-slide-image, img:not(.hero-video-fallback)');
+    if (image && !boundMedia.has(image)) {
+      boundMedia.add(image);
+      image.addEventListener('error', () => discardBrokenSlide(slide), { once: true });
+      if (image.complete && image.src && image.naturalWidth === 0) queueMicrotask(() => discardBrokenSlide(slide));
+    }
+    const video = slide.querySelector('video');
+    if (video && !boundMedia.has(video)) {
+      boundMedia.add(video);
+      video.addEventListener('ended', () => { if (slides[active] === slide) show(active + 1); });
+      video.addEventListener('error', () => discardBrokenSlide(slide), { once: true });
+    }
   }
 
   async function playActiveVideo(slide) {
@@ -95,7 +176,8 @@
       video.currentTime = 0;
       await video.play();
     } catch {
-      slide.classList.add('is-media-error');
+      // Bloqueio de autoplay não significa mídia quebrada. Mantém o poster e
+      // segue o mesmo tempo de exibição de uma imagem.
       scheduleImageAdvance();
     }
   }
@@ -111,6 +193,7 @@
 
   function show(index) {
     if (!slides.length) return;
+    keepHeroVisible();
     clearTimer();
     active = (index + slides.length) % slides.length;
     slides.forEach((slide, slideIndex) => {
@@ -163,11 +246,6 @@
       video.poster = item.posterUrl || '';
       video.dataset.desktopSrc = item.desktopUrl || '';
       video.dataset.mobileSrc = item.mobileUrl || item.desktopUrl || '';
-      video.addEventListener('ended', () => { if (slides[active] === slide) show(active + 1); });
-      video.addEventListener('error', () => {
-        slide.classList.add('is-media-error');
-        if (slides[active] === slide) scheduleImageAdvance();
-      });
       slide.append(fallback, video);
     } else {
       const image = document.createElement('img');
@@ -210,22 +288,37 @@
     slideItems = items;
     rebuildDots(items);
     root.dataset.cmsBanner = 'false';
+    cmsSignature = '';
     active = 0;
     refreshCollections();
     show(0);
   }
 
   function setSlides(items) {
-    const valid = (items || []).filter(item => item?.desktopUrl);
-    if (!valid.length) { restoreDefaults(); return; }
+    const valid = (items || []).map(normalizeItem).filter(Boolean);
+    if (!valid.length) {
+      keepHeroVisible();
+      return null;
+    }
+    const signature = valid.map(itemSignature).join('\n');
+    if (root.dataset.cmsBanner === 'true' && signature === cmsSignature) {
+      slideItems = valid;
+      keepHeroVisible();
+      return slideItems[active] || null;
+    }
+    const previousKey = itemKey(slideItems[active]);
+    const preservedIndex = valid.findIndex(item => itemKey(item) === previousKey);
+    const nextActive = preservedIndex >= 0 ? preservedIndex : Math.min(active, valid.length - 1);
     stop();
     slideItems = valid;
     slideContainer.replaceChildren(...valid.map(buildSlide));
     rebuildDots(valid);
     root.dataset.cmsBanner = 'true';
-    active = 0;
+    cmsSignature = signature;
+    active = nextActive;
     refreshCollections();
-    show(0);
+    show(active);
+    return slideItems[active] || null;
   }
 
   previous?.addEventListener('click', () => show(active - 1));
@@ -261,7 +354,9 @@
   window.atacarejoHero = {
     show,
     setSlides,
-    setCmsMode(enabled) { if (!enabled) restoreDefaults(); },
+    // Uma resposta vazia do CMS pode ser transitória. Nunca substitui mídia
+    // já renderizada; os slides padrão continuam sendo a reserva do boot.
+    setCmsMode() { keepHeroVisible(); },
     setPrimaryImage(desktopUrl, mobileUrl = desktopUrl) {
       setSlides([{ type: 'image', desktopUrl, mobileUrl, internalTitle: 'Hero principal' }]);
     }
@@ -271,5 +366,6 @@
   slideItems = defaultSlides.map((slide, index) => ({ internalTitle: slide.querySelector('figcaption strong')?.textContent || `slide ${index + 1}` }));
   rebuildDots(slideItems);
   refreshCollections();
+  keepHeroVisible();
   show(0);
 })();

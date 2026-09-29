@@ -188,29 +188,19 @@
   function applyHero(banners, productRows = [], promotions = []) {
     const hero = document.querySelector('.hero');
     if (!hero) return;
+    // A Hero possui conteúdo de reserva no HTML e é uma região estrutural da
+    // Home. Uma consulta vazia/temporária do CMS nunca pode ocultá-la.
+    hero.removeAttribute('hidden');
     const slides = (Array.isArray(banners) ? banners : banners ? [banners] : []).filter(item => item.position === 'home_hero');
     const banner = slides[0] || null;
-    hero.dataset.cmsHasBanner = String(Boolean(slides.length));
     if (!banner) {
       window.atacarejoHero?.setCmsMode(false);
-      applyCampaignLook(hero, null);
-      renderCampaignDecor(hero, null, productRows, promotions);
       return;
     }
-    const title = hero?.querySelector('h1');
-    const subtitle = hero?.querySelector('.hero-copy>p:not(.eyebrow)');
-    const button = hero?.querySelector('.hero-copy .btn');
-    const art = hero?.querySelector('.hero-art');
-    applyCampaignLook(hero, banner);
-    renderCampaignDecor(hero, banner, productRows, promotions);
-    if (title && banner.title) title.textContent = banner.title;
-    if (subtitle && banner.subtitle) subtitle.textContent = banner.subtitle;
-    if (button && banner.button_text) button.firstChild.textContent = `${banner.button_text} `;
-    if (button && banner.button_url) button.onclick = () => navigateCmsTarget(banner.button_url);
     const cleanHeroUrl = value => /editorial-room(?:-clean)?\.(?:jpg|png)/i.test(value || '') ? 'assets/editorial-room-clean.png?v=caption-removed-1' : value || '';
     const mediaSlides = slides.map((item, index) => {
       const video = item.media_type === 'video';
-      const desktopUrl = cleanHeroUrl(video ? item.video_desktop_url : item.image_desktop_url || item.image_mobile_url);
+      const desktopUrl = cleanHeroUrl(video ? item.video_desktop_url || item.video_mobile_url : item.image_desktop_url || item.image_mobile_url);
       const mobileUrl = cleanHeroUrl(video ? item.video_mobile_url || item.video_desktop_url : item.image_mobile_url || item.image_desktop_url);
       return {
         type: video ? 'video' : 'image', desktopUrl, mobileUrl,
@@ -222,11 +212,23 @@
         linkLabel: item.internal_title || item.title ? `Abrir ${item.internal_title || item.title}` : `Abrir slide ${index + 1}`
       };
     }).filter(item => item.desktopUrl);
+    if (!mediaSlides.length) {
+      window.atacarejoHero?.setCmsMode(false);
+      return;
+    }
+    const art = hero.querySelector('.hero-art');
+    let activeItem = mediaSlides[0];
     if (window.atacarejoHero?.setSlides) {
-      window.atacarejoHero.setSlides(mediaSlides);
+      activeItem = window.atacarejoHero.setSlides(mediaSlides);
+      if (!activeItem) return;
     } else if (art && mediaSlides[0]?.desktopUrl) {
       art.style.backgroundImage = `url("${mediaSlides[0].desktopUrl.replace(/"/g, '%22')}")`;
     }
+    applyCampaignLook(hero, banner);
+    renderCampaignDecor(hero, banner, productRows, promotions);
+    applyHeroSlideCopy(activeItem);
+    hero.dataset.cmsHasBanner = 'true';
+    hero.removeAttribute('hidden');
   }
   function applySecondaryBanners(banners, productRows = [], promotions = []) {
     const strip = document.querySelector('.banner-strip');
@@ -344,7 +346,11 @@
       if (section.section_key === 'ambient') applyAmbientSection(section, element);
       const needsBanner = ['hero', 'promo_banners'].includes(section.section_key);
       const legacyProductRow = ['promotions', 'best_sellers'].includes(section.section_key);
-      element.hidden = legacyProductRow || !section.active || (needsBanner && element.dataset.cmsHasBanner !== 'true');
+      // A Hero é permanente: o carrossel padrão continua visível mesmo sem
+      // resposta, configuração ou banner válido do CMS.
+      element.hidden = section.section_key === 'hero'
+        ? false
+        : legacyProductRow || !section.active || (needsBanner && element.dataset.cmsHasBanner !== 'true');
       const title = element.querySelector('h2');
       const subtitle = element.querySelector('.section-head>div>p:not(.eyebrow):last-child');
       if (title && section.title && !placeholderTitles.has(section.title)) title.textContent = section.title;
@@ -353,10 +359,11 @@
     });
     const main = document.querySelector('main');
     if (!main) return;
-    ['hero','promo_banners'].forEach(key => {
+    ['promo_banners'].forEach(key => {
       const element = map[key];
       if (element && element.dataset.cmsHasBanner !== 'true') element.hidden = true;
     });
+    map.hero?.removeAttribute('hidden');
     const defaults = { hero: 10, environments: 20, office: 25, featured_products: 30, benefits: 40, promo_banners: 50, ambient: 60, inspirations: 70, promotions: 90, best_sellers: 91 };
     const configured = new Map(sections.map(section => [section.section_key, Number(section.sort_order)]));
     const requiredHomeOrder = new Set(['hero','environments','office','featured_products','benefits','promo_banners','ambient']);

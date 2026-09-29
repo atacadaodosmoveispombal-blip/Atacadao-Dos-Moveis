@@ -16,11 +16,16 @@ if (hostedBuild) {
   assert(hero.includes("video.addEventListener('ended'"), 'Avanço ao terminar o vídeo não foi preservado.');
   assert(hero.includes('video.autoplay = true') && hero.includes('video.muted = true') && hero.includes('video.playsInline = true') && hero.includes('video.controls = false'), 'Autoplay mobile seguro não foi preservado.');
   assert(hero.includes("video.addEventListener('error'"), 'Fallback do vídeo não foi preservado.');
+  assert(hero.includes('discardBrokenSlide'), 'Isolamento de mídia quebrada não foi preservado.');
+  assert(hero.includes('signature === cmsSignature'), 'Atualizações idênticas ainda podem reiniciar o carrossel.');
+  assert(hero.includes('if (!valid.length)'), 'Resposta vazia ainda pode substituir os slides carregados.');
   assert(hero.includes('mobileSrc') && hero.includes('desktopSrc'), 'Prioridade Desktop/Mobile não foi preservada.');
   assert(admin.includes("update({ active: resume, paused: !resume, draft: false })"), 'Ativar/desativar slide perdeu a persistência.');
   assert(admin.includes('source.position !== target.position'), 'Ordenação não está limitada à área da Hero.');
   assert(storefront.includes("filter(item => item.position === 'home_hero')"), 'A Home não está consumindo todos os slides ativos da Hero.');
   assert(storefront.includes(".eq('active', true).eq('draft', false).eq('paused', false)"), 'Filtro de slides ativos não foi preservado.');
+  assert(storefront.includes("element.hidden = section.section_key === 'hero'"), 'A seção Hero ainda pode ser escondida pela configuração do CMS.');
+  assert(storefront.includes("map.hero?.removeAttribute('hidden')"), 'A invariável de visibilidade da Hero não foi preservada.');
   console.log('OK imagem/vídeo, autoplay, ended, fallback, responsividade, ativação e ordem (verificação estática hospedada)');
   process.exit(0);
 }
@@ -64,6 +69,15 @@ async function evaluate(expression) {
   return response.result?.value;
 }
 
+async function waitFor(expression, message, timeout = 1200) {
+  const started = Date.now();
+  while (Date.now() - started < timeout) {
+    if (await evaluate(expression)) return;
+    await wait(25);
+  }
+  throw new Error(message);
+}
+
 const image = color => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900"><rect width="100%" height="100%" fill="${color}"/></svg>`)}`;
 const video = pathToFileURL(path.resolve('assets', 'products', 'mesa-aurora', 'mesa-aurora-demonstracao.mp4')).href;
 
@@ -91,6 +105,18 @@ try {
   const imageSlides = [{ type: 'image', desktopUrl: image('red'), mobileUrl: image('pink'), internalTitle: 'Imagem 1' }, { type: 'image', desktopUrl: image('blue'), mobileUrl: image('cyan'), internalTitle: 'Imagem 2' }];
   await evaluate(`window.atacarejoHero.setSlides(${JSON.stringify(imageSlides)}); window.atacarejoHero.show(1); true`);
   assert(await evaluate("document.querySelectorAll('[data-hero-slide]').length === 2 && document.querySelectorAll('[data-hero-slide]')[1].classList.contains('is-active')"), 'Falha na transição imagem → imagem.');
+  const activeNodeWasPreserved = await evaluate(`(() => { const before=document.querySelector('.hero-slide.is-active'); window.atacarejoHero.setSlides(${JSON.stringify(imageSlides)}); return before===document.querySelector('.hero-slide.is-active'); })()`);
+  assert(activeNodeWasPreserved, 'Uma sincronização sem mudanças reconstruiu ou reiniciou o slide ativo.');
+  await evaluate('window.atacarejoHero.setSlides([]); window.atacarejoHero.setSlides([{desktopUrl:"javascript:alert(1)"}]); true');
+  assert(await evaluate("document.querySelectorAll('[data-hero-slide]').length === 2 && document.querySelectorAll('[data-hero-slide]')[1].classList.contains('is-active')"), 'Resposta vazia/URL inválida apagou slides válidos já carregados.');
+  await evaluate("document.querySelector('.hero').hidden=true; window.atacarejoHero.show(2); true");
+  assert(await evaluate("!document.querySelector('.hero').hidden && Boolean(document.querySelector('.hero-slide.is-active'))"), 'A Hero não se recuperou de um estado hidden indevido.');
+
+  await evaluate(`window.atacarejoHero.setSlides(${JSON.stringify(imageSlides)}); document.querySelector('.hero-slide.is-active img').dispatchEvent(new Event('error')); true`);
+  assert(await evaluate("document.querySelectorAll('[data-hero-slide]').length === 1 && document.querySelector('.hero-slide').classList.contains('is-active')"), 'Um slide de imagem quebrado derrubou o carrossel em vez de ser isolado.');
+  assert(await evaluate("document.querySelector('.hero-prev').hidden && document.querySelector('.hero-next').hidden && document.querySelector('.hero-dots').hidden"), 'Os controles não foram estabilizados para um único slide.');
+  await wait(180);
+  assert(await evaluate("document.querySelectorAll('[data-hero-slide]').length === 1 && document.querySelector('.hero-slide').classList.contains('is-active')"), 'O único slide não permaneceu fixo durante o autoplay.');
 
   const imageVideo = [{ type: 'image', desktopUrl: image('red'), mobileUrl: image('pink'), internalTitle: 'Imagem' }, { type: 'video', desktopUrl: video, mobileUrl: `${video}?mobile=1`, posterUrl: image('black'), internalTitle: 'Vídeo' }];
   await evaluate(`window.atacarejoHero.setSlides(${JSON.stringify(imageVideo)}); window.atacarejoHero.show(1); true`);
@@ -118,7 +144,11 @@ try {
   assert(await evaluate("!document.querySelector('.hero-slide video').dataset.desktopSrc.includes('mobile=1')"), 'A Hero desktop não priorizou o vídeo desktop.');
 
   await evaluate(`window.atacarejoHero.setSlides(${JSON.stringify(imageVideo)}); window.atacarejoHero.show(1); document.querySelector('.hero-slide.is-active video').dispatchEvent(new Event('error')); true`);
-  assert(await evaluate("document.querySelector('.hero-slide.is-active').classList.contains('is-media-error') && Boolean(document.querySelector('.hero-slide.is-active .hero-video-fallback'))"), 'Fallback por poster não foi ativado após erro do vídeo.');
+  assert(await evaluate("document.querySelectorAll('[data-hero-slide]').length === 1 && !document.querySelector('.hero-slide video') && document.querySelector('.hero-slide').classList.contains('is-active')"), 'Um slide de vídeo quebrado derrubou o carrossel em vez de ser isolado.');
+
+  await evaluate(`window.atacarejoHero.setSlides(${JSON.stringify(imageSlides)}); window.atacarejoHero.show(0); document.querySelector('.hero-carousel').dispatchEvent(new Event('mouseleave')); true`);
+  await waitFor("document.querySelectorAll('[data-hero-slide]')[1].classList.contains('is-active')", 'O autoplay não avançou no primeiro ciclo.');
+  await waitFor("document.querySelectorAll('[data-hero-slide]')[0].classList.contains('is-active')", 'O autoplay não permaneceu em loop no segundo ciclo.');
 
   const admin = await readFile('admin-app.js', 'utf8');
   const storefront = await readFile('storefront-cms.js', 'utf8');
@@ -126,13 +156,18 @@ try {
   assert(admin.includes("source.position !== target.position"), 'Ordenação não está limitada à área da Hero.');
   assert(storefront.includes("filter(item => item.position === 'home_hero')"), 'A Home não está consumindo todos os slides ativos da Hero.');
   assert(storefront.includes(".eq('active', true).eq('draft', false).eq('paused', false)"), 'Filtro de slides ativos não foi preservado.');
+  assert(storefront.includes("element.hidden = section.section_key === 'hero'"), 'A Hero ainda pode ser escondida pelas seções do CMS.');
+  assert(storefront.includes("map.hero?.removeAttribute('hidden')"), 'A Hero perdeu a proteção contra hidden.');
 
   console.log('OK imagem → imagem');
   console.log('OK imagem → vídeo');
   console.log('OK vídeo → imagem e vídeo → vídeo');
   console.log('OK vários vídeos e avanço no ended');
   console.log('OK autoplay/muted/playsinline sem controles');
-  console.log('OK fallback por poster');
+  console.log('OK isolamento de imagem/vídeo quebrado');
+  console.log('OK resposta vazia, URL inválida e sincronização sem reset');
+  console.log('OK Hero sempre visível e controles para um slide');
+  console.log('OK autoplay em loop por vários ciclos');
   console.log('OK mídia desktop/mobile');
   console.log('OK ativação/desativação e ordenação persistidas');
 } finally {
