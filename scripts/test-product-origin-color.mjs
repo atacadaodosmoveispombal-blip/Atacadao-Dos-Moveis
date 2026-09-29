@@ -37,9 +37,17 @@ assert(storefront.includes('variants.find(item => item.isOrigin)'), 'Vitrine nã
 assert(app.includes('item.isOrigin&&item.active!==false'), 'Página do produto não seleciona primeiro a origem.');
 assert(app.includes('isOrigin?(p.baseMedia||p.media||[])'), 'Retorno à origem não restaura a galeria principal.');
 assert(app.includes("base.variants.length===1?'COR':'ESCOLHA A COR'"), 'Produto de uma cor não usa o rótulo simples COR.');
+const whatsappPurchase = app.slice(app.indexOf('function buyProductWhatsAppWithOptions'), app.indexOf('buyProductWhatsApp=buyProductWhatsAppWithOptions'));
+const cartPurchase = app.slice(app.indexOf('function addCart'), app.indexOf('function toggleFav'));
+assert(whatsappPurchase.includes('selectedEffectiveProduct(base,variantId)'), 'Compra direta pelo WhatsApp não assume a cor primária.');
+assert(!whatsappPurchase.includes('Escolha a cor'), 'Compra direta pelo WhatsApp ainda exige seleção manual de cor.');
+assert(cartPurchase.includes('selectedEffectiveProduct(base,variantId)'), 'Compra direta pela sacola não assume a cor primária.');
+assert(!cartPurchase.includes('Escolha a cor'), 'Compra direta pela sacola ainda exige seleção manual de cor.');
+assert(app.includes('let chosen=productDefaultVariant(base);'), 'Detalhe do produto não abre com a cor primária selecionada.');
 
 console.log('OK cor de origem obrigatória no cadastro individual e em massa');
 console.log('OK produtos antigos permanecem sem atribuição automática e são sinalizados');
 console.log('OK galeria principal vinculada somente à origem');
 console.log('OK cores adicionais usam apenas imagens secundárias');
 console.log('OK vitrine inicia na origem e restaura a galeria principal');
+console.log('OK compras diretas usam a cor primária sem exigir seleção manual');
