@@ -17,13 +17,14 @@
       "estoque exclusivamente por cor com total derivado",
       "catálogo desktop com quatro cards e imagens 1280 por 1270",
       "quatro produtos manuais na Home e carregamento progressivo por categoria",
-      "logo oficial atualizada em todo o site e painel"
+      "logo oficial atualizada em todo o site e painel",
+      "tipos dinâmicos abaixo das subcategorias no catálogo e no painel"
     ]
   },
   "database": {
     "executionMode": "manual-incremental-only",
-    "lastVerifiedAt": "2026-09-27",
-    "lastVerifiedSchema": "20261012_home_featured_products.sql",
+    "lastVerifiedAt": "2026-09-30",
+    "lastVerifiedSchema": "20261014_category_type_parent_guard.sql",
     "pendingMigrations": [],
     "appliedMigrations": [
       "20261005_product_dimensions_numeric.sql",
@@ -33,7 +34,9 @@
       "20261009_product_characteristics.sql",
       "20261010_product_origin_color.sql",
       "20261011_stock_by_color_source_of_truth.sql",
-      "20261012_home_featured_products.sql"
+      "20261012_home_featured_products.sql",
+      "20261013_category_types.sql",
+      "20261014_category_type_parent_guard.sql"
     ]
   },
   "features": [
@@ -60,6 +63,18 @@
     {
       "name": "categorias e subcategorias",
       "checks": [{ "file": "admin-app.js", "contains": ["function categoryRow(", "Subcategoria", "search_keywords"] }]
+    },
+    {
+      "name": "tipos de subcategoria",
+      "checks": [
+        { "file": "admin.html", "contains": ["data-view=\"category-types\""] },
+        { "file": "admin-app.js", "contains": ["table: 'category_types'", "['type_id', 'Tipo (opcional)'", "data-mass-base=\"type_id\"", "data-mass-override=\"type_id\"", "type_id: common.type_id || null"] },
+        { "file": "storefront-cms.js", "contains": ["loadStorefrontTypes()", "typeId: row.type_id || ''", "window.setStoreNavigationData?.(environments, categories.filter"] },
+        { "file": "app.js", "contains": ["function showDesktopTypes(", "function filterType(", "function catalogMatchesTaxonomy(", "data-mobile-type", "data-drawer-type"] },
+        { "file": "supabase/migrations/20261013_category_types.sql", "contains": ["create table public.category_types", "add column type_id uuid", "enable row level security"] },
+        { "file": "supabase/migrations/20261014_category_type_parent_guard.sql", "contains": ["prevent_used_category_type_reparent", "category_types_prevent_used_reparent"] },
+        { "file": "scripts/test-category-types.mjs", "contains": ["filtro exato por tipo", "Subcategorias sem tipos devem abrir diretamente"] }
+      ]
     },
     {
       "name": "cadastro simplificado de nova categoria",
