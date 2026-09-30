@@ -417,7 +417,7 @@
       .join(' × ');
     return {
       id: stableProductId(row.id), dbId: row.id, n: row.name, cat: row.categories?.name || 'Móveis',
-      environment: row.environments?.name || '', subcategory: row.categories?.name || '', categoryIconKey: row.categories?.icon_key || '', brand: row.brands?.name || '', keywords: row.categories?.search_keywords || '',
+      environment: row.environments?.name || '', subcategory: row.categories?.name || '', typeId: row.type_id || '', type: '', categoryIconKey: row.categories?.icon_key || '', brand: row.brands?.name || '', keywords: row.categories?.search_keywords || '',
       price: defaultVariant?.price ?? sellingPrice, old: defaultVariant?.old ?? (sellingPrice < regularPrice ? regularPrice : null), discount,
       img: orderedImages[0]?.image_url || row.og_image_url || imageFallback,
       images: orderedImages.slice(1).map(image => image.image_url),
@@ -452,7 +452,7 @@
     return legacy;
   }
   async function loadStorefrontProducts() {
-    const compatibleProductFields = 'id,name,sku,short_description,description,category_id,price,promotional_price,stock_quantity,best_seller,featured,new_arrival,on_sale,og_image_url,installment_enabled,max_installments,dimensions,material,color,specifications,warranty,whatsapp_enabled,cart_enabled,free_city_shipping,free_assembly,is_campaign,variants_enabled,variation_type';
+    const compatibleProductFields = 'id,name,sku,short_description,description,category_id,type_id,price,promotional_price,stock_quantity,best_seller,featured,new_arrival,on_sale,og_image_url,installment_enabled,max_installments,dimensions,material,color,specifications,warranty,whatsapp_enabled,cart_enabled,free_city_shipping,free_assembly,is_campaign,variants_enabled,variation_type';
     const publicProductFields = `${compatibleProductFields},mirror_feature,ribbed_feature,home_featured`;
     const variantRelation = 'product_variants(id,name,type,sku,color_name,color_hex,secondary_color_hex,swatch_mode,swatch_image,price,price_adjustment,stock,active,default_variant,display_order,variant_images(image_url,is_cover,sort_order))';
     const catalogVariantRelation = 'product_variants(id,name,type,sku,color_name,color_hex,secondary_color_hex,swatch_mode,swatch_image,price,price_adjustment,stock,active,default_variant,display_order,color_id,combination_color_id,primary_color:product_colors!product_variants_color_id_fkey(name,hex,secondary_hex,type),secondary_color:product_colors!product_variants_combination_color_id_fkey(name,hex,secondary_hex,type),variant_images(image_url,is_cover,sort_order))';
@@ -482,6 +482,9 @@
     const withIcons = await cms.from('environments').select('id,name,slug,description,image_url,icon_key,sort_order,active').eq('active', true).order('sort_order');
     return withIcons.error?.code === '42703' ? cms.from('environments').select('id,name,slug,description,image_url,sort_order,active').eq('active', true).order('sort_order') : withIcons;
   }
+  async function loadStorefrontTypes() {
+    return cms.from('category_types').select('id,category_id,name,slug,active,sort_order').eq('active', true).order('sort_order');
+  }
   async function loadOnlineSalesSettings() {
     const result = await cms.from('online_sales_settings').select('*').eq('id', true).maybeSingle();
     if (result.error && (['42P01', 'PGRST205'].includes(result.error.code) || /online_sales_settings|schema cache/i.test(result.error.message || ''))) return { data: null, error: null };
@@ -496,10 +499,11 @@
     // pelo painel administrativo.
     products.splice(0, products.length);
     render();
-    const [productResult, categoryResult, environmentResult, bannerResult, promotionResult, sectionResult, settingResult, inspirationResult, onlineSalesResult] = await Promise.all([
+    const [productResult, categoryResult, environmentResult, typeResult, bannerResult, promotionResult, sectionResult, settingResult, inspirationResult, onlineSalesResult] = await Promise.all([
       loadStorefrontProducts(),
       loadStorefrontCategories(),
       loadStorefrontEnvironments(),
+      loadStorefrontTypes(),
       cms.from('banners').select('*').eq('active', true).eq('draft', false).eq('paused', false).or(`start_at.is.null,start_at.lte.${now}`).or(`end_at.is.null,end_at.gt.${now}`).order('sort_order'),
       cms.from('promotions').select('*,promotion_products(product_id)').eq('active', true).or(`start_at.is.null,start_at.lte.${now}`).or(`end_at.is.null,end_at.gt.${now}`),
       cms.from('site_sections').select('*').order('sort_order'),
@@ -523,11 +527,16 @@
       cats.splice(0, cats.length, ...categories.map(item => [item.name, item.image_url || imageFallback]));
       const homepageEnvironments = environments.filter(item => item.active !== false);
       environmentCats.splice(0, environmentCats.length, ...homepageEnvironments.map(item => ({ label: item.name, category: item.name, img: item.image_url || imageFallback })));
-      window.setStoreNavigationData?.(environments, categories.filter(item => item.show_in_menu !== false));
+      window.setStoreNavigationData?.(environments, categories.filter(item => item.show_in_menu !== false), typeResult.data || []);
       renderCats();
     }
     const campaignPromotions = promotionResult.data || [];
-    products.splice(0, products.length, ...(productResult.data || []).map((row, index) => mapProduct(row, index, campaignPromotionFor(row, campaignPromotions))));
+    const typeNames = new Map((typeResult.data || []).map(item => [String(item.id), item.name]));
+    products.splice(0, products.length, ...(productResult.data || []).map((row, index) => {
+      const product = mapProduct(row, index, campaignPromotionFor(row, campaignPromotions));
+      product.type = typeNames.get(String(row.type_id)) || '';
+      return product;
+    }));
     // Mantém o item na sacola para que alterações de estoque/preço sejam
     // apresentadas ao cliente, em vez de removê-lo silenciosamente.
     cart = cart.filter(item => products.some(product => product.id === item.id));
@@ -539,11 +548,13 @@
     const requestedParams = new URLSearchParams(location.search);
     const requestedEnvironment = requestedParams.get('environment');
     const requestedCategory = requestedParams.get('subcategory') || requestedParams.get('category');
+    const requestedType = requestedParams.get('type');
     if (requestedEnvironment || requestedCategory) {
       const category = (categoryResult.data || []).find(item => item.slug === requestedCategory);
       const environment = (environmentResult.data || []).find(item => item.slug === requestedEnvironment || String(item.id) === String(category?.environment_id));
       requestAnimationFrame(() => {
-        if (environment && category) window.filterSubcategory?.(environment.name, category.name);
+        if (environment && category && requestedType && (typeResult.data || []).some(item => item.slug === requestedType && String(item.category_id) === String(category.id))) window.filterType?.(environment.name, category.name, (typeResult.data || []).find(item => item.slug === requestedType && String(item.category_id) === String(category.id)).id);
+        else if (environment && category) window.filterSubcategory?.(environment.name, category.name);
         else if (environment) window.filterEnvironment?.(environment.name);
         else if (category) window.filterCategory?.(category.name);
       });
