@@ -3040,7 +3040,7 @@
       primary: { label: 'Editar', icon: 'edit', attributes: { 'data-edit': row.id } },
       actions
     });
-    return `<tr><td>${config.table === 'environments' || config.table === 'category_types' ? CategoryIcons.icon(row.icon_key||row.name,{size:28}) : imageKey && row[imageKey] ? `<img class="thumb" src="${esc(row[imageKey])}" alt=""> ` : ''}<b>${esc(title)}</b></td><td>${esc(identity)}</td><td>${esc(timing)}</td><td><span class="badge ${row.active ? '' : 'off'}">${row.active ? 'Ativo' : 'Inativo'}</span></td><td class="action-cell">${menu}</td></tr>`;
+    return `<tr><td>${config.table === 'environments' || config.table === 'category_types' ? CategoryIcons.icon(row.icon_key||(config.table === 'category_types' ? row.categories?.name : row.name)||row.name,{environment:row.categories?.environments?.name,size:28}) : imageKey && row[imageKey] ? `<img class="thumb" src="${esc(row[imageKey])}" alt=""> ` : ''}<b>${esc(title)}</b></td><td>${esc(identity)}</td><td>${esc(timing)}</td><td><span class="badge ${row.active ? '' : 'off'}">${row.active ? 'Ativo' : 'Inativo'}</span></td><td class="action-cell">${menu}</td></tr>`;
   }
   function bindSearch() {
     const search = $('#searchList');
