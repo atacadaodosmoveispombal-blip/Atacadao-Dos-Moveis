@@ -23,9 +23,9 @@
   },
   "database": {
     "executionMode": "manual-incremental-only",
-    "lastVerifiedAt": "2026-09-30",
-    "lastVerifiedSchema": "20261014_category_type_parent_guard.sql",
-    "pendingMigrations": ["20261017_category_type_icons.sql"],
+    "lastVerifiedAt": "2026-10-01",
+    "lastVerifiedSchema": "20261017_category_type_icons.sql",
+    "pendingMigrations": [],
     "appliedMigrations": [
       "20261005_product_dimensions_numeric.sql",
       "20261006_product_dimensions_image.sql",
@@ -36,7 +36,10 @@
       "20261011_stock_by_color_source_of_truth.sql",
       "20261012_home_featured_products.sql",
       "20261013_category_types.sql",
-      "20261014_category_type_parent_guard.sql"
+      "20261014_category_type_parent_guard.sql",
+      "20261015_group_wardrobes_under_roupeiro.sql",
+      "20261016_category_type_assignments_and_seed.sql",
+      "20261017_category_type_icons.sql"
     ]
   },
   "features": [
