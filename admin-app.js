@@ -472,7 +472,8 @@
   }
   function iconPickerMarkup(value = '') {
     const selected = String(value || '');
-    return `<div class="category-icon-picker" role="group" aria-label="Escolha o ícone"><input type="hidden" name="icon_key" value="${esc(selected)}"><p>Escolha um desenho para o menu. A opção automática acompanha o nome.</p><div class="category-icon-picker-grid"><button type="button" data-icon-choice="" aria-pressed="${!selected}"><span aria-hidden="true">✦</span><small>Automático</small></button>${CategoryIcons.keys.map(key => `<button type="button" data-icon-choice="${esc(key)}" aria-pressed="${selected === key}">${CategoryIcons.icon(key,{size:34})}<small>${esc(key.replaceAll('-', ' '))}</small></button>`).join('')}</div></div>`;
+    const groups = CategoryIcons.gallery.map((group, index) => `<details class="category-icon-picker-group" data-icon-group="${index}" ${index === 0 || group.items.some(([key]) => key === selected) ? 'open' : ''}><summary>${esc(group.title)} <span>${group.items.length}</span></summary><div class="category-icon-picker-grid">${group.items.map(([key, label]) => `<button type="button" data-icon-choice="${esc(key)}" aria-pressed="${selected === key}" title="${esc(label)}">${CategoryIcons.icon(key,{size:34})}<small>${esc(label)}</small></button>`).join('')}</div></details>`).join('');
+    return `<div class="category-icon-picker" role="group" aria-label="Escolha o ícone"><input type="hidden" name="icon_key" value="${esc(selected)}"><p>Escolha um desenho vetorial para o menu. A opção automática acompanha o nome.</p><div class="category-icon-picker-toolbar"><button type="button" data-icon-choice="" aria-pressed="${!selected}"><span aria-hidden="true">✦</span> Automático</button><input type="search" data-icon-search aria-label="Buscar desenho" placeholder="Buscar desenho"></div>${groups}</div>`;
   }
   function bindIconPicker(root, onSelect = () => {}) {
     const picker = root.querySelector('.category-icon-picker');
@@ -483,6 +484,19 @@
       picker.querySelector('[name="icon_key"]').value = button.dataset.iconChoice;
       picker.querySelectorAll('[data-icon-choice]').forEach(choice => choice.setAttribute('aria-pressed', String(choice === button)));
       onSelect();
+    });
+    picker.querySelector('[data-icon-search]')?.addEventListener('input', event => {
+      const query = String(event.target.value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+      picker.querySelectorAll('.category-icon-picker-group').forEach(group => {
+        let matches = 0;
+        group.querySelectorAll('[data-icon-choice]').forEach(button => {
+          const label = String(button.title || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+          button.hidden = Boolean(query && !label.includes(query));
+          if (!button.hidden) matches++;
+        });
+        group.hidden = Boolean(query && !matches);
+        if (query && matches) group.open = true;
+      });
     });
   }
   async function fieldHtml(field, record = {}) {
@@ -578,7 +592,7 @@
     }])).values()];
     const visualChoices = [
       ...storedImages,
-      ...CategoryIcons.keys.map(key => ({ type: 'icon', key, label: key.replaceAll('-', ' ') }))
+      ...CategoryIcons.keys.map(key => ({ type: 'icon', key, label: CategoryIcons.labelFor(key) }))
     ];
     const positionOptions = environmentId => {
       if (!environmentId) return '<option value="">Escolha o ambiente primeiro</option>';
@@ -3040,7 +3054,7 @@
       primary: { label: 'Editar', icon: 'edit', attributes: { 'data-edit': row.id } },
       actions
     });
-    return `<tr><td>${config.table === 'environments' || config.table === 'category_types' ? CategoryIcons.icon(row.icon_key||(config.table === 'category_types' ? row.categories?.name : row.name)||row.name,{environment:row.categories?.environments?.name,size:28}) : imageKey && row[imageKey] ? `<img class="thumb" src="${esc(row[imageKey])}" alt=""> ` : ''}<b>${esc(title)}</b></td><td>${esc(identity)}</td><td>${esc(timing)}</td><td><span class="badge ${row.active ? '' : 'off'}">${row.active ? 'Ativo' : 'Inativo'}</span></td><td class="action-cell">${menu}</td></tr>`;
+    return `<tr><td>${config.table === 'environments' || config.table === 'category_types' ? CategoryIcons.icon(row.icon_key||(config.table === 'category_types' ? CategoryIcons.typeKeyFor(row.name,row.categories?.slug||row.categories?.name)||row.categories?.name : row.name)||row.name,{environment:row.categories?.environments?.name,size:28}) : imageKey && row[imageKey] ? `<img class="thumb" src="${esc(row[imageKey])}" alt=""> ` : ''}<b>${esc(title)}</b></td><td>${esc(identity)}</td><td>${esc(timing)}</td><td><span class="badge ${row.active ? '' : 'off'}">${row.active ? 'Ativo' : 'Inativo'}</span></td><td class="action-cell">${menu}</td></tr>`;
   }
   function bindSearch() {
     const search = $('#searchList');

@@ -196,6 +196,8 @@ function showDesktopTypes(environment,subcategory){
 }
 function typeIcon(type,subcategory,environment,size=20){
  if(type.icon_key)return CategoryIcons.icon(type.icon_key,{size});
+ const mapped=CategoryIcons.typeKeyFor(type.name,subcategory.slug||subcategory.name);
+ if(mapped)return CategoryIcons.icon(mapped,{size});
  const family=CategoryIcons.keyFor(subcategory.icon_key||subcategory.name,environment.name);
  if(family==='roupeiro'){
   const name=normaliseSearch(type.name);
