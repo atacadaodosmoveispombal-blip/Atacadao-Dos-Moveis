@@ -25,7 +25,7 @@
     "executionMode": "manual-incremental-only",
     "lastVerifiedAt": "2026-09-30",
     "lastVerifiedSchema": "20261014_category_type_parent_guard.sql",
-    "pendingMigrations": [],
+    "pendingMigrations": ["20261017_category_type_icons.sql"],
     "appliedMigrations": [
       "20261005_product_dimensions_numeric.sql",
       "20261006_product_dimensions_image.sql",
@@ -68,12 +68,19 @@
       "name": "tipos de subcategoria",
       "checks": [
         { "file": "admin.html", "contains": ["data-view=\"category-types\""] },
-        { "file": "admin-app.js", "contains": ["table: 'category_types'", "['type_id', 'Tipo (opcional)'", "data-mass-base=\"type_id\"", "data-mass-override=\"type_id\"", "type_id: common.type_id || null"] },
+        { "file": "admin-app.js", "contains": ["table: 'category_types'", "['type_id', 'Tipo (opcional)'", "data-mass-base-type", "data-mass-row-type", "function massTypeIds(", "product_category_types", "type_id: common.type_id || null"] },
         { "file": "storefront-cms.js", "contains": ["loadStorefrontTypes()", "typeId: row.type_id || ''", "window.setStoreNavigationData?.(environments, categories.filter"] },
         { "file": "app.js", "contains": ["function showDesktopTypes(", "function filterType(", "function catalogMatchesTaxonomy(", "data-mobile-type", "data-drawer-type"] },
         { "file": "supabase/migrations/20261013_category_types.sql", "contains": ["create table public.category_types", "add column type_id uuid", "enable row level security"] },
         { "file": "supabase/migrations/20261014_category_type_parent_guard.sql", "contains": ["prevent_used_category_type_reparent", "category_types_prevent_used_reparent"] },
         { "file": "supabase/migrations/20261015_group_wardrobes_under_roupeiro.sql", "contains": ["Roupeiro de Bater", "Roupeiro De Correr", "Roupeiro Solteiro (3/4 portas)", "insert into public.category_types", "update public.products", "show_in_menu = false"] },
+        { "file": "supabase/migrations/20261016_category_type_assignments_and_seed.sql", "contains": ["create table public.product_category_types", "('sala','sofa','2 Lugares'", "('quarto','roupeiro','Casal'"] },
+        { "file": "category-icons.js", "contains": ["tipo-roupeiro-correr", "tipo-roupeiro-bater", "tipo-roupeiro-espelho", "tipo-roupeiro-4-portas", "tipo-cama"] },
+        { "file": "admin-app.js", "contains": ["function iconPickerMarkup(", "function bindIconPicker(", "['icon_key', 'Ícone do tipo', 'iconpicker']"] },
+        { "file": "storefront-cms.js", "contains": ["name,slug,icon_key,active,sort_order"] },
+        { "file": "supabase/migrations/20261017_category_type_icons.sql", "contains": ["add column if not exists icon_key text"] },
+        { "file": "scripts/test-category-icon-picker.mjs", "contains": ["ícones de roupeiro", "galeria no painel"] },
+        { "file": "scripts/test-mass-category-types.mjs", "contains": ["persistência de tipos no cadastro em massa"] },
         { "file": "scripts/test-category-types.mjs", "contains": ["filtro exato por tipo", "Subcategorias sem tipos devem abrir diretamente"] }
       ]
     },

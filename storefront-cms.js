@@ -483,7 +483,8 @@
     return withIcons.error?.code === '42703' ? cms.from('environments').select('id,name,slug,description,image_url,sort_order,active').eq('active', true).order('sort_order') : withIcons;
   }
   async function loadStorefrontTypes() {
-    return cms.from('category_types').select('id,category_id,name,slug,active,sort_order').eq('active', true).order('sort_order');
+    const withIcons = await cms.from('category_types').select('id,category_id,name,slug,icon_key,active,sort_order').eq('active', true).order('sort_order');
+    return withIcons.error?.code === '42703' ? cms.from('category_types').select('id,category_id,name,slug,active,sort_order').eq('active', true).order('sort_order') : withIcons;
   }
   async function loadOnlineSalesSettings() {
     const result = await cms.from('online_sales_settings').select('*').eq('id', true).maybeSingle();
