@@ -18,6 +18,21 @@ const pickerMarkup = picker('tipo-roupeiro-correr');
 assert.match(pickerMarkup, /name="icon_key" value="tipo-roupeiro-correr"/, 'O ícone escolhido deve entrar no formulário.');
 assert.match(pickerMarkup, /data-icon-choice="tipo-roupeiro-correr" aria-pressed="true"/, 'A escolha atual deve ficar visível.');
 assert.ok(!pickerMarkup.includes('<img'), 'A galeria de ícones não deve usar fotos.');
+assert.match(pickerMarkup, /Roupeiros/, 'A galeria deve organizar os desenhos por ambiente.');
+assert.match(pickerMarkup, /Buscar desenho/, 'A galeria deve permitir encontrar um desenho pelo nome.');
+assert.match(pickerMarkup, /Sofá de canto/, 'Os desenhos da imagem de referência devem ter nomes legíveis.');
+const seed = read('../supabase/migrations/20261016_category_type_assignments_and_seed.sql');
+const seedBlock = seed.match(/with seed\(environment_slug, category_slug, type_name, type_slug, sort_order\) as \(\s*values([\s\S]*?)\)\s*insert into public\.category_types/)?.[1];
+assert.ok(seedBlock, 'A lista dos tipos solicitados deve estar disponível.');
+const requestedTypes = [...seedBlock.matchAll(/\('([^']+)','([^']+)','([^']+)','([^']+)',\d+\)/g)];
+assert.equal(requestedTypes.length, 66, 'A referência deve conter os 66 tipos solicitados.');
+for (const [, , subcategory, name] of requestedTypes) {
+  const key = icons.typeKeyFor(name, subcategory);
+  assert.ok(key, `${subcategory} → ${name} precisa de desenho automático.`);
+  assert.ok(icons.keys.includes(key), `${subcategory} → ${name} aponta para um SVG existente.`);
+  assert.match(icons.icon(key), /^<svg[^>]+>.*<\/svg>$/, `${subcategory} → ${name} deve renderizar como SVG.`);
+}
+assert.notEqual(icons.typeKeyFor('Casal', 'Roupeiro'), icons.typeKeyFor('Casal', 'Camas'), 'O mesmo nome deve receber desenhos específicos da subcategoria.');
 const typeIcon = vm.runInNewContext(`(${extract(storefront, 'typeIcon', 'openDesktopEnvironmentMenu')})`, {
   CategoryIcons: icons,
   normaliseSearch: value => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
@@ -37,6 +52,7 @@ for (const [name, key] of [
   assert.notEqual(actual, bed);
 }
 assert.equal(typeIcon({ name: 'Modelo novo', icon_key: 'tipo-closet' }, wardrobe, bedroom), icons.icon('tipo-closet', { size: 20 }), 'O ícone escolhido no painel tem prioridade.');
+assert.equal(typeIcon({ name: 'Queen', slug: 'queen' }, { name: 'Camas', slug: 'camas' }, bedroom), icons.icon('cama-queen', { size: 20 }), 'Os tipos de cama devem mostrar o desenho correspondente no site.');
 assert.match(styles, /\.environment-mega-types>button \.category-icon\{[^}]*color:#0751b7/, 'Tipos não clicados devem continuar azuis.');
 assert.match(styles, /\.environment-mega-links button\.is-selected \.category-icon\{color:#bd9100\}/, 'Só a subcategoria selecionada recebe destaque.');
 assert.ok(admin.includes('bindIconPicker($(\'#editorFields\'), syncCategoryPreview)'), 'O seletor da subcategoria deve atualizar a prévia.');
