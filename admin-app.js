@@ -473,6 +473,12 @@
   async function fieldHtml(field, record = {}) {
     const [key, label, type, required, choices] = field;
     const value = record[key] ?? '';
+    if (type === 'producttypes') {
+      const result = await db.from('category_types').select('id,name,category_id,active').order('sort_order').order('name');
+      if (result.error) throw result.error;
+      const selected = new Set(editorState?.typeIds || []);
+      return `<div class="field full product-type-field"><span class="product-type-label">Tipos (opcional)</span><input type="hidden" name="type_id" value="${esc(value)}"><div class="product-type-options">${(result.data || []).filter(row => row.active !== false || selected.has(String(row.id))).map(row => `<label data-category-id="${esc(row.category_id)}" hidden><input type="checkbox" value="${esc(row.id)}" ${selected.has(String(row.id)) ? 'checked' : ''}> ${esc(row.name)}${row.active === false ? ' (inativo)' : ''}</label>`).join('')}</div><div class="product-type-add"><input type="text" aria-label="Nome do novo tipo" placeholder="Novo tipo"><button type="button">+ Adicionar novo tipo</button></div><small>Selecione todos os tipos que descrevem o produto.</small></div>`;
+    }
     if (type === 'dimensions') return productDimensionsEditorHtml(record);
     if (type === 'materials') return productMaterialsEditorHtml(record);
     if (type === 'productcharacteristics') return productCharacteristicsEditorHtml(record);
@@ -1945,7 +1951,9 @@
       if (view === 'category-types' && record && String(values.category_id) !== String(record.category_id)) {
         const linked = await db.from('products').select('id', { count: 'exact', head: true }).eq('type_id', record.id);
         if (linked.error) throw linked.error;
-        if (linked.count) throw new Error('Reatribua os produtos antes de mover este tipo para outra subcategoria.');
+        const assigned = await db.from('product_category_types').select('product_id', { count: 'exact', head: true }).eq('category_type_id', record.id);
+        if (assigned.error) throw assigned.error;
+        if (linked.count || assigned.count) throw new Error('Reatribua os produtos antes de mover este tipo para outra subcategoria.');
       }
       if (view === 'environments' && !values.icon_key) values.icon_key = CategoryIcons.keyFor(values.name);
       if (view === 'sections') {
@@ -2974,9 +2982,11 @@
       if (view === 'category-types') {
         const linked = await db.from('products').select('id', { count: 'exact', head: true }).eq('type_id', record.id);
         if (linked.error) return toast(explain(linked.error), 'error');
-        linkedProducts = linked.count || 0;
+        const assigned = await db.from('product_category_types').select('product_id', { count: 'exact', head: true }).eq('category_type_id', record.id);
+        if (assigned.error) return toast(explain(assigned.error), 'error');
+        linkedProducts = Math.max(linked.count || 0, assigned.count || 0);
       }
-      const deleteMessage = view === 'category-types' ? `“${record.name}” será excluído. ${linkedProducts ? `${linkedProducts} produto${linkedProducts === 1 ? '' : 's'} permanecer${linkedProducts === 1 ? 'á' : 'ão'} cadastrado${linkedProducts === 1 ? '' : 's'}, sem tipo.` : 'Nenhum produto está vinculado a este tipo.'}` : `“${record?.name || record?.title || record?.code || config.singular}” será excluído. Esta ação não poderá ser desfeita e ficará registrada na auditoria.`;
+      const deleteMessage = view === 'category-types' ? `“${record.name}” será excluído. ${linkedProducts ? 'Os produtos vinculados permanecerão cadastrados, mas perderão este tipo.' : 'Nenhum produto está vinculado a este tipo.'}` : `“${record?.name || record?.title || record?.code || config.singular}” será excluído. Esta ação não poderá ser desfeita e ficará registrada na auditoria.`;
       if (!await confirmAction({ title: 'Excluir este item?', message: deleteMessage, confirmLabel: 'Excluir', tone: 'danger' })) return;
       const storedUrls = config.fields.filter(field => field[2] === 'file').map(([key]) => record?.[key]).filter(Boolean);
       if (view === 'inspirations') {
@@ -3039,7 +3049,7 @@
   const productEditorSections = [
     { key: 'basic', label: 'Informações básicas', help: 'Nome, endereço do produto e classificação.', fields: [
       ['name', 'Nome do produto', 'text', true], ['slug', 'Slug / URL', 'slug', true],
-      ['environment_id', 'Ambiente', 'relation', true, 'environments'], ['category_id', 'Subcategoria', 'relation', true, 'categories'], ['type_id', 'Tipo (opcional)', 'relation', false, 'category_types'],
+      ['environment_id', 'Ambiente', 'relation', true, 'environments'], ['category_id', 'Subcategoria', 'relation', true, 'categories'], ['type_id', 'Tipo (opcional)', 'producttypes', false, 'category_types'],
       ['sku', 'Código / SKU (opcional)', 'text'], ['brand_id', 'Marca (opcional)', 'relation', false, 'brands']
     ] },
     { key: 'price', label: 'Preço e condições', help: 'Preço normal, promoção e parcelamento.', fields: [
@@ -4303,11 +4313,18 @@
       specifications_text: formatSpecificationsText(record.specifications)
     } : { ...commerceDefaults, specifications_text: '' };
     const colorCatalog = await loadProductColorCatalog();
+    let selectedTypeIds = record?.type_id ? [String(record.type_id)] : [];
+    if (record?.id) {
+      const assignmentResult = await db.from('product_category_types').select('category_type_id').eq('product_id', record.id);
+      if (assignmentResult.error) throw assignmentResult.error;
+      selectedTypeIds = [...new Set([...selectedTypeIds, ...(assignmentResult.data || []).map(item => String(item.category_type_id))])];
+    }
     // Keep the defaults only for rendering a new product. The persistence
     // layer must receive a null record so it executes INSERT instead of
     // attempting PATCH /products?id=eq.undefined.
     editorState = {
       view: 'products', record: record ? editRecord : null, activeTab: 'basic', dirty: false, saving: false,
+      typeIds: selectedTypeIds,
       existingGalleryCount: record?.product_images?.length || 0, pendingGalleryFiles: [], pendingCoverFile: null,
       previewObjectUrls: [], variantPreviewUrls: [], colors: colorCatalog.colors, colorsAvailable: colorCatalog.available,
       originColorId: record?.origin_color_id || '',
@@ -4329,18 +4346,16 @@
     bindProductOptionsEditor();
     const environmentSelect = $('[name="environment_id"]');
     const categorySelect = $('[name="category_id"]');
-    const typeSelect = $('[name="type_id"]');
+    const typeField = $('.product-type-field');
+    const typeSelect = typeField?.querySelector('[name="type_id"]');
     if (environmentSelect && categorySelect) {
       const categoryOptions = [...categorySelect.options].slice(1).map(option => ({ value: option.value, label: option.textContent, environmentId: option.dataset.environmentId || '' }));
-      const typeOptions = [...(typeSelect?.options || [])].slice(1).map(option => ({ value: option.value, label: option.textContent, categoryId: option.dataset.categoryId || '' }));
       const initialCategory = String(editRecord.category_id || '');
       const syncTypes = reset => {
         if (!typeSelect) return;
         const categoryId = categorySelect.value;
-        const selected = reset ? '' : typeSelect.value || String(editRecord.type_id || '');
-        const matching = typeOptions.filter(option => String(option.categoryId) === String(categoryId));
-        typeSelect.innerHTML = `<option value="">${categoryId ? 'Sem tipo' : 'Selecione primeiro a subcategoria'}</option>${matching.map(option => `<option value="${option.value}" ${String(option.value) === String(selected) ? 'selected' : ''}>${esc(option.label)}</option>`).join('')}`;
-        typeSelect.disabled = !categoryId;
+        typeField.querySelectorAll('.product-type-options label').forEach(label => {const match=String(label.dataset.categoryId)===String(categoryId);label.hidden=!match;if(reset&&!match)label.querySelector('input').checked=false});
+        typeSelect.value=typeField.querySelector('.product-type-options input:checked:not([disabled])')?.value||'';
       };
       const syncSubcategories = reset => {
         const environmentId = environmentSelect.value;
@@ -4354,6 +4369,18 @@
       syncSubcategories(false);
       environmentSelect.addEventListener('change', () => { syncSubcategories(true); setProductEditorDirty(); });
       categorySelect.addEventListener('change', () => { syncTypes(true); setProductEditorDirty(); });
+      typeField?.querySelector('.product-type-options')?.addEventListener('change', () => {syncTypes(false);setProductEditorDirty()});
+      typeField?.querySelector('.product-type-add button')?.addEventListener('click', async () => {
+        const input=typeField.querySelector('.product-type-add input');const name=input.value.trim();const categoryId=categorySelect.value;
+        if(!categoryId)return toast('Selecione uma subcategoria antes de adicionar um tipo.', 'error');
+        if(!name)return input.focus();
+        const button=typeField.querySelector('.product-type-add button');button.disabled=true;
+        try {
+          const result=await db.from('category_types').insert({category_id:categoryId,name,slug:slugify(name),active:true}).select('id,name,category_id').single();
+          if(result.error)throw result.error;
+          const label=document.createElement('label');label.dataset.categoryId=categoryId;const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.value=result.data.id;checkbox.checked=true;label.append(checkbox,document.createTextNode(` ${result.data.name}`));typeField.querySelector('.product-type-options').append(label);input.value='';syncTypes(false);setProductEditorDirty();notifyStorefront('category_types');
+        } catch(error){toast(explain(error),'error')} finally {button.disabled=false}
+      });
     }
     $('#existingGallery')?.insertAdjacentHTML('afterend', '<div class="pending-gallery-heading"><b>Novas mídias</b><small>Prévia antes de salvar</small></div><div id="pendingGalleryPreview" class="multi-images pending-gallery-preview product-media-grid"></div>');
     renderPendingProductGallery();
@@ -4436,6 +4463,10 @@
     try { productOptions = selectedProductOptionPayload(editorState?.productOptions || []); }
     catch (error) { activateProductEditorTab('product_options'); return toast(error.message, 'error'); }
     const record = editorState?.record || null;
+    if (record && String(form.elements.category_id.value) !== String(record.category_id) && editorState?.typeIds?.length) {
+      activateProductEditorTab('basic');
+      return toast('Para mudar a subcategoria, primeiro desmarque os tipos atuais e salve o produto. Depois escolha a nova subcategoria.', 'error');
+    }
     const button = $('#saveEditor');
     button.disabled = true;
     button.textContent = 'Salvando…';
@@ -4448,6 +4479,8 @@
     try {
       await persistPendingVariantColors(variantSettings);
       const values = formValues(productFields.filter(field => !['section', 'benefits'].includes(field[0])), form);
+      const selectedTypeIds = [...new Set($$('.product-type-options input:checked', form).filter(input => !input.closest('label')?.hidden).map(input => input.value))];
+      values.type_id = selectedTypeIds[0] || null;
       values.dimensions = productDimensionsFromForm(form);
       values.specifications = parseSpecificationsText(values.specifications_text);
       values.sku = values.sku || null;
@@ -4466,6 +4499,16 @@
       if (result.error) throw result.error;
       persisted = true;
       if (!record) createdProductId = result.data.id;
+      const currentAssignments = await db.from('product_category_types').select('category_type_id').eq('product_id', result.data.id);
+      if (currentAssignments.error) throw currentAssignments.error;
+      const existingTypeIds = new Set((currentAssignments.data || []).map(item => String(item.category_type_id)));
+      const additions = selectedTypeIds.filter(id => !existingTypeIds.has(String(id))).map(category_type_id => ({product_id:result.data.id,category_type_id}));
+      if (additions.length) { const added = await db.from('product_category_types').insert(additions); if (added.error) throw added.error; }
+      for (const id of existingTypeIds) {
+        if (selectedTypeIds.includes(id)) continue;
+        const removed = await db.from('product_category_types').delete().eq('product_id', result.data.id).eq('category_type_id', id);
+        if (removed.error) throw removed.error;
+      }
       if (uploadedOgImage && record?.og_image_url && record.og_image_url !== uploadedOgImage.url) await removeStoredUrl(record.og_image_url, 'products');
       const galleryColorUpdate = await db.from('product_images').update({ color_id: variantSettings.originColorId }).eq('product_id', result.data.id).or('image_role.is.null,image_role.neq.dimensions');
       if (galleryColorUpdate.error) throw galleryColorUpdate.error;

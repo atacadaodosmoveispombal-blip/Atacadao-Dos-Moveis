@@ -79,7 +79,7 @@ function setStoreNavigationData(environments=[],subcategories=[],types=[]){
  if(activeEnvironments.length&&activeSubcategories.length){
   const next=activeEnvironments.map(environment=>({
    id:environment.id,name:environment.name,slug:environment.slug,description:environment.description||`Encontre tudo para ${environment.name.toLowerCase()}`,
-   image:environment.image_url||environment.image||'',icon_key:environment.icon_key||'',subcategories:activeSubcategories.filter(item=>String(item.environment_id)===String(environment.id)).sort((a,b)=>Number(a.sort_order)-Number(b.sort_order)).map(item=>({id:item.id,name:item.name,slug:item.slug,icon_key:item.icon_key||'',keywords:item.search_keywords||'',types:types.filter(type=>type.active!==false&&String(type.category_id)===String(item.id)).sort((a,b)=>Number(a.sort_order)-Number(b.sort_order)).map(type=>({id:type.id,name:type.name,slug:type.slug}))}))
+   image:environment.image_url||environment.image||'',icon_key:environment.icon_key||'',subcategories:activeSubcategories.filter(item=>String(item.environment_id)===String(environment.id)).sort((a,b)=>Number(a.sort_order)-Number(b.sort_order)).map(item=>({id:item.id,name:item.name,slug:item.slug,icon_key:item.icon_key||'',keywords:item.search_keywords||'',types:types.filter(type=>type.active!==false&&String(type.category_id)===String(item.id)&&products.some(product=>product.subcategory===item.name&&product.environment===environment.name&&(product.typeIds||[product.typeId]).some(id=>String(id)===String(type.id)))).sort((a,b)=>Number(a.sort_order)-Number(b.sort_order)).map(type=>({id:type.id,name:type.name,slug:type.slug}))}))
   })).filter(item=>item.subcategories.length);
   if(next.length)environmentNavigation=next;
  }
@@ -189,11 +189,12 @@ function showDesktopTypes(environment,subcategory){
  const mega=document.querySelector('#environmentMegaMenu');const panel=mega?.querySelector('.environment-mega-types');if(!panel)return;
  const types=typeof subcategory==='string'?[]:(subcategory.types||[]);
  if(!types.length){panel.hidden=true;return}
- panel.innerHTML=`<p>${storeHtml(subcategory.name)}</p><button type="button" data-mega-all-subcategory>Todos de ${storeHtml(subcategory.name)}<span aria-hidden="true">→</span></button>${types.map(type=>`<button type="button" data-mega-type="${storeHtml(type.id)}">${storeHtml(type.name)}<span aria-hidden="true">→</span></button>`).join('')}`;
+ mega.querySelectorAll('[data-mega-subcategory]').forEach(button=>{const active=button.dataset.megaSubcategory===subcategory.name;button.classList.toggle('is-selected',active);button.setAttribute('aria-current',active?'true':'false')});
+ panel.innerHTML=`<p>${storeHtml(subcategory.name)}</p>${types.map(type=>`<button type="button" data-mega-type="${storeHtml(type.id)}">${typeIcon(subcategory,environment,20)}<span>${storeHtml(type.name)}</span><span aria-hidden="true">→</span></button>`).join('')}`;
  panel.hidden=false;panel.classList.toggle('opens-left',mega.getBoundingClientRect().right+230>innerWidth);
  panel.querySelectorAll('[data-mega-type]').forEach(button=>button.onclick=()=>filterType(environment.name,subcategory.name,button.dataset.megaType));
- panel.querySelector('[data-mega-all-subcategory]').onclick=()=>filterSubcategory(environment.name,subcategory.name);
 }
+function typeIcon(subcategory,environment,size=20){const key=CategoryIcons.keyFor(subcategory.icon_key||subcategory.name,environment.name);return CategoryIcons.icon(key==='roupeiro'?'camas':key==='sofa'?'poltrona':key==='camas'?'cabeceira':key==='rack'?'painel':'categoria',{size})}
 function openDesktopEnvironmentMenu(environmentName,focusPanel=false){
  const environment=environmentRecord(environmentName);const mega=document.querySelector('#environmentMegaMenu');if(!environment||!mega)return;
  clearTimeout(environmentMenuTimer);mega.innerHTML=desktopMegaMarkup(environment);mega.hidden=false;mega.dataset.environment=environment.name;
@@ -201,9 +202,7 @@ function openDesktopEnvironmentMenu(environmentName,focusPanel=false){
  document.querySelectorAll('#desktopEnvironmentNav button,#categoriesMenu').forEach(button=>{const expanded=normaliseSearch(button.dataset.environment||'')===normaliseSearch(environment.name);button.setAttribute('aria-expanded',String(expanded));button.classList.toggle('is-active',expanded)});
  mega.querySelectorAll('[data-mega-subcategory]').forEach(button=>{
   const subcategory=environment.subcategories.find(item=>subcategoryName(item)===button.dataset.megaSubcategory);
-  button.onmouseenter=()=>showDesktopTypes(environment,subcategory);
-  button.onfocus=()=>showDesktopTypes(environment,subcategory);
-  button.onclick=()=>subcategory?.types?.length?showDesktopTypes(environment,subcategory):filterSubcategory(environment.name,button.dataset.megaSubcategory);
+  button.onclick=()=>{if(subcategory?.types?.length){filterSubcategory(environment.name,button.dataset.megaSubcategory,true);showDesktopTypes(environment,subcategory)}else filterSubcategory(environment.name,button.dataset.megaSubcategory)};
  });
  mega.querySelector('[data-mega-all]').onclick=()=>filterEnvironment(environment.name);
  if(focusPanel)mega.querySelector('[data-mega-subcategory]')?.focus();
@@ -218,12 +217,11 @@ function openDesktopAllEnvironmentsMenu(){
  const categoryButton=document.querySelector('#categoriesMenu');categoryButton.setAttribute('aria-expanded','true');categoryButton.classList.add('is-active');
  mega.querySelectorAll('[data-overview-environment]').forEach(button=>button.onclick=()=>filterEnvironment(button.dataset.overviewEnvironment));
 }
-function scheduleEnvironmentMenuClose(){clearTimeout(environmentMenuTimer);environmentMenuTimer=setTimeout(closeEnvironmentNavigation,180)}
+function scheduleEnvironmentMenuClose(){clearTimeout(environmentMenuTimer);const mega=document.querySelector('#environmentMegaMenu');if(mega?.querySelector('[data-mega-subcategory].is-selected'))return;environmentMenuTimer=setTimeout(closeEnvironmentNavigation,180)}
 function renderMobileEnvironmentPanel(environment){
  const panel=document.querySelector('#mobileEnvironmentPanel');if(!panel)return;
- panel.hidden=false;panel.innerHTML=`<div class="environment-mobile-heading"><button type="button" data-mobile-back aria-label="Fechar subcategorias">‹</button><div><small>AMBIENTE</small><strong>${storeHtml(environment.name)}</strong><span>${storeHtml(environment.description)}</span></div><button type="button" data-mobile-collapse aria-label="Recolher ${storeHtml(environment.name)}">⌃</button></div><div class="environment-mobile-subcategories">${environment.subcategories.map(subcategory=>`<div class="environment-mobile-group"><button type="button" data-mobile-subcategory="${storeHtml(subcategoryName(subcategory))}" aria-expanded="false">${subcategoryIcon(subcategory,environment,24)}<span class="category-label">${storeHtml(subcategoryName(subcategory))}</span><span class="category-arrow-glyph" aria-hidden="true">→</span></button>${subcategory?.types?.length?`<div class="environment-mobile-types" hidden><button type="button" data-mobile-all-subcategory="${storeHtml(subcategoryName(subcategory))}">Todos de ${storeHtml(subcategoryName(subcategory))}</button>${subcategory.types.map(type=>`<button type="button" data-mobile-type="${storeHtml(type.id)}" data-mobile-type-subcategory="${storeHtml(subcategoryName(subcategory))}">${storeHtml(type.name)}</button>`).join('')}</div>`:''}</div>`).join('')}</div><button class="environment-mobile-all" type="button" data-mobile-all>Ver todos de ${storeHtml(environment.name)} <span aria-hidden="true">→</span></button>`;
- panel.querySelectorAll('[data-mobile-subcategory]').forEach(button=>button.onclick=()=>{const group=button.closest('.environment-mobile-group');const types=group.querySelector('.environment-mobile-types');if(!types)return filterSubcategory(environment.name,button.dataset.mobileSubcategory);types.hidden=!types.hidden;button.setAttribute('aria-expanded',String(!types.hidden))});
- panel.querySelectorAll('[data-mobile-all-subcategory]').forEach(button=>button.onclick=()=>filterSubcategory(environment.name,button.dataset.mobileAllSubcategory));
+ panel.hidden=false;panel.innerHTML=`<div class="environment-mobile-heading"><button type="button" data-mobile-back aria-label="Fechar subcategorias">‹</button><div><small>AMBIENTE</small><strong>${storeHtml(environment.name)}</strong><span>${storeHtml(environment.description)}</span></div><button type="button" data-mobile-collapse aria-label="Recolher ${storeHtml(environment.name)}">⌃</button></div><div class="environment-mobile-subcategories">${environment.subcategories.map(subcategory=>`<div class="environment-mobile-group"><button type="button" data-mobile-subcategory="${storeHtml(subcategoryName(subcategory))}" aria-expanded="false">${subcategoryIcon(subcategory,environment,24)}<span class="category-label">${storeHtml(subcategoryName(subcategory))}</span><span class="category-arrow-glyph" aria-hidden="true">→</span></button>${subcategory?.types?.length?`<div class="environment-mobile-types" hidden>${subcategory.types.map(type=>`<button type="button" data-mobile-type="${storeHtml(type.id)}" data-mobile-type-subcategory="${storeHtml(subcategoryName(subcategory))}">${storeHtml(type.name)}</button>`).join('')}</div>`:''}</div>`).join('')}</div><button class="environment-mobile-all" type="button" data-mobile-all>Ver todos de ${storeHtml(environment.name)} <span aria-hidden="true">→</span></button>`;
+ panel.querySelectorAll('[data-mobile-subcategory]').forEach(button=>button.onclick=()=>{const group=button.closest('.environment-mobile-group');const types=group.querySelector('.environment-mobile-types');if(!types)return filterSubcategory(environment.name,button.dataset.mobileSubcategory);filterSubcategory(environment.name,button.dataset.mobileSubcategory,true);panel.querySelectorAll('.environment-mobile-types').forEach(item=>item.hidden=item!==types);panel.querySelectorAll('[data-mobile-subcategory]').forEach(item=>item.setAttribute('aria-expanded',String(item===button)));types.hidden=false});
  panel.querySelectorAll('[data-mobile-type]').forEach(button=>button.onclick=()=>filterType(environment.name,button.dataset.mobileTypeSubcategory,button.dataset.mobileType));
  panel.querySelector('[data-mobile-all]').onclick=()=>filterEnvironment(environment.name);
  const collapse=()=>{mobileEnvironmentOpen='';panel.hidden=true;document.querySelectorAll('#mobileEnvironmentTabs button').forEach(button=>{button.classList.remove('is-active');button.setAttribute('aria-expanded','false')})};
@@ -243,7 +241,7 @@ function renderEnvironmentNavigation(){
 }
 function render(){products.forEach(hydrateProductTaxonomy);['#offerGrid','#bestGrid','#officeGrid'].forEach(selector=>{const grid=document.querySelector(selector);if(grid)grid.innerHTML=''});renderCatalog();updateCounts()}
 function clearCatalogSearch(){const field=document.querySelector('#search');if(field){field.value='';field.setAttribute('aria-expanded','false')}const suggestions=document.querySelector('#suggestions');if(suggestions)suggestions.style.display='none'}
-function catalogMatchesTaxonomy(product,environment,subcategory,typeId){return (environment==='Todas'||product.environment===environment)&&(!subcategory||product.subcategory===subcategory)&&(!typeId||String(product.typeId)===String(typeId))}
+function catalogMatchesTaxonomy(product,environment,subcategory,typeId){return (environment==='Todas'||product.environment===environment)&&(!subcategory||product.subcategory===subcategory)&&(!typeId||(product.typeIds||[product.typeId]).some(id=>String(id)===String(typeId)))}
 function renderCatalog(){
  const searchField=document.querySelector('#search');
  const q=normaliseSearch(searchField?.value||'');
@@ -292,16 +290,16 @@ function renderCatalogBreadcrumb(){
  root.innerHTML=parts.join('');
 }
 function closeEnvironmentNavigation(){
- const mega=document.querySelector('#environmentMegaMenu');if(mega){mega.hidden=true;mega.classList.remove('is-open')}
+ const mega=document.querySelector('#environmentMegaMenu');if(mega){mega.hidden=true;mega.classList.remove('is-open');mega.querySelectorAll('[data-mega-subcategory].is-selected').forEach(button=>{button.classList.remove('is-selected');button.removeAttribute('aria-current')})}
  document.querySelectorAll('#desktopEnvironmentNav button,#categoriesMenu').forEach(button=>{button.setAttribute('aria-expanded','false');button.classList.remove('is-active')});
 }
 function activeTypeName(){const environment=environmentRecord(activeEnvironment);const subcategory=environment?.subcategories.find(item=>subcategoryName(item)===activeSubcategory);return subcategory?.types?.find(type=>String(type.id)===String(activeType))?.name||''}
 function filterEnvironment(value){
  const environment=environmentRecord(value);if(!environment)return scrollToTop();assistantResultIds=null;offersOnly=false;activeEnvironment=environment.name;activeSubcategory='';activeType='';activeCat=activeEnvironment;categoryVisibleLimit=CATEGORY_PAGE_SIZE;clearCatalogSearch();renderCatalog();closeEnvironmentNavigation();window.MobileNav?.mark('categorias');document.querySelector('#catalogo').scrollIntoView({behavior:'smooth'});
 }
-function filterSubcategory(environmentValue,subcategory){
+function filterSubcategory(environmentValue,subcategory,keepMenu=false){
  const environment=environmentRecord(environmentValue);if(!environment)return;
- assistantResultIds=null;offersOnly=false;activeEnvironment=environment.name;activeSubcategory=subcategory;activeType='';activeCat=subcategory;categoryVisibleLimit=CATEGORY_PAGE_SIZE;clearCatalogSearch();renderCatalog();closeEnvironmentNavigation();window.MobileNav?.mark('categorias');document.querySelector('#catalogo').scrollIntoView({behavior:'smooth'});
+ assistantResultIds=null;offersOnly=false;activeEnvironment=environment.name;activeSubcategory=subcategory;activeType='';activeCat=subcategory;categoryVisibleLimit=CATEGORY_PAGE_SIZE;clearCatalogSearch();renderCatalog();if(!keepMenu)closeEnvironmentNavigation();window.MobileNav?.mark('categorias');if(!keepMenu)document.querySelector('#catalogo').scrollIntoView({behavior:'smooth'});
 }
 function filterType(environmentValue,subcategoryNameValue,typeId){
  const environment=environmentRecord(environmentValue);const subcategory=environment?.subcategories.find(item=>subcategoryName(item)===subcategoryNameValue);const type=subcategory?.types?.find(item=>String(item.id)===String(typeId));if(!type)return;
@@ -513,10 +511,9 @@ function bindDrawerCategoryTypes(){
   const subcategory=environment?.subcategories.find(item=>subcategoryName(item)===button.dataset.drawerSubcategory);
   if(!subcategory?.types?.length){button.onclick=()=>{closeDrawer();filterSubcategory(button.dataset.drawerEnvironment,button.dataset.drawerSubcategory)};return}
   const panel=document.createElement('div');panel.className='drawer-category-types';panel.hidden=true;
-  panel.innerHTML=`<button type="button" data-drawer-all-subcategory>Todos de ${storeHtml(subcategory.name)}</button>${subcategory.types.map(type=>`<button type="button" data-drawer-type="${storeHtml(type.id)}">${storeHtml(type.name)}</button>`).join('')}`;
+  panel.innerHTML=subcategory.types.map(type=>`<button type="button" data-drawer-type="${storeHtml(type.id)}">${storeHtml(type.name)}</button>`).join('');
   button.after(panel);button.setAttribute('aria-expanded','false');
-  button.onclick=()=>{panel.hidden=!panel.hidden;button.setAttribute('aria-expanded',String(!panel.hidden))};
-  panel.querySelector('[data-drawer-all-subcategory]').onclick=()=>{closeDrawer();filterSubcategory(environment.name,subcategory.name)};
+  button.onclick=()=>{filterSubcategory(environment.name,subcategory.name,true);panel.hidden=false;button.setAttribute('aria-expanded','true')};
   panel.querySelectorAll('[data-drawer-type]').forEach(item=>item.onclick=()=>{closeDrawer();filterType(environment.name,subcategory.name,item.dataset.drawerType)});
  });
 }
