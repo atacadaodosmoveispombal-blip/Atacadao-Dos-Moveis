@@ -444,7 +444,7 @@
     categories: { table: 'categories', singular: 'Subcategoria', plural: 'subcategorias', bucket: 'categories', fields: [
       ['environment_id', 'Ambiente', 'relation', true, 'environments'], ['name', 'Nome', 'text', true], ['slug', 'URL amigável', 'slug', true], ['description', 'Descrição', 'textarea'], ['search_keywords', 'Palavras relacionadas para busca', 'text'], ['image_url', 'Imagem', 'file'], ['sort_order', 'Ordem', 'number'], ['active', 'Ativa', 'checkbox'], ['show_on_homepage', 'Mostrar na página inicial', 'checkbox'], ['show_in_menu', 'Mostrar no menu de ambientes', 'checkbox'] ] },
     'category-types': { table: 'category_types', singular: 'Tipo', plural: 'tipos', fields: [
-      ['category_id', 'Subcategoria', 'relation', true, 'categories'], ['name', 'Nome do tipo', 'text', true], ['slug', 'Identificação', 'slug', true], ['sort_order', 'Ordem', 'number'], ['active', 'Ativo', 'checkbox'] ] },
+      ['category_id', 'Subcategoria', 'relation', true, 'categories'], ['name', 'Nome do tipo', 'text', true], ['slug', 'Identificação', 'slug', true], ['icon_key', 'Ícone do tipo', 'iconpicker'], ['sort_order', 'Ordem', 'number'], ['active', 'Ativo', 'checkbox'] ] },
     environments: { table: 'environments', singular: 'Ambiente', plural: 'ambientes', bucket: 'environments', fields: [
       ['name', 'Nome', 'text', true], ['slug', 'URL amigável', 'slug', true], ['description', 'Descrição', 'textarea'], ['icon_key', 'Ícone do ambiente', 'select', false, [['', 'Automático pelo nome'], ...CategoryIcons.keys.map(key => [key, key.replaceAll('-', ' ')])]], ['image_url', 'Imagem', 'file'], ['sort_order', 'Ordem', 'number'], ['active', 'Ativo', 'checkbox'] ] },
     brands: { table: 'brands', singular: 'Marca', plural: 'marcas', bucket: 'brands', fields: [
@@ -470,9 +470,25 @@
     if (error) throw error;
     return data || [];
   }
+  function iconPickerMarkup(value = '') {
+    const selected = String(value || '');
+    return `<div class="category-icon-picker" role="group" aria-label="Escolha o ícone"><input type="hidden" name="icon_key" value="${esc(selected)}"><p>Escolha um desenho para o menu. A opção automática acompanha o nome.</p><div class="category-icon-picker-grid"><button type="button" data-icon-choice="" aria-pressed="${!selected}"><span aria-hidden="true">✦</span><small>Automático</small></button>${CategoryIcons.keys.map(key => `<button type="button" data-icon-choice="${esc(key)}" aria-pressed="${selected === key}">${CategoryIcons.icon(key,{size:34})}<small>${esc(key.replaceAll('-', ' '))}</small></button>`).join('')}</div></div>`;
+  }
+  function bindIconPicker(root, onSelect = () => {}) {
+    const picker = root.querySelector('.category-icon-picker');
+    if (!picker) return;
+    picker.addEventListener('click', event => {
+      const button = event.target.closest('[data-icon-choice]');
+      if (!button || !picker.contains(button)) return;
+      picker.querySelector('[name="icon_key"]').value = button.dataset.iconChoice;
+      picker.querySelectorAll('[data-icon-choice]').forEach(choice => choice.setAttribute('aria-pressed', String(choice === button)));
+      onSelect();
+    });
+  }
   async function fieldHtml(field, record = {}) {
     const [key, label, type, required, choices] = field;
     const value = record[key] ?? '';
+    if (type === 'iconpicker') return `<div class="field full"><span class="product-type-label">${esc(label)}</span>${iconPickerMarkup(value)}</div>`;
     if (type === 'producttypes') {
       const result = await db.from('category_types').select('id,name,category_id,active').order('sort_order').order('name');
       if (result.error) throw result.error;
@@ -540,7 +556,7 @@
     const iconKey = iconSelect?.value || CategoryIcons.keyFor(name, environmentName);
     const iconPreview = $('#categoryPreviewIcon');
     if (iconPreview) iconPreview.innerHTML = CategoryIcons.icon(iconKey, { size: 28 });
-    if (iconSelect && !iconSelect.value) iconSelect.options[0].textContent = 'Automático: ' + iconKey.replaceAll('-', ' ');
+    if (iconSelect?.tagName === 'SELECT' && !iconSelect.value) iconSelect.options[0].textContent = 'Automático: ' + iconKey.replaceAll('-', ' ');
     const status = $('#dialogEyebrow');
     status.classList.toggle('is-draft', !active);
     status.classList.toggle('is-live', active);
@@ -669,7 +685,7 @@
     $('#editorFields').innerHTML = `<div class="category-editor-layout">
       <section class="category-editor-section category-info-section">
         <header><span>1</span><div><h3>Informações da categoria</h3><p>Conte aos clientes o que eles encontram nesta seção.</p></div></header>
-        <div class="category-editor-fields"><label>Ambiente<select name="environment_id" required><option value="">Selecione</option>${environments.map(environment => `<option value="${environment.id}" ${String(environment.id) === String(selectedEnvironmentId) ? 'selected' : ''}>${esc(environment.name)}</option>`).join('')}</select></label><label>Nome da subcategoria<input name="name" type="text" required value="${esc(record?.name || '')}" placeholder="Ex.: Sofá"></label><label>Descrição<textarea name="description" placeholder="Apresente a subcategoria em poucas palavras.">${esc(record?.description || '')}</textarea></label><label>Palavras relacionadas para busca<input name="search_keywords" type="text" value="${esc(record?.search_keywords || '')}" placeholder="Ex.: sofá retrátil, estofado, 3 lugares"></label><label>Ícone da subcategoria<select name="icon_key"><option value="">Automático pelo nome</option>${CategoryIcons.keys.map(key => `<option value="${key}" ${record?.icon_key === key ? 'selected' : ''}>${esc(key.replaceAll('-', ' '))}</option>`).join('')}</select><small>O ícone é sugerido automaticamente; altere aqui se precisar.</small></label></div>
+        <div class="category-editor-fields"><label>Ambiente<select name="environment_id" required><option value="">Selecione</option>${environments.map(environment => `<option value="${environment.id}" ${String(environment.id) === String(selectedEnvironmentId) ? 'selected' : ''}>${esc(environment.name)}</option>`).join('')}</select></label><label>Nome da subcategoria<input name="name" type="text" required value="${esc(record?.name || '')}" placeholder="Ex.: Sofá"></label><label>Descrição<textarea name="description" placeholder="Apresente a subcategoria em poucas palavras.">${esc(record?.description || '')}</textarea></label><label>Palavras relacionadas para busca<input name="search_keywords" type="text" value="${esc(record?.search_keywords || '')}" placeholder="Ex.: sofá retrátil, estofado, 3 lugares"></label><div class="category-icon-field"><b>Ícone da subcategoria</b>${iconPickerMarkup(record?.icon_key)}</div></div>
         <div class="category-address"><span>Endereço da página</span><code id="categoryAddressText">/categoria/${esc(record?.slug || 'categoria')}</code><button id="editCategorySlug" type="button">Editar endereço</button></div>
         <label class="category-slug-editor" id="categorySlugEditor" hidden>Final do endereço<input name="slug" type="text" required value="${esc(record?.slug || '')}" placeholder="sala"><small>Use letras, números e hífens.</small></label>
       </section>
@@ -705,7 +721,7 @@
     });
     $('[name="description"]').addEventListener('input', syncCategoryPreview);
     $('[name="environment_id"]').addEventListener('change', syncCategoryPreview);
-    $('[name="icon_key"]').addEventListener('change', syncCategoryPreview);
+    bindIconPicker($('#editorFields'), syncCategoryPreview);
     syncCategoryPreview();
     $('[name="active"]').addEventListener('change', syncCategoryPreview);
     $('#editCategorySlug').onclick = () => { editorState.slugManual = true; $('#categorySlugEditor').hidden = false; slugInput.focus(); };
@@ -1630,6 +1646,7 @@
     $('#dialogEyebrow').textContent = config.singular.toUpperCase();
     $('#dialogTitle').textContent = `${record ? 'Editar' : 'Novo'} ${config.singular.toLowerCase()}`;
     $('#editorFields').innerHTML = (await Promise.all(config.fields.map(field => fieldHtml(field, record || (view === 'category-types' ? { active: true } : {}))))).join('');
+    bindIconPicker($('#editorFields'));
     const source = $('[name="name"], [name="title"]', $('#editorFields'));
     const slug = $('[name="slug"]', $('#editorFields'));
     if (source && slug && !record) source.addEventListener('input', () => { slug.value = slugify(source.value); });
@@ -1956,6 +1973,7 @@
         if (linked.count || assigned.count) throw new Error('Reatribua os produtos antes de mover este tipo para outra subcategoria.');
       }
       if (view === 'environments' && !values.icon_key) values.icon_key = CategoryIcons.keyFor(values.name);
+      if (view === 'category-types' && !values.icon_key) values.icon_key = null;
       if (view === 'sections') {
         try { values.content = values.content_text ? JSON.parse(values.content_text) : {}; }
         catch { throw new Error('O conteúdo JSON da seção não é válido.'); }
@@ -3022,7 +3040,7 @@
       primary: { label: 'Editar', icon: 'edit', attributes: { 'data-edit': row.id } },
       actions
     });
-    return `<tr><td>${config.table === 'environments' ? CategoryIcons.icon(row.icon_key||row.name,{size:28}) : imageKey && row[imageKey] ? `<img class="thumb" src="${esc(row[imageKey])}" alt=""> ` : ''}<b>${esc(title)}</b></td><td>${esc(identity)}</td><td>${esc(timing)}</td><td><span class="badge ${row.active ? '' : 'off'}">${row.active ? 'Ativo' : 'Inativo'}</span></td><td class="action-cell">${menu}</td></tr>`;
+    return `<tr><td>${config.table === 'environments' || config.table === 'category_types' ? CategoryIcons.icon(row.icon_key||(config.table === 'category_types' ? row.categories?.name : row.name)||row.name,{environment:row.categories?.environments?.name,size:28}) : imageKey && row[imageKey] ? `<img class="thumb" src="${esc(row[imageKey])}" alt=""> ` : ''}<b>${esc(title)}</b></td><td>${esc(identity)}</td><td>${esc(timing)}</td><td><span class="badge ${row.active ? '' : 'off'}">${row.active ? 'Ativo' : 'Inativo'}</span></td><td class="action-cell">${menu}</td></tr>`;
   }
   function bindSearch() {
     const search = $('#searchList');
@@ -4539,7 +4557,17 @@
     finally { button.disabled = false; button.textContent = 'Salvar alterações'; if (editorState) editorState.saving = false; }
   }
   const MASS_PRODUCT_DRAFT_KEY = 'atacarejo.mass-product-draft.v1';
-  const massProductBaseDefaults = () => ({ environment_id: '', category_id: '', type_id: '', material: '', mirror_feature: '', ribbed_feature: '', warranty: '', description: '', free_city_shipping: false, free_assembly: false, on_sale: false, featured: false });
+  const massProductBaseDefaults = () => ({ environment_id: '', category_id: '', type_id: '', type_ids: [], material: '', mirror_feature: '', ribbed_feature: '', warranty: '', description: '', free_city_shipping: false, free_assembly: false, on_sale: false, featured: false });
+  function massTypeIds(value) {
+    return [...new Set((Array.isArray(value) ? value : value ? [value] : []).filter(Boolean).map(String))];
+  }
+  function massTypeChoices(mass, categoryId, selected, attribute) {
+    const ids = new Set(massTypeIds(selected));
+    const types = mass.types.filter(type => String(type.category_id) === String(categoryId));
+    return types.length
+      ? types.map(type => `<label><input type="checkbox" ${attribute} value="${esc(type.id)}" ${ids.has(String(type.id)) ? 'checked' : ''}> ${esc(type.name)}</label>`).join('')
+      : `<small>${categoryId ? 'Nenhum tipo cadastrado. Adicione um novo tipo abaixo.' : 'Selecione uma subcategoria primeiro.'}</small>`;
+  }
   function newMassColorSelection(source = {}) {
     const imageNames = Array.isArray(source.imageNames)
       ? source.imageNames.filter(Boolean)
@@ -4622,10 +4650,11 @@
   }
   function massEffectiveValues(row, base) {
     const override = row.overrides || {};
+    const typeIds = massTypeIds(override.type_ids ?? (Object.prototype.hasOwnProperty.call(override, 'type_id') ? override.type_id : base.type_ids ?? base.type_id));
     return {
       environment_id: override.environment_id ?? base.environment_id,
       category_id: override.category_id ?? base.category_id,
-      type_id: override.type_id ?? base.type_id,
+      type_id: typeIds[0] || '', type_ids: typeIds,
       material: override.material ?? base.material,
       mirror_feature: override.mirror_feature ?? base.mirror_feature,
       ribbed_feature: override.ribbed_feature ?? base.ribbed_feature,
@@ -4658,7 +4687,7 @@
     if (invalidColorStock) errors.push(`Estoque de ${massColorSelectionLabel(invalidColorStock)} inválido`);
     if (!common.environment_id) errors.push('Falta ambiente');
     if (!common.category_id) errors.push('Falta subcategoria');
-    if (common.type_id && !mass.types.some(type => String(type.id) === String(common.type_id) && String(type.category_id) === String(common.category_id))) errors.push('Tipo não pertence à subcategoria');
+    if (common.type_ids.some(id => !mass.types.some(type => String(type.id) === String(id) && String(type.category_id) === String(common.category_id)))) errors.push('Tipo não pertence à subcategoria');
     for (const [key, label] of [['altura', 'Altura'], ['largura', 'Largura'], ['profundidade', 'Profundidade']]) {
       if (row[key] !== '' && parseProductDimension(row[key]) === null) errors.push(`${label} inválida`);
     }
@@ -4724,8 +4753,9 @@
   }
   function massCharacteristicsCellMarkup(row, mass) {
     const categoryId = massEffectiveValues(row, mass.base).category_id;
-    const types = mass.types.filter(item => String(item.category_id) === String(categoryId)).map(item => [item.id, item.name]);
-    return `<div class="mass-characteristics-cell"><label>Tipo<select data-mass-override="type_id">${massCharacteristicOverrideOptions(row, mass, 'type_id', types)}</select></label><label>Material<select data-mass-override="material">${massCharacteristicOverrideOptions(row, mass, 'material', [['MDF', 'MDF'], ['MDP', 'MDP']])}</select></label><label>Espelho<select data-mass-override="mirror_feature">${massCharacteristicOverrideOptions(row, mass, 'mirror_feature', [['with', 'Com espelho'], ['without', 'Sem espelho']])}</select></label><label>Ripado<select data-mass-override="ribbed_feature">${massCharacteristicOverrideOptions(row, mass, 'ribbed_feature', [['with', 'Com ripado'], ['without', 'Sem ripado']])}</select></label></div>`;
+    const selected = massEffectiveValues(row, mass.base).type_ids;
+    const names = mass.types.filter(type => selected.includes(String(type.id))).map(type => type.name);
+    return `<div class="mass-characteristics-cell"><div class="mass-row-types"><details><summary>Tipos: ${esc(names.join(', ') || 'Nenhum')}</summary><div class="mass-type-choices">${massTypeChoices(mass, categoryId, selected, `data-mass-row-type="${esc(row.key)}"`)}</div><div class="mass-type-actions"><button type="button" data-mass-type-inherit="${esc(row.key)}">Usar padrão</button><input data-mass-new-type-row="${esc(row.key)}" placeholder="Novo tipo" aria-label="Novo tipo para ${esc(row.name || 'produto')}"><button type="button" data-mass-type-add-row="${esc(row.key)}">+ Adicionar novo tipo</button></div></details></div><label>Material<select data-mass-override="material">${massCharacteristicOverrideOptions(row, mass, 'material', [['MDF', 'MDF'], ['MDP', 'MDP']])}</select></label><label>Espelho<select data-mass-override="mirror_feature">${massCharacteristicOverrideOptions(row, mass, 'mirror_feature', [['with', 'Com espelho'], ['without', 'Sem espelho']])}</select></label><label>Ripado<select data-mass-override="ribbed_feature">${massCharacteristicOverrideOptions(row, mass, 'ribbed_feature', [['with', 'Com ripado'], ['without', 'Sem ripado']])}</select></label></div>`;
   }
   function massProductManagersMarkup() {
     return `<div id="massMediaManager" class="mass-manager-layer" hidden><button type="button" class="mass-manager-backdrop" data-mass-media-close aria-label="Fechar fotos"></button><section class="mass-manager-panel" role="dialog" aria-modal="true" aria-labelledby="massMediaManagerTitle"><header><div><small>GALERIA PRINCIPAL / COR DE ORIGEM</small><h3 id="massMediaManagerTitle">Fotos</h3></div><button type="button" data-mass-media-close aria-label="Fechar">×</button></header><div class="mass-manager-toolbar"><span id="massMediaCount">0 de 8 fotos</span><label class="secondary">+ Adicionar fotos<input id="massMediaInput" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden></label></div><div id="massMediaGrid" class="mass-media-manager-grid"></div><footer><small>A primeira foto é sempre a capa. Todas pertencem à cor de origem definida nesta linha.</small><button type="button" data-mass-media-close>Concluir</button></footer></section></div>
@@ -4733,10 +4763,13 @@
     <div id="massOptionsManager" class="mass-manager-layer" hidden><button type="button" class="mass-manager-backdrop" data-mass-options-close aria-label="Fechar opções"></button><section class="mass-manager-panel mass-options-manager-panel" role="dialog" aria-modal="true" aria-labelledby="massOptionsManagerTitle"><header><div><small>OPÇÕES DO PRODUTO</small><h3 id="massOptionsManagerTitle">Configurar opções</h3></div><button type="button" data-mass-options-close aria-label="Fechar">×</button></header><div class="mass-options-manager-body"><p>Marque somente as alternativas disponíveis. Estas opções não alteram cores, fotos, preço ou estoque.</p><div id="massOptionsManagerContent"></div></div><footer><small>Opções sem alternativas marcadas não aparecem no site.</small><button type="button" data-mass-options-close>Concluir</button></footer></section></div>
     <div id="massDescriptionManager" class="mass-manager-layer" hidden><button type="button" class="mass-manager-backdrop" data-mass-description-close aria-label="Fechar descrição"></button><section class="mass-manager-panel mass-description-manager-panel" role="dialog" aria-modal="true" aria-labelledby="massDescriptionManagerTitle"><header><div><small>DESCRIÇÃO COMPLETA</small><h3 id="massDescriptionManagerTitle">Descrição do produto</h3></div><button type="button" data-mass-description-close aria-label="Fechar">×</button></header><div class="mass-description-manager-body"><label for="massDescriptionInput">Descrição completa</label><textarea id="massDescriptionInput" rows="7" placeholder="Apresente o produto e seus principais diferenciais."></textarea><small id="massDescriptionSource"></small></div><footer><button id="massDescriptionUseDefault" type="button" class="secondary">Usar descrição padrão</button><span></span><button type="button" class="secondary" data-mass-description-close>Cancelar</button><button id="massDescriptionSave" type="button">Salvar descrição</button></footer></section></div>`;
   }
-  function massProductBaseMarkup(mass) {
-    return `<section class="mass-product-base card"><header><div><h3>Informações aplicadas a todos</h3><p>Os dados abaixo serão herdados pelas linhas. Você poderá editar cada produto individualmente depois.</p></div><span id="massBaseCount">${mass.rows.length} linhas</span></header><div class="mass-product-base-grid"><label>Ambiente<select data-mass-base="environment_id">${massSelectOptions(mass.environments, mass.base.environment_id, 'Selecione o ambiente', item => item.active !== false)}</select></label><label>Subcategoria<select data-mass-base="category_id">${massSelectOptions(mass.categories, mass.base.category_id, 'Selecione a subcategoria', item => !mass.base.environment_id || String(item.environment_id) === String(mass.base.environment_id))}</select></label><label>Tipo<select data-mass-base="type_id" ${!mass.base.category_id || !mass.types.some(item => String(item.category_id) === String(mass.base.category_id)) ? "disabled" : ""}>${massSelectOptions(mass.types, mass.base.type_id, "Sem tipo", item => String(item.category_id) === String(mass.base.category_id))}</select></label><label>Material<select data-mass-base="material">${massCharacteristicOptions(mass.base.material, [['MDF', 'MDF'], ['MDP', 'MDP']])}</select></label><label>Espelho<select data-mass-base="mirror_feature">${massCharacteristicOptions(mass.base.mirror_feature, [['with', 'Com espelho'], ['without', 'Sem espelho']])}</select></label><label>Ripado<select data-mass-base="ribbed_feature">${massCharacteristicOptions(mass.base.ribbed_feature, [['with', 'Com ripado'], ['without', 'Sem ripado']])}</select></label><label>Garantia<input data-mass-base="warranty" value="${esc(mass.base.warranty)}" placeholder="Ex.: 3 meses"></label><label class="mass-description-default">Descrição padrão <small>Opcional. Será herdada pelas linhas sem descrição personalizada.</small><textarea data-mass-base="description" rows="3" placeholder="Descrição completa aplicada inicialmente a todos os produtos.">${esc(mass.base.description || '')}</textarea></label><label class="mass-check"><input type="checkbox" data-mass-base="free_city_shipping" ${mass.base.free_city_shipping ? 'checked' : ''}> Frete grátis</label><label class="mass-check"><input type="checkbox" data-mass-base="free_assembly" ${mass.base.free_assembly ? 'checked' : ''}> Armação gratuita</label><label class="mass-check"><input type="checkbox" data-mass-base="on_sale" ${mass.base.on_sale ? 'checked' : ''}> Produto em promoção</label><label class="mass-check"><input type="checkbox" data-mass-base="featured" ${mass.base.featured ? 'checked' : ''}> Produto em destaque</label></div></section>`;
+  function massBaseTypeMarkup(mass) {
+    return `<div class="mass-base-types"><b>Tipos</b><div class="mass-type-choices">${massTypeChoices(mass, mass.base.category_id, mass.base.type_ids, 'data-mass-base-type')}</div><div class="mass-type-actions"><input data-mass-new-type-base placeholder="Novo tipo" aria-label="Nome do novo tipo"><button type="button" data-mass-type-add-base>+ Adicionar novo tipo</button></div></div>`;
   }
-  const massBulkFields = [['price', 'Preço normal'], ['promotional_price', 'Preço promocional'], ['environment_id', 'Ambiente'], ['category_id', 'Subcategoria'], ['type_id', 'Tipo'], ['material', 'Material'], ['mirror_feature', 'Espelho'], ['ribbed_feature', 'Ripado'], ['warranty', 'Garantia'], ['free_city_shipping', 'Frete grátis'], ['free_assembly', 'Armação gratuita'], ['on_sale', 'Promoção'], ['featured', 'Destaque']];
+  function massProductBaseMarkup(mass) {
+    return `<section class="mass-product-base card"><header><div><h3>Informações aplicadas a todos</h3><p>Os dados abaixo serão herdados pelas linhas. Você poderá editar cada produto individualmente depois.</p></div><span id="massBaseCount">${mass.rows.length} linhas</span></header><div class="mass-product-base-grid"><label>Ambiente<select data-mass-base="environment_id">${massSelectOptions(mass.environments, mass.base.environment_id, 'Selecione o ambiente', item => item.active !== false)}</select></label><label>Subcategoria<select data-mass-base="category_id">${massSelectOptions(mass.categories, mass.base.category_id, 'Selecione a subcategoria', item => !mass.base.environment_id || String(item.environment_id) === String(mass.base.environment_id))}</select></label>${massBaseTypeMarkup(mass)}<label>Material<select data-mass-base="material">${massCharacteristicOptions(mass.base.material, [['MDF', 'MDF'], ['MDP', 'MDP']])}</select></label><label>Espelho<select data-mass-base="mirror_feature">${massCharacteristicOptions(mass.base.mirror_feature, [['with', 'Com espelho'], ['without', 'Sem espelho']])}</select></label><label>Ripado<select data-mass-base="ribbed_feature">${massCharacteristicOptions(mass.base.ribbed_feature, [['with', 'Com ripado'], ['without', 'Sem ripado']])}</select></label><label>Garantia<input data-mass-base="warranty" value="${esc(mass.base.warranty)}" placeholder="Ex.: 3 meses"></label><label class="mass-description-default">Descrição padrão <small>Opcional. Será herdada pelas linhas sem descrição personalizada.</small><textarea data-mass-base="description" rows="3" placeholder="Descrição completa aplicada inicialmente a todos os produtos.">${esc(mass.base.description || '')}</textarea></label><label class="mass-check"><input type="checkbox" data-mass-base="free_city_shipping" ${mass.base.free_city_shipping ? 'checked' : ''}> Frete grátis</label><label class="mass-check"><input type="checkbox" data-mass-base="free_assembly" ${mass.base.free_assembly ? 'checked' : ''}> Armação gratuita</label><label class="mass-check"><input type="checkbox" data-mass-base="on_sale" ${mass.base.on_sale ? 'checked' : ''}> Produto em promoção</label><label class="mass-check"><input type="checkbox" data-mass-base="featured" ${mass.base.featured ? 'checked' : ''}> Produto em destaque</label></div></section>`;
+  }
+  const massBulkFields = [['price', 'Preço normal'], ['promotional_price', 'Preço promocional'], ['environment_id', 'Ambiente'], ['category_id', 'Subcategoria'], ['type_id', 'Adicionar tipo'], ['material', 'Material'], ['mirror_feature', 'Espelho'], ['ribbed_feature', 'Ripado'], ['warranty', 'Garantia'], ['free_city_shipping', 'Frete grátis'], ['free_assembly', 'Armação gratuita'], ['on_sale', 'Promoção'], ['featured', 'Destaque']];
   function massBulkInputMarkup(mass, field) {
     if (field === 'environment_id') return `<select data-mass-bulk-value>${massSelectOptions(mass.environments, '', 'Selecione o ambiente', item => item.active !== false)}</select>`;
     if (field === 'category_id') return `<select data-mass-bulk-value>${massSelectOptions(mass.categories, '', 'Selecione a subcategoria')}</select>`;
@@ -4989,36 +5022,62 @@
   }
   function syncMassTypeOptions() {
     const mass = editorState?.mass;
-    const select = $('[data-mass-base="type_id"]');
-    if (!mass || !select) return;
+    const choices = $('.mass-base-types .mass-type-choices');
+    if (!mass || !choices) return;
     const allowed = mass.types.filter(item => String(item.category_id) === String(mass.base.category_id));
-    if (!allowed.some(item => String(item.id) === String(mass.base.type_id))) mass.base.type_id = '';
-    select.innerHTML = massSelectOptions(allowed, mass.base.type_id, 'Sem tipo');
-    select.disabled = !mass.base.category_id || !allowed.length;
+    const allowedIds = new Set(allowed.map(item => String(item.id)));
+    mass.base.type_ids = massTypeIds(mass.base.type_ids).filter(id => allowedIds.has(id));
+    mass.base.type_id = mass.base.type_ids[0] || '';
+    choices.innerHTML = massTypeChoices(mass, mass.base.category_id, mass.base.type_ids, 'data-mass-base-type');
   }
   function applyMassBulkEdit() {
     const mass = editorState?.mass;
     const field = $('#massBulkField')?.value;
     const input = $('[data-mass-bulk-value]');
-    const optionalCharacteristic = ['type_id', 'material', 'mirror_feature', 'ribbed_feature'].includes(field);
+    const optionalCharacteristic = ['material', 'mirror_feature', 'ribbed_feature'].includes(field);
     if (!mass || !field || !input || (input.value === '' && !optionalCharacteristic)) return toast('Informe o valor que será aplicado.', 'error');
     let value = input.value;
     if (['free_city_shipping', 'free_assembly', 'on_sale', 'featured'].includes(field)) value = value === 'true';
+    if (field === 'type_id' && mass.rows.some(row => mass.selected.has(row.key) && row.status !== 'success' && String(massEffectiveValues(row, mass.base).category_id) !== String(mass.types.find(type => String(type.id) === String(value))?.category_id))) return toast('O tipo deve pertencer à subcategoria de todos os produtos selecionados.', 'error');
     mass.rows.filter(row => mass.selected.has(row.key) && row.status !== 'success').forEach(row => {
       if (['price', 'promotional_price'].includes(field)) row[field] = value;
+      else if (field === 'type_id') { row.overrides.type_ids = massTypeIds([...massEffectiveValues(row, mass.base).type_ids, value]); row.overrides.type_id = row.overrides.type_ids[0] || ''; }
       else {
         row.overrides[field] = value;
-        if (field === 'category_id') { row.overrides.environment_id = mass.categories.find(item => String(item.id) === String(value))?.environment_id || row.overrides.environment_id; row.overrides.type_id = ''; }
-        if (field === 'type_id') { const type = mass.types.find(item => String(item.id) === String(value)); if (type) { row.overrides.category_id = type.category_id; row.overrides.environment_id = mass.categories.find(item => String(item.id) === String(type.category_id))?.environment_id || row.overrides.environment_id; } }
+        if (field === 'category_id') { row.overrides.environment_id = mass.categories.find(item => String(item.id) === String(value))?.environment_id || row.overrides.environment_id; row.overrides.type_ids = []; delete row.overrides.type_id; }
         if (field === 'environment_id') {
           const currentCategory = massEffectiveValues(row, mass.base).category_id;
           const category = mass.categories.find(item => String(item.id) === String(currentCategory));
-          if (category && String(category.environment_id) !== String(value)) { row.overrides.category_id = ''; row.overrides.type_id = ''; }
+          if (category && String(category.environment_id) !== String(value)) { row.overrides.category_id = ''; row.overrides.type_ids = []; delete row.overrides.type_id; }
         }
       }
     });
     mass.dirty = true; editorState.dirty = true;
     renderMassRows(); persistMassProductDraft(); toast(`Valor aplicado a ${mass.selected.size} produtos.`);
+  }
+  async function createMassCategoryType(rowKey = '') {
+    const mass = editorState?.mass;
+    const row = rowKey ? mass?.rows.find(item => item.key === rowKey) : null;
+    const input = rowKey ? $(`[data-mass-new-type-row="${CSS.escape(rowKey)}"]`) : $('[data-mass-new-type-base]');
+    const button = rowKey ? $(`[data-mass-type-add-row="${CSS.escape(rowKey)}"]`) : $('[data-mass-type-add-base]');
+    const categoryId = row ? massEffectiveValues(row, mass.base).category_id : mass?.base.category_id;
+    const name = input?.value.trim();
+    if (!mass || !input || !button) return;
+    if (!categoryId) return toast('Selecione uma subcategoria antes de adicionar um tipo.', 'error');
+    if (!name) return input.focus();
+    button.disabled = true;
+    try {
+      const slug = slugify(name);
+      let result = await db.from('category_types').insert({ category_id: categoryId, name, slug, active: true }).select('id,name,slug,category_id,active').single();
+      if (result.error?.code === '23505') result = await db.from('category_types').select('id,name,slug,category_id,active').eq('category_id', categoryId).eq('slug', slug).single();
+      if (result.error) throw result.error;
+      if (result.data.active === false) throw new Error('Este tipo já existe e está inativo. Ative-o na aba Tipos.');
+      if (!mass.types.some(type => String(type.id) === String(result.data.id))) mass.types.push(result.data);
+      if (row) { row.overrides.type_ids = massTypeIds([...massEffectiveValues(row, mass.base).type_ids, result.data.id]); row.overrides.type_id = row.overrides.type_ids[0] || ''; renderMassRows(); }
+      else { mass.base.type_ids = massTypeIds([...mass.base.type_ids, result.data.id]); mass.base.type_id = mass.base.type_ids[0] || ''; syncMassTypeOptions(); renderMassRows(); }
+      input.value = ''; markMassProductDirty(); notifyStorefront('category_types');
+    } catch (error) { toast(explain(error), 'error'); }
+    finally { button.disabled = false; }
   }
   function bindMassProductEditor() {
     const mass = editorState.mass;
@@ -5068,7 +5127,7 @@
       if (baseField) {
         mass.base[baseField] = event.target.type === 'checkbox' ? event.target.checked : event.target.value;
         if (baseField === 'environment_id') syncMassCategoryOptions();
-        if (baseField === 'category_id') { mass.base.type_id = ''; syncMassTypeOptions(); }
+        if (baseField === 'category_id') { mass.base.type_ids = []; mass.base.type_id = ''; syncMassTypeOptions(); }
         if (['environment_id','category_id','type_id'].includes(baseField)) renderMassRows();
         if (baseField === 'description') syncMassDescriptionButtons();
         mass.dirty = true; editorState.dirty = true; updateMassSummary(); persistMassProductDraft(); return;
@@ -5097,6 +5156,23 @@
       mass.dirty = true; editorState.dirty = true; updateMassSummary(); persistMassProductDraft();
     });
     workspace.addEventListener('change', event => {
+      if (event.target.matches('[data-mass-base-type]')) {
+        mass.base.type_ids = [...workspace.querySelectorAll('[data-mass-base-type]:checked')].map(input => input.value);
+        mass.base.type_id = mass.base.type_ids[0] || '';
+        renderMassRows(); markMassProductDirty(); return;
+      }
+      const rowTypeKey = event.target.dataset.massRowType;
+      if (rowTypeKey) {
+        const row = mass.rows.find(item => item.key === rowTypeKey);
+        if (!row || row.status === 'success') return;
+        const details = event.target.closest('.mass-row-types details');
+        row.overrides.type_ids = [...details.querySelectorAll('[data-mass-row-type]:checked')].map(input => input.value);
+        row.overrides.type_id = row.overrides.type_ids[0] || '';
+        row.status = 'pending';
+        const names = mass.types.filter(type => row.overrides.type_ids.includes(String(type.id))).map(type => type.name);
+        details.querySelector('summary').textContent = `Tipos: ${names.join(', ') || 'Nenhum'}`;
+        updateMassSummary(); markMassProductDirty(); return;
+      }
       if (event.target.id === 'massOriginColor') {
         const row = activeMassRow('activeColorRowKey'); if (!row) return;
         const next = event.target.value;
@@ -5156,6 +5232,15 @@
       }
     });
     workspace.addEventListener('click', event => {
+      if (event.target.closest('[data-mass-type-add-base]')) { createMassCategoryType(); return; }
+      const addRowType = event.target.closest('[data-mass-type-add-row]');
+      if (addRowType) { createMassCategoryType(addRowType.dataset.massTypeAddRow); return; }
+      const inheritType = event.target.closest('[data-mass-type-inherit]');
+      if (inheritType) {
+        const row = mass.rows.find(item => item.key === inheritType.dataset.massTypeInherit);
+        if (row) { delete row.overrides.type_ids; delete row.overrides.type_id; row.status = 'pending'; renderMassRows(); markMassProductDirty(); }
+        return;
+      }
       if (event.target.closest('[data-mass-media-close]')) { closeMassMediaManager(); return; }
       if (event.target.closest('[data-mass-colors-close]')) { closeMassColorManager(); return; }
       if (event.target.closest('[data-mass-options-close]')) { closeMassOptionsManager(); return; }
@@ -5282,12 +5367,15 @@
       if (draftAction === 'restart') { clearMassProductDraft(); draft = null; }
     }
     const rows = (draft?.rows || [null]).map(item => newMassProductRow(item || {}));
+    const base = { ...massProductBaseDefaults(), ...(draft?.base || {}) };
+    base.type_ids = massTypeIds(draft?.base?.type_ids ?? draft?.base?.type_id);
+    base.type_id = base.type_ids[0] || '';
     const colors = [...(colorCatalog.colors || [])];
     for (const pendingColor of (draft?.colors || [])) if (!colors.some(color => color.id === pendingColor.id || color.slug === pendingColor.slug)) colors.push({ ...pendingColor });
     editorState = {
       view: 'mass-products', dirty: Boolean(draft), saving: false, previewObjectUrls: [], colors, colorsAvailable: colorCatalog.available,
       mass: {
-        base: { ...massProductBaseDefaults(), ...(draft?.base || {}) }, rows, selected: new Set(), saving: false, failedOnly: false,
+        base, rows, selected: new Set(), saving: false, failedOnly: false,
         environments: environmentResult.data || [], categories: (categoryResult.data || []).filter(item => item.active !== false), types: typeResult.data || [], draftTimer: null,
         activeMediaRowKey: null, activeColorRowKey: null, activeOptionsRowKey: null, activeDescriptionRowKey: null
       }
@@ -5376,6 +5464,11 @@
       const { data, error } = await db.from('products').insert(massProductPayload(row, mass.base)).select().single();
       if (error) throw error;
       createdId = data.id; row.createdId = data.id;
+      const typeIds = massEffectiveValues(row, mass.base).type_ids;
+      if (typeIds.length) {
+        const assigned = await db.from('product_category_types').insert(typeIds.map(category_type_id => ({ product_id: data.id, category_type_id })));
+        if (assigned.error) throw assigned.error;
+      }
       const cover = row.imageItems[0];
       galleryUploads = await saveGallery(data.id, null, 'products', { files: row.imageItems.map(item => item.file), coverFile: cover?.file || null, colorId: row.originColorId });
       const variants = massProductVariantSettings(row);

@@ -32,5 +32,6 @@
   "20261013_category_types.sql": "10193c91642331e71917bbfbb8ae8a336718b16a75194900fa0dfcd4626d3e4f",
   "20261014_category_type_parent_guard.sql": "8eb77577dac770d574a406a2562a09e4109e1d1eac0f26dc92d4ab33b0fcd3e0",
   "20261015_group_wardrobes_under_roupeiro.sql": "3c7e96454b96697479f9e620298a139f9eed06d8e9268a76694b22b2a32d72cf",
-  "20261016_category_type_assignments_and_seed.sql": "6b9b78ada592ee20cba784e8e03743fc063394e17369ce7395b6030bd2ccf012"
+  "20261016_category_type_assignments_and_seed.sql": "6b9b78ada592ee20cba784e8e03743fc063394e17369ce7395b6030bd2ccf012",
+  "20261017_category_type_icons.sql": "daa6093b766b7b7934320d88201776eabc12dbece0d21510b55180be1ce7ee42"
 }
