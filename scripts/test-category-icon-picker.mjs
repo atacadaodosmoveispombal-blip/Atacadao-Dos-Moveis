@@ -13,6 +13,11 @@ const window = {};
 vm.runInNewContext(iconSource, { window });
 const icons = window.CategoryIcons;
 const extract = (source, start, end) => source.slice(source.indexOf(`function ${start}(`), source.indexOf(`function ${end}(`));
+const picker = vm.runInNewContext(`(${extract(admin, 'iconPickerMarkup', 'bindIconPicker')})`, { CategoryIcons: icons, esc: value => String(value) });
+const pickerMarkup = picker('tipo-roupeiro-correr');
+assert.match(pickerMarkup, /name="icon_key" value="tipo-roupeiro-correr"/, 'O ícone escolhido deve entrar no formulário.');
+assert.match(pickerMarkup, /data-icon-choice="tipo-roupeiro-correr" aria-pressed="true"/, 'A escolha atual deve ficar visível.');
+assert.ok(!pickerMarkup.includes('<img'), 'A galeria de ícones não deve usar fotos.');
 const typeIcon = vm.runInNewContext(`(${extract(storefront, 'typeIcon', 'openDesktopEnvironmentMenu')})`, {
   CategoryIcons: icons,
   normaliseSearch: value => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
