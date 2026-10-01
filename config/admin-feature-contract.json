@@ -73,6 +73,7 @@
         { "file": "app.js", "contains": ["function showDesktopTypes(", "function filterType(", "function catalogMatchesTaxonomy(", "data-mobile-type", "data-drawer-type"] },
         { "file": "supabase/migrations/20261013_category_types.sql", "contains": ["create table public.category_types", "add column type_id uuid", "enable row level security"] },
         { "file": "supabase/migrations/20261014_category_type_parent_guard.sql", "contains": ["prevent_used_category_type_reparent", "category_types_prevent_used_reparent"] },
+        { "file": "supabase/migrations/20261015_group_wardrobes_under_roupeiro.sql", "contains": ["Roupeiro de Bater", "Roupeiro De Correr", "Roupeiro Solteiro (3/4 portas)", "insert into public.category_types", "update public.products", "show_in_menu = false"] },
         { "file": "scripts/test-category-types.mjs", "contains": ["filtro exato por tipo", "Subcategorias sem tipos devem abrir diretamente"] }
       ]
     },
