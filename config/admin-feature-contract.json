@@ -24,7 +24,7 @@
   "database": {
     "executionMode": "manual-incremental-only",
     "lastVerifiedAt": "2026-10-01",
-    "lastVerifiedSchema": "20261017_category_type_icons.sql",
+    "lastVerifiedSchema": "20261018_existing_product_type_links.sql",
     "pendingMigrations": [],
     "appliedMigrations": [
       "20261005_product_dimensions_numeric.sql",
@@ -39,7 +39,8 @@
       "20261014_category_type_parent_guard.sql",
       "20261015_group_wardrobes_under_roupeiro.sql",
       "20261016_category_type_assignments_and_seed.sql",
-      "20261017_category_type_icons.sql"
+      "20261017_category_type_icons.sql",
+      "20261018_existing_product_type_links.sql"
     ]
   },
   "features": [
@@ -78,6 +79,8 @@
         { "file": "supabase/migrations/20261014_category_type_parent_guard.sql", "contains": ["prevent_used_category_type_reparent", "category_types_prevent_used_reparent"] },
         { "file": "supabase/migrations/20261015_group_wardrobes_under_roupeiro.sql", "contains": ["Roupeiro de Bater", "Roupeiro De Correr", "Roupeiro Solteiro (3/4 portas)", "insert into public.category_types", "update public.products", "show_in_menu = false"] },
         { "file": "supabase/migrations/20261016_category_type_assignments_and_seed.sql", "contains": ["create table public.product_category_types", "('sala','sofa','2 Lugares'", "('quarto','roupeiro','Casal'"] },
+        { "file": "supabase/migrations/20261018_existing_product_type_links.sql", "contains": ["corner_sofa_count <> 3", "wardrobe_count <> 51", "on conflict do nothing"] },
+        { "file": "scripts/audit-category-types.mjs", "contains": ["visibleProducts", "visibleCountByType", "product_category_types"] },
         { "file": "category-icons.js", "contains": ["tipo-roupeiro-correr", "tipo-roupeiro-bater", "tipo-roupeiro-espelho", "tipo-roupeiro-4-portas", "tipo-cama"] },
         { "file": "admin-app.js", "contains": ["function iconPickerMarkup(", "function bindIconPicker(", "['icon_key', 'Ícone do tipo', 'iconpicker']"] },
         { "file": "storefront-cms.js", "contains": ["name,slug,icon_key,active,sort_order"] },
