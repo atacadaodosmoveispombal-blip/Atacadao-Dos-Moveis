@@ -742,6 +742,11 @@ button{touch-action:manipulation}
 .environment-mega-types>p{margin:0 0 10px;color:#69809f;font-size:.62rem;font-weight:800;letter-spacing:.13em;text-transform:uppercase}
 .environment-mega-types>button{width:100%;min-height:42px;padding:5px 4px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #edf1f6;background:#fff;color:#113d7d;text-align:left;font-size:.84rem}
 .environment-mega-types>button:hover,.environment-mega-types>button:focus-visible{color:#012c72;font-weight:700}
+.environment-mega-links button.is-selected{background:#eef5ff;color:#063c85;font-weight:800;box-shadow:inset 3px 0 #f3c437}
+.environment-mega-links button.is-selected .category-icon{color:#bd9100}
+.environment-mega-types>button{justify-content:flex-start;gap:9px}
+.environment-mega-types>button .category-icon{width:20px;height:20px;flex:none;color:#bd9100}
+.environment-mega-types>button span:nth-child(2){flex:1}
 .environment-mobile-navigation{display:none}
 .catalog-breadcrumb{min-height:30px;margin:0 0 14px;display:flex;align-items:center;gap:8px;color:#63738b;font-size:.76rem}
 .catalog-breadcrumb button{min-height:30px;padding:0;background:transparent;color:#174b97;font-weight:650}

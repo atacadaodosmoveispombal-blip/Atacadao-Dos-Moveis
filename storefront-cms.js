@@ -499,11 +499,12 @@
     // pelo painel administrativo.
     products.splice(0, products.length);
     render();
-    const [productResult, categoryResult, environmentResult, typeResult, bannerResult, promotionResult, sectionResult, settingResult, inspirationResult, onlineSalesResult] = await Promise.all([
+    const [productResult, categoryResult, environmentResult, typeResult, assignmentResult, bannerResult, promotionResult, sectionResult, settingResult, inspirationResult, onlineSalesResult] = await Promise.all([
       loadStorefrontProducts(),
       loadStorefrontCategories(),
       loadStorefrontEnvironments(),
       loadStorefrontTypes(),
+      cms.from('product_category_types').select('product_id,category_type_id'),
       cms.from('banners').select('*').eq('active', true).eq('draft', false).eq('paused', false).or(`start_at.is.null,start_at.lte.${now}`).or(`end_at.is.null,end_at.gt.${now}`).order('sort_order'),
       cms.from('promotions').select('*,promotion_products(product_id)').eq('active', true).or(`start_at.is.null,start_at.lte.${now}`).or(`end_at.is.null,end_at.gt.${now}`),
       cms.from('site_sections').select('*').order('sort_order'),
@@ -521,6 +522,20 @@
     applyHero((bannerResult.data || []).filter(item => item.position === 'home_hero'), productResult.data || [], promotionResult.data || []);
     applySecondaryBanners(bannerResult.data || [], productResult.data || [], promotionResult.data || []);
     renderInspirations(inspirationResult.data || []);
+    const campaignPromotions = promotionResult.data || [];
+    const typeNames = new Map((typeResult.data || []).map(item => [String(item.id), item.name]));
+    const assignments = new Map();
+    for (const row of assignmentResult.data || []) {
+      const ids = assignments.get(String(row.product_id)) || [];
+      ids.push(row.category_type_id);
+      assignments.set(String(row.product_id), ids);
+    }
+    products.splice(0, products.length, ...(productResult.data || []).map((row, index) => {
+      const product = mapProduct(row, index, campaignPromotionFor(row, campaignPromotions));
+      product.typeIds = [...new Set([...(assignments.get(String(row.id)) || []), row.type_id].filter(Boolean))];
+      product.type = product.typeIds.map(id => typeNames.get(String(id))).filter(Boolean).join(', ');
+      return product;
+    }));
     {
       const categories = categoryResult.data || [];
       const environments = environmentResult.data || [];
@@ -530,13 +545,6 @@
       window.setStoreNavigationData?.(environments, categories.filter(item => item.show_in_menu !== false), typeResult.data || []);
       renderCats();
     }
-    const campaignPromotions = promotionResult.data || [];
-    const typeNames = new Map((typeResult.data || []).map(item => [String(item.id), item.name]));
-    products.splice(0, products.length, ...(productResult.data || []).map((row, index) => {
-      const product = mapProduct(row, index, campaignPromotionFor(row, campaignPromotions));
-      product.type = typeNames.get(String(row.type_id)) || '';
-      return product;
-    }));
     // Mantém o item na sacola para que alterações de estoque/preço sejam
     // apresentadas ao cliente, em vez de removê-lo silenciosamente.
     cart = cart.filter(item => products.some(product => product.id === item.id));
@@ -580,7 +588,7 @@
   sync?.addEventListener('message', scheduleBoot);
   window.addEventListener('storage', event => { if (event.key === 'atacarejo-cms-sync') scheduleBoot(); });
   const realtime = cms.channel('storefront-cms');
-  ['products','product_images','product_variants','variant_images','product_colors','product_option_groups','product_option_values','categories','environments','brands','banners','promotions','promotion_products','site_sections','store_settings','online_sales_settings','inspirations','inspiration_images'].forEach(table => {
+  ['products','product_images','product_variants','variant_images','product_colors','product_option_groups','product_option_values','categories','category_types','product_category_types','environments','brands','banners','promotions','promotion_products','site_sections','store_settings','online_sales_settings','inspirations','inspiration_images'].forEach(table => {
     realtime.on('postgres_changes', { event: '*', schema: 'public', table }, scheduleBoot);
   });
   realtime.subscribe();
