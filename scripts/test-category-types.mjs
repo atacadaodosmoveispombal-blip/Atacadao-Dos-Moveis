@@ -26,6 +26,28 @@ assert.deepEqual(ids('Sala', 'Poltrona', ''), [4], 'Subcategorias sem tipos deve
 assert.deepEqual(ids('Sala', '', ''), [1, 2, 3, 4], 'O ambiente deve incluir todos os seus produtos.');
 assert.deepEqual(ids('Todas', '', ''), [1, 2, 3, 4, 5, 6], 'A navegação geral deve continuar intacta.');
 
+const navigationContext = vm.createContext({
+  environmentNavigation: [], activeEnvironment: 'Todas', activeSubcategory: '', activeType: '',
+  environmentRecord: () => null, renderEnvironmentNavigation() {}, renderCats() {}, renderCatalog() {}
+});
+const navigationSource = source.slice(source.indexOf('function setStoreNavigationData('), source.indexOf('window.setStoreNavigationData='));
+vm.runInContext(`${navigationSource};this.setStoreNavigationData=setStoreNavigationData`, navigationContext);
+navigationContext.setStoreNavigationData(
+  [{ id: 'sala', name: 'Sala', slug: 'sala', active: true, sort_order: 1 }],
+  [{ id: 'sofa', name: 'Sofá', slug: 'sofa', environment_id: 'sala', active: true, sort_order: 1 }],
+  [
+    { id: 'dois', name: '2 Lugares', category_id: 'sofa', active: true, sort_order: 1 },
+    { id: 'tres', name: '3 Lugares', category_id: 'sofa', active: true, sort_order: 2 },
+    { id: 'oculto', name: 'Inativo', category_id: 'sofa', active: false, sort_order: 3 },
+    { id: 'outro', name: 'Outra categoria', category_id: 'rack', active: true, sort_order: 4 }
+  ]
+);
+assert.deepEqual(
+  Array.from(navigationContext.environmentNavigation[0].subcategories[0].types, type => type.name),
+  ['2 Lugares', '3 Lugares'],
+  'Tipos ativos devem aparecer no menu mesmo quando não há produtos cadastrados.'
+);
+
 const sourceBlock = (start, end) => source.slice(source.indexOf(`function ${start}(`), source.indexOf(`function ${end}(`));
 const events = [];
 const classes = () => {
@@ -68,4 +90,4 @@ typeButton.onclick();
 assert.deepEqual(events, [['subcategory', 'Quarto', 'Roupeiro', true], ['type', 'Quarto', 'Roupeiro', 'casal']]);
 assert.deepEqual(ids('Quarto', 'Roupeiro', 'casal'), [6], 'O clique em Casal deve filtrar somente os roupeiros correspondentes.');
 
-console.log('OK filtro exato por tipo, menu fixo após clique, múltiplos tipos e produtos antigos');
+console.log('OK filtro exato por tipo, menu fixo após clique, múltiplos tipos e produtos antigos; tipos vazios no menu');

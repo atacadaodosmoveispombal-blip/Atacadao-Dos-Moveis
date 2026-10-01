@@ -79,7 +79,7 @@ function setStoreNavigationData(environments=[],subcategories=[],types=[]){
  if(activeEnvironments.length&&activeSubcategories.length){
   const next=activeEnvironments.map(environment=>({
    id:environment.id,name:environment.name,slug:environment.slug,description:environment.description||`Encontre tudo para ${environment.name.toLowerCase()}`,
-   image:environment.image_url||environment.image||'',icon_key:environment.icon_key||'',subcategories:activeSubcategories.filter(item=>String(item.environment_id)===String(environment.id)).sort((a,b)=>Number(a.sort_order)-Number(b.sort_order)).map(item=>({id:item.id,name:item.name,slug:item.slug,icon_key:item.icon_key||'',keywords:item.search_keywords||'',types:types.filter(type=>type.active!==false&&String(type.category_id)===String(item.id)&&products.some(product=>product.subcategory===item.name&&product.environment===environment.name&&(product.typeIds||[product.typeId]).some(id=>String(id)===String(type.id)))).sort((a,b)=>Number(a.sort_order)-Number(b.sort_order)).map(type=>({id:type.id,name:type.name,slug:type.slug,icon_key:type.icon_key||''}))}))
+   image:environment.image_url||environment.image||'',icon_key:environment.icon_key||'',subcategories:activeSubcategories.filter(item=>String(item.environment_id)===String(environment.id)).sort((a,b)=>Number(a.sort_order)-Number(b.sort_order)).map(item=>({id:item.id,name:item.name,slug:item.slug,icon_key:item.icon_key||'',keywords:item.search_keywords||'',types:types.filter(type=>type.active!==false&&String(type.category_id)===String(item.id)).sort((a,b)=>Number(a.sort_order)-Number(b.sort_order)).map(type=>({id:type.id,name:type.name,slug:type.slug,icon_key:type.icon_key||''}))}))
   })).filter(item=>item.subcategories.length);
   if(next.length)environmentNavigation=next;
  }
@@ -267,7 +267,7 @@ function renderCatalog(){
  if(sort==='Maior preço')list.sort((a,b)=>b.price-a.price);
  const total=list.length;
  const visibleList=categoryMode?list.slice(0,categoryVisibleLimit):list;
- const emptyMessage=homeMode?'Os produtos destacados serão publicados aqui em breve.':'Nenhum produto encontrado.';
+ const emptyMessage=homeMode?'Os produtos destacados serão publicados aqui em breve.':activeType&&!q?'Ainda não há produtos cadastrados neste tipo.':'Nenhum produto encontrado.';
  document.querySelector('#catalogGrid').innerHTML=visibleList.length?visibleList.map(catalogCard).join(''):`<div class="empty">${emptyMessage}<br><button class="admin-link" type="button" onclick="scrollToTop()">Voltar para a home</button></div>`;
  const singular=total===1;
  const noun=offersOnly?(singular?'oferta encontrada':'ofertas encontradas'):(singular?'produto encontrado':'produtos encontrados');
