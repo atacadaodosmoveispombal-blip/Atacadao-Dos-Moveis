@@ -33,13 +33,14 @@ const classes = () => {
   return { add: name => names.add(name), remove: name => names.delete(name), toggle: (name, enabled) => enabled ? names.add(name) : names.delete(name), contains: name => names.has(name) };
 };
 const subcategoryButton = { dataset: { megaSubcategory: 'Roupeiro' }, classList: classes(), setAttribute() {}, removeAttribute() {} };
+const otherSubcategoryButton = { dataset: { megaSubcategory: 'Camas' }, classList: classes(), setAttribute() {}, removeAttribute() {} };
 const typeButton = { dataset: { megaType: 'casal' } };
 const typePanel = { hidden: true, classList: classes(), querySelectorAll: () => [typeButton] };
 const allButton = {};
 const mega = {
   hidden: true, dataset: {}, classList: classes(), getBoundingClientRect: () => ({ right: 800 }),
   querySelector: selector => selector === '.environment-mega-types' ? typePanel : selector === '[data-mega-all]' ? allButton : selector === '[data-mega-subcategory].is-selected' ? subcategoryButton.classList.contains('is-selected') ? subcategoryButton : null : subcategoryButton,
-  querySelectorAll: () => [subcategoryButton]
+  querySelectorAll: () => [subcategoryButton, otherSubcategoryButton]
 };
 const environment = { name: 'Quarto', subcategories: [{ name: 'Roupeiro', types: [{ id: 'casal', name: 'Casal' }] }] };
 const context = vm.createContext({
@@ -59,6 +60,7 @@ for (const [start, end] of [['showDesktopTypes', 'typeIcon'], ['openDesktopEnvir
 context.openDesktopEnvironmentMenu('Quarto');
 subcategoryButton.onclick();
 assert.equal(subcategoryButton.classList.contains('is-selected'), true, 'Roupeiro deve permanecer destacado após o clique.');
+assert.equal(otherSubcategoryButton.classList.contains('is-selected'), false, 'Outras subcategorias devem continuar sem seleção.');
 assert.equal(typePanel.hidden, false, 'O painel de tipos deve continuar aberto após o clique.');
 context.scheduleEnvironmentMenuClose();
 assert.equal(typePanel.hidden, false, 'Sair com o mouse não deve fechar o painel selecionado.');
