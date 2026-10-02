@@ -24,9 +24,9 @@
   },
   "database": {
     "executionMode": "manual-incremental-only",
-    "lastVerifiedAt": "2026-10-01",
-    "lastVerifiedSchema": "20261018_existing_product_type_links.sql",
-    "pendingMigrations": ["20261019_products_active_by_default.sql"],
+    "lastVerifiedAt": "2026-10-02",
+    "lastVerifiedSchema": "20261019_products_active_by_default.sql",
+    "pendingMigrations": [],
     "appliedMigrations": [
       "20261005_product_dimensions_numeric.sql",
       "20261006_product_dimensions_image.sql",
@@ -41,7 +41,8 @@
       "20261015_group_wardrobes_under_roupeiro.sql",
       "20261016_category_type_assignments_and_seed.sql",
       "20261017_category_type_icons.sql",
-      "20261018_existing_product_type_links.sql"
+      "20261018_existing_product_type_links.sql",
+      "20261019_products_active_by_default.sql"
     ]
   },
   "features": [
