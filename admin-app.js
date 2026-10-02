@@ -3107,11 +3107,11 @@
       ['dimensions', 'Medidas do produto', 'dimensions'], ['material', 'Material', 'materials'],
       ['product_characteristics', 'Características do produto', 'productcharacteristics'], ['warranty', 'Garantia', 'text']
     ] },
-    { key: 'publication', label: 'Publicação', help: 'Venda, destaques e visibilidade no site.', fields: [
+    { key: 'publication', label: 'Publicação', help: 'Produtos novos são publicados ao salvar. Para ativar ou desativar um produto depois, use o menu de ações na lista.', fields: [
       ['whatsapp_enabled', 'Permitir compra pelo WhatsApp', 'checkbox'], ['cart_enabled', 'Permitir adicionar à sacola', 'checkbox'],
       ['featured', 'Produto em destaque', 'checkbox'], ['best_seller', 'Mais vendido', 'checkbox'],
       ['new_arrival', 'Lançamento', 'checkbox'], ['on_sale', 'Em oferta', 'checkbox'],
-      ['is_campaign', 'Produto em campanha', 'checkbox'], ['active', 'Produto publicado', 'checkbox'],
+      ['is_campaign', 'Produto em campanha', 'checkbox'],
       ['sort_order', 'Ordem de exibição', 'number'], ['meta_title', 'Título SEO (opcional)', 'text'],
       ['meta_description', 'Descrição SEO (opcional)', 'textarea']
     ] }
@@ -4521,6 +4521,7 @@
       values.variation_type = variantSettings.type;
       values.stock_quantity = variantSettings.variants.reduce((total, item) => total + Number(item.stock || 0), 0);
       values.low_stock_threshold = Math.min(...variantSettings.variants.map(item => Number(item.low_stock_threshold || 0)));
+      if (!record) values.active = true;
       delete values.specifications_text;
       const ogFile = form.elements.og_image_url?.files?.[0];
       if (ogFile) { uploadedOgImage = await upload('products', ogFile, 'sharing'); values.og_image_url = uploadedOgImage.url; }
@@ -4551,7 +4552,7 @@
       await saveProductOptions(result.data.id, productOptions);
       completed = true;
       if (editorState) editorState.dirty = false;
-      notifyStorefront('products'); $('#editorDialog').close(); toast('Produto salvo e sincronizado com o catálogo.'); render('products');
+      notifyStorefront('products'); $('#editorDialog').close(); toast(record ? 'Produto atualizado sem alterar o status de publicação.' : 'Produto cadastrado e publicado no site.'); render('products');
     } catch (error) {
       if (createdProductId && !completed) {
         const { error: rollbackError } = await db.from('products').delete().eq('id', createdProductId);
@@ -4812,7 +4813,7 @@
     return `<section class="mass-product-grid card"><div class="mass-product-grid-toolbar"><div><b>Produtos</b><small>Uma linha representa um produto. O estoque é informado dentro de Cores.</small></div><div class="mass-add-lines"><label>Quantidade<input id="massLineCount" type="number" min="1" max="100" value="10"></label><button type="button" class="secondary" id="massAddLine">+ Adicionar linha</button><button type="button" class="secondary" id="massAddManyLines">Criar linhas</button></div></div><div class="mass-product-table-wrap"><table class="mass-product-table"><thead><tr><th><input id="massSelectAll" type="checkbox" aria-label="Selecionar todas"></th><th>Fotos</th><th>Nome do produto</th><th>Cor e estoque</th><th>Características</th><th>Opções</th><th>Preço normal</th><th>Preço promocional</th><th>Altura</th><th>Largura</th><th>Profundidade</th><th>Ações</th></tr></thead><tbody id="massProductRows">${mass.rows.map((row, index) => massProductRowMarkup(row, index, mass)).join('')}</tbody></table></div><div class="mass-product-summary" id="massProductSummary"></div></section>`;
   }
   function massProductEditorMarkup(mass) {
-    return `<div class="mass-product-workspace">${massProductBaseMarkup(mass)}${massProductBulkMarkup(mass)}${massProductRowsMarkup(mass)}<p class="mass-product-note">Os produtos são criados como rascunhos. Fotos usam a galeria principal, cores usam as variações existentes e medidas usam o mesmo JSONB do cadastro individual.</p>${massProductManagersMarkup()}</div>`;
+    return `<div class="mass-product-workspace">${massProductBaseMarkup(mass)}${massProductBulkMarkup(mass)}${massProductRowsMarkup(mass)}<p class="mass-product-note">Os produtos são publicados automaticamente ao concluir o cadastro. Fotos usam a galeria principal, cores usam as variações existentes e medidas usam o mesmo JSONB do cadastro individual.</p>${massProductManagersMarkup()}</div>`;
   }
   function massRowElement(key) { return $(`[data-mass-row="${CSS.escape(key)}"]`); }
   function updateMassRowFeedback(row) {
@@ -5415,7 +5416,7 @@
       short_description: '', description: common.description || '', category_id: common.category_id || null, type_id: common.type_id || null, environment_id: common.environment_id || null, brand_id: null,
       price: parseProductDimension(row.price), promotional_price: promotional, stock_quantity: stockTotal, low_stock_threshold: 0,
       featured: Boolean(common.featured), best_seller: false, new_arrival: false, on_sale: Boolean(common.on_sale || promotional), sort_order: 0,
-      active: false, warranty: common.warranty || '', dimensions: massProductDimensions(row), material: common.material || '',
+      active: true, warranty: common.warranty || '', dimensions: massProductDimensions(row), material: common.material || '',
       mirror_feature: common.mirror_feature || null, ribbed_feature: common.ribbed_feature || null, color: colorText, specifications: {},
       origin_color_id: row.originColorId,
       installment_enabled: true, max_installments: 12, whatsapp_enabled: true, cart_enabled: true,
@@ -5525,7 +5526,7 @@
       massRowElement(invalid[0].key)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return toast(`${invalid.length} produto${invalid.length === 1 ? '' : 's'} precisam de correção.`, 'error');
     }
-    const confirmed = await confirmAction({ title: `Cadastrar ${pending.length} produto${pending.length === 1 ? '' : 's'}?`, message: `Você está prestes a cadastrar ${pending.length} produto${pending.length === 1 ? '' : 's'} como rascunho.`, confirmLabel: 'Confirmar cadastro' });
+    const confirmed = await confirmAction({ title: `Cadastrar ${pending.length} produto${pending.length === 1 ? '' : 's'}?`, message: `Você está prestes a cadastrar e publicar ${pending.length} produto${pending.length === 1 ? '' : 's'} no site.`, confirmLabel: 'Confirmar cadastro' });
     if (!confirmed) return;
     try { await persistMassPendingColors(mass); }
     catch (error) { return toast(explain(error), 'error'); }
@@ -5544,7 +5545,7 @@
     notifyStorefront('products');
     if (!failed.length) {
       clearMassProductDraft(); editorState.dirty = false;
-      toast(`${results.length} produtos cadastrados com sucesso.`);
+      toast(`${results.length} produtos cadastrados e publicados no site.`);
       setTimeout(() => { if ($('#editorDialog').open) $('#editorDialog').close(); render('products'); }, 700);
       return;
     }
@@ -5664,7 +5665,7 @@
       copy.name = `${source.name} — cópia`;
       copy.slug = `${source.slug}-copia-${Date.now().toString().slice(-6)}`;
       copy.sku = source.sku ? `${source.sku}-C${Date.now().toString().slice(-5)}` : null;
-      copy.active = false;
+      copy.active = true;
       copy.view_count = 0;
       const { data: duplicate, error: duplicateError } = await db.from('products').insert(copy).select().single();
       if (duplicateError) return toast(explain(duplicateError), 'error');
@@ -5673,7 +5674,7 @@
         const { error: imageError } = await db.from('product_images').insert(imageCopies);
         if (imageError) toast(`Produto duplicado, mas as fotos não foram copiadas: ${explain(imageError)}`, 'error');
       }
-      notifyStorefront('products'); toast('Produto duplicado como rascunho.'); render('products');
+      notifyStorefront('products'); toast('Produto duplicado e publicado no site.'); render('products');
     };
     const bindProductRows = pageRows => {
       bindActionMenus($('#productRows'));
