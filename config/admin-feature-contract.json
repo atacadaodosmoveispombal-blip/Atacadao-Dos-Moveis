@@ -18,13 +18,14 @@
       "catálogo desktop com quatro cards e imagens 1280 por 1270",
       "quatro produtos manuais na Home e carregamento progressivo por categoria",
       "logo oficial atualizada em todo o site e painel",
-      "tipos dinâmicos abaixo das subcategorias no catálogo e no painel"
+      "tipos dinâmicos abaixo das subcategorias no catálogo e no painel",
+      "publicação automática de novos produtos"
     ]
   },
   "database": {
     "executionMode": "manual-incremental-only",
-    "lastVerifiedAt": "2026-10-01",
-    "lastVerifiedSchema": "20261018_existing_product_type_links.sql",
+    "lastVerifiedAt": "2026-10-02",
+    "lastVerifiedSchema": "20261019_products_active_by_default.sql",
     "pendingMigrations": [],
     "appliedMigrations": [
       "20261005_product_dimensions_numeric.sql",
@@ -40,7 +41,8 @@
       "20261015_group_wardrobes_under_roupeiro.sql",
       "20261016_category_type_assignments_and_seed.sql",
       "20261017_category_type_icons.sql",
-      "20261018_existing_product_type_links.sql"
+      "20261018_existing_product_type_links.sql",
+      "20261019_products_active_by_default.sql"
     ]
   },
   "features": [
@@ -59,6 +61,14 @@
     {
       "name": "cadastro em massa",
       "checks": [{ "file": "admin-app.js", "contains": ["function massProductEditorMarkup(", "async function massProductEditor(", "async function saveMassProducts("] }]
+    },
+    {
+      "name": "publicação automática de produtos novos",
+      "checks": [
+        { "file": "admin-app.js", "contains": ["if (!record) values.active = true;", "function massProductPayload(", "copy.active = true;", "data-product-toggle"] },
+        { "file": "supabase/migrations/20261019_products_active_by_default.sql", "contains": ["alter table public.products alter column active set default true;"] },
+        { "file": "scripts/test-product-publication.mjs", "contains": ["produto novo", "edição", "cadastro em massa"] }
+      ]
     },
     {
       "name": "busca de produtos",
