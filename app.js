@@ -244,12 +244,41 @@ function toggleMobileEnvironment(environmentName){
  if(mobileEnvironmentOpen===environment.name&&!panel.hidden){mobileEnvironmentOpen='';panel.hidden=true}else{mobileEnvironmentOpen=environment.name;renderMobileEnvironmentPanel(environment)}
  document.querySelectorAll('#mobileEnvironmentTabs button').forEach(button=>{const expanded=button.dataset.environment===mobileEnvironmentOpen&&!panel.hidden;button.classList.toggle('is-active',expanded);button.setAttribute('aria-expanded',String(expanded))});
 }
+function renderDesktopTextNavigation(){
+ const oldNav=document.querySelector('.environment-desktop-nav');if(!oldNav)return;
+ let nav=document.querySelector('#desktopTextNavigation');
+ if(!nav){nav=document.createElement('nav');nav.id='desktopTextNavigation';nav.className='desktop-text-nav';nav.setAttribute('aria-label','Categorias da loja');oldNav.after(nav);
+  nav.addEventListener('click',event=>{
+   const button=event.target.closest('[data-desktop-action]');if(!button)return;
+   const action=button.dataset.desktopAction;
+   if(action==='menu'){
+    const item=button.closest('.desktop-text-item');const expanded=item.classList.toggle('is-open');button.setAttribute('aria-expanded',String(expanded));return;
+   }
+   nav.querySelectorAll('.desktop-text-item.is-open').forEach(item=>{item.classList.remove('is-open');item.querySelector('[aria-expanded]')?.setAttribute('aria-expanded','false')});
+   if(action==='environment')filterEnvironment(button.dataset.environment);
+   else if(action==='subcategory')filterSubcategory(button.dataset.environment,button.dataset.subcategory);
+   else if(action==='type')filterType(button.dataset.environment,button.dataset.subcategory,button.dataset.type);
+   else if(action==='offers')showOffers();
+   else if(action==='contact')openWhatsApp();
+  });
+  document.addEventListener('click',event=>{if(nav.contains(event.target))return;nav.querySelectorAll('.desktop-text-item.is-open').forEach(item=>{item.classList.remove('is-open');item.querySelector('[aria-expanded]')?.setAttribute('aria-expanded','false')})});
+  nav.addEventListener('keydown',event=>{if(event.key==='Escape'){nav.querySelectorAll('.desktop-text-item.is-open').forEach(item=>item.classList.remove('is-open'));nav.querySelectorAll('[aria-expanded]')?.forEach(button=>button.setAttribute('aria-expanded','false'));nav.querySelector(':focus')?.blur()}});
+ }
+ const typeRows=(environment,subcategory)=>subcategory?.types?.length?`<div class="desktop-text-flyout">${subcategory.types.map(type=>`<button type="button" data-desktop-action="type" data-environment="${storeHtml(environment.name)}" data-subcategory="${storeHtml(subcategoryName(subcategory))}" data-type="${storeHtml(type.id)}">${storeHtml(type.name)}</button>`).join('')}</div>`:'';
+ const subcategoryRows=environment=>environment.subcategories.map(subcategory=>`<div class="desktop-text-row"><button type="button" data-desktop-action="subcategory" data-environment="${storeHtml(environment.name)}" data-subcategory="${storeHtml(subcategoryName(subcategory))}">${storeHtml(subcategoryName(subcategory))}${subcategory?.types?.length?'<span aria-hidden="true">›</span>':''}</button>${typeRows(environment,subcategory)}</div>`).join('');
+ const environmentItem=environment=>`<div class="desktop-text-item"><button type="button" data-desktop-action="environment" data-environment="${storeHtml(environment.name)}" aria-haspopup="true">${storeHtml(environment.name)}<span aria-hidden="true">⌄</span></button><div class="desktop-text-menu">${subcategoryRows(environment)}</div></div>`;
+ const category=(name)=>environmentRecord(name);
+ const primary=['Sala','Quarto','Cozinha','Escritório'].map(category).filter(Boolean);
+ const bedroom=category('Quarto');const mattresses=bedroom?.subcategories.find(item=>normaliseSearch(subcategoryName(item))==='colchoes');
+ nav.innerHTML=`<div class="desktop-text-item desktop-text-all"><button type="button" data-desktop-action="menu" aria-haspopup="true" aria-expanded="false">Móveis<span aria-hidden="true">⌄</span></button><div class="desktop-text-menu">${environmentNavigation.map(environment=>`<div class="desktop-text-row"><button type="button" data-desktop-action="environment" data-environment="${storeHtml(environment.name)}">${storeHtml(environment.name)}<span aria-hidden="true">›</span></button><div class="desktop-text-flyout">${subcategoryRows(environment)}</div></div>`).join('')}</div></div>${primary.slice(0,3).map(environmentItem).join('')}${mattresses?`<div class="desktop-text-item"><button type="button" data-desktop-action="subcategory" data-environment="${storeHtml(bedroom.name)}" data-subcategory="${storeHtml(subcategoryName(mattresses))}" ${mattresses.types?.length?'aria-haspopup="true"':''}>Colchões${mattresses.types?.length?'<span aria-hidden="true">⌄</span>':''}</button>${mattresses.types?.length?`<div class="desktop-text-menu">${mattresses.types.map(type=>`<button type="button" data-desktop-action="type" data-environment="${storeHtml(bedroom.name)}" data-subcategory="${storeHtml(subcategoryName(mattresses))}" data-type="${storeHtml(type.id)}">${storeHtml(type.name)}</button>`).join('')}</div>`:''}</div>`:''}${primary.slice(3).map(environmentItem).join('')}<div class="desktop-text-item"><button type="button" data-desktop-action="offers">Ofertas</button></div><div class="desktop-text-item"><button type="button" data-desktop-action="contact">Contato</button></div>`;
+}
 function renderEnvironmentNavigation(){
  const desktop=document.querySelector('#desktopEnvironmentNav');const mobile=document.querySelector('#mobileEnvironmentTabs');if(!desktop||!mobile)return;
  desktop.innerHTML=environmentNavigation.map(environment=>`<button type="button" data-environment="${storeHtml(environment.name)}" aria-expanded="false" aria-controls="environmentMegaMenu">${environmentIcon(environment,22)}<span>${storeHtml(environment.name)}</span></button>`).join('');
  mobile.innerHTML=environmentNavigation.map(environment=>`<button type="button" data-environment="${storeHtml(environment.name)}" aria-expanded="false" aria-controls="mobileEnvironmentPanel">${environmentIcon(environment,24)}<span>${storeHtml(environment.name)}</span></button>`).join('');
  desktop.querySelectorAll('button').forEach(button=>{button.onmouseenter=()=>openDesktopEnvironmentMenu(button.dataset.environment);button.onfocus=()=>openDesktopEnvironmentMenu(button.dataset.environment);button.onclick=event=>{event.stopPropagation();openDesktopEnvironmentMenu(button.dataset.environment,true)}});
  mobile.querySelectorAll('button').forEach(button=>button.onclick=()=>toggleMobileEnvironment(button.dataset.environment));
+ renderDesktopTextNavigation();
 }
 function render(){products.forEach(hydrateProductTaxonomy);['#offerGrid','#bestGrid','#officeGrid'].forEach(selector=>{const grid=document.querySelector(selector);if(grid)grid.innerHTML=''});renderCatalog();updateCounts()}
 function clearCatalogSearch(){const field=document.querySelector('#search');if(field){field.value='';field.setAttribute('aria-expanded','false')}const suggestions=document.querySelector('#suggestions');if(suggestions)suggestions.style.display='none'}
