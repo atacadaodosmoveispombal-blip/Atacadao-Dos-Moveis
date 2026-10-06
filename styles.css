@@ -883,6 +883,30 @@ button{touch-action:manipulation}
 .environment-mega-overview button span{flex:1}
 .environment-mega-overview button b{font-size:1rem}
 @media(max-width:1000px){.environment-mega-overview>div{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Local desktop navigation experiment. The existing navigation remains in use below 1200px. */
+.desktop-text-nav{display:none}
+@media(min-width:1200px){
+ .environment-desktop-nav,.environment-mega-menu{display:none!important}
+ .desktop-text-nav{display:flex;align-items:stretch;justify-content:center;gap:clamp(7px,1.2vw,22px);height:58px;padding-inline:max(var(--page-pad,4%),var(--safe-left,0px));border-top:1px solid #e8eef6;background:#fff;box-shadow:0 4px 15px rgba(3,40,91,.08);position:relative;z-index:81}
+ .desktop-text-item{position:relative;display:flex;align-items:stretch;min-width:0}
+ .desktop-text-item>button{display:flex;align-items:center;justify-content:center;gap:7px;min-height:58px;padding:0 clamp(9px,1vw,18px);background:transparent;color:#083b86;font-size:clamp(.78rem,.85vw,.9rem);font-weight:800;white-space:nowrap;transition:background-color .16s ease,color .16s ease}
+ .desktop-text-item>button span{font-size:1rem;font-weight:600;color:#6181ab}
+ .desktop-text-item>button:hover,.desktop-text-item:focus-visible,.desktop-text-item:focus-within>button,.desktop-text-item.is-open>button{background:#f1f6fd;color:#012d71}
+ .desktop-text-all>button{color:#07367d;background:#ffe01b}
+ .desktop-text-all>button:hover,.desktop-text-all>button:focus-visible,.desktop-text-all:focus-within>button,.desktop-text-all.is-open>button{background:#f5d21b}
+ .desktop-text-menu,.desktop-text-flyout{display:none;position:absolute;min-width:235px;max-width:min(320px,calc(100vw - 36px));max-height:min(70vh,620px);overflow:visible;padding:7px 0;border:1px solid #dce5f0;border-radius:0 0 10px 10px;background:#fff;box-shadow:0 18px 38px rgba(1,38,88,.18);z-index:90}
+ .desktop-text-menu{top:100%;left:0}
+ .desktop-text-flyout{top:-8px;left:100%;border-radius:10px}
+ .desktop-text-item:hover>.desktop-text-menu,.desktop-text-item:focus-within>.desktop-text-menu,.desktop-text-item.is-open>.desktop-text-menu,.desktop-text-row:hover>.desktop-text-flyout,.desktop-text-row:focus-within>.desktop-text-flyout{display:block}
+ .desktop-text-menu>button,.desktop-text-row>button,.desktop-text-flyout>button{width:100%;display:flex;align-items:center;justify-content:space-between;gap:14px;min-height:43px;padding:8px 17px;background:#fff;color:#143f80;text-align:left;font-size:.82rem;font-weight:600;white-space:nowrap}
+ .desktop-text-menu>button:hover,.desktop-text-menu>button:focus-visible,.desktop-text-row:hover>button,.desktop-text-row>button:focus-visible,.desktop-text-flyout>button:hover,.desktop-text-flyout>button:focus-visible{background:#f1f6fd;color:#013ba7}
+ .desktop-text-row{position:relative}
+ .desktop-text-row>button span{color:#b68d00;font-size:1.15rem}
+ .desktop-text-item:nth-child(n+5)>.desktop-text-menu{left:auto;right:0}
+ .desktop-text-item:nth-child(n+5) .desktop-text-flyout{left:auto;right:100%}
+}
+@media(min-width:1200px) and (prefers-reduced-motion:reduce){.desktop-text-item>button{transition:none}}
 .hero-dots[hidden],.hero-arrow[hidden]{display:none}
 
 /* Color variants keep the current storefront identity and touch sizing. */

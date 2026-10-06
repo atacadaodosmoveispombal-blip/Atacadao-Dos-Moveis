@@ -235,6 +235,13 @@
       ]
     },
     {
+      "name": "navegação textual exclusiva de desktop",
+      "checks": [
+        { "file": "app.js", "contains": ["function renderDesktopTextNavigation()", "renderDesktopTextNavigation();", "data-desktop-action=\"subcategory\"", "data-desktop-action=\"type\""] },
+        { "file": "styles.css", "contains": [".desktop-text-nav{display:none}", "@media(min-width:1200px){", ".environment-desktop-nav,.environment-mega-menu{display:none!important}", ".desktop-text-row:hover>.desktop-text-flyout"] }
+      ]
+    },
+    {
       "name": "site público",
       "checks": [
         { "file": "index.html", "contains": ["app.js", "storefront-cms.js", "hero-carousel.js"] },
