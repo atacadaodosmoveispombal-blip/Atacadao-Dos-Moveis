@@ -936,3 +936,11 @@ button{touch-action:manipulation}
 .catalog-load-more button:hover{background:#0a4fae;color:#fff}
 .catalog-load-more button span{margin-left:7px;font-size:1rem}
 .catalogue.is-home-catalog .catalog-breadcrumb,.catalogue.is-home-catalog .filter-pills,.catalogue.is-home-catalog .catalog-link{display:none!important}
+
+/* Catalogue ordering, placed above the current filters and product grid. */
+.catalogue .catalog-tools{display:flex!important;align-items:center;justify-content:flex-end;gap:10px;width:100%;margin:0 0 16px}
+.catalogue .catalog-tools label{color:#0a398d;font-size:.82rem;font-weight:700;white-space:nowrap}
+.catalogue .catalog-tools select{display:block;width:auto;min-width:190px;max-width:100%;min-height:42px;flex:none;border:1px solid #b9cce6;border-radius:8px;background:#fff;color:#073780;font-size:.82rem;font-weight:600;padding:8px 34px 8px 12px}
+.catalogue .catalog-tools select:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
+.catalogue .catalog-tools .filter-btn{display:none}
+@media(max-width:620px){.catalogue .catalog-tools{gap:8px}.catalogue .catalog-tools select{min-width:0;width:min(58vw,220px)}}

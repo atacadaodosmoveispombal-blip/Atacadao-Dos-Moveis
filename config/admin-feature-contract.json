@@ -242,6 +242,16 @@
       ]
     },
     {
+      "name": "ordenação do catálogo após filtros",
+      "checks": [
+        { "file": "index.html", "contains": ["Ordenar por", "value=\"price-asc\"", "value=\"price-desc\"", "value=\"name-asc\"", "value=\"name-desc\"", "value=\"newest\"", "value=\"featured\""] },
+        { "file": "app.js", "contains": ["function sortCatalogProducts(", "sortCatalogProducts(list,document.querySelector('#sort').value)"] },
+        { "file": "storefront-cms.js", "contains": ["featured: Boolean(row.featured), createdAt: row.created_at", "on_sale,created_at,og_image_url"] },
+        { "file": "styles.css", "contains": [".catalogue .catalog-tools{display:flex!important", ".catalogue .catalog-tools select:focus-visible"] },
+        { "file": "scripts/test-catalog-sort.mjs", "contains": ["ordenação numérica, nomes, datas e destaques"] }
+      ]
+    },
+    {
       "name": "site público",
       "checks": [
         { "file": "index.html", "contains": ["app.js", "storefront-cms.js", "hero-carousel.js"] },

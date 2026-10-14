@@ -283,6 +283,27 @@ function renderEnvironmentNavigation(){
 function render(){products.forEach(hydrateProductTaxonomy);['#offerGrid','#bestGrid','#officeGrid'].forEach(selector=>{const grid=document.querySelector(selector);if(grid)grid.innerHTML=''});renderCatalog();updateCounts()}
 function clearCatalogSearch(){const field=document.querySelector('#search');if(field){field.value='';field.setAttribute('aria-expanded','false')}const suggestions=document.querySelector('#suggestions');if(suggestions)suggestions.style.display='none'}
 function catalogMatchesTaxonomy(product,environment,subcategory,typeId){return (environment==='Todas'||product.environment===environment)&&(!subcategory||product.subcategory===subcategory)&&(!typeId||(product.typeIds||[product.typeId]).some(id=>String(id)===String(typeId)))}
+function sortCatalogProducts(list,order){
+ if(order==='relevant')return list;
+ const nameOrder=new Intl.Collator('pt-BR',{sensitivity:'base',numeric:true});
+ const priceOf=product=>productHasPrice(product)?Number(product.price):null;
+ const dateOf=product=>{const date=Date.parse(product.createdAt||'');return Number.isFinite(date)?date:null};
+ return list.sort((a,b)=>{
+  if(order==='price-asc'||order==='price-desc'){
+   const left=priceOf(a),right=priceOf(b);
+   if(left===null)return right===null?0:1;
+   if(right===null)return -1;
+   return order==='price-asc'?left-right:right-left;
+  }
+  if(order==='name-asc'||order==='name-desc')return (order==='name-asc'?1:-1)*nameOrder.compare(a.n||'',b.n||'');
+  if(order==='newest'){
+   const left=dateOf(a),right=dateOf(b);
+   return left===null?(right===null?0:1):right===null?-1:right-left;
+  }
+  if(order==='featured')return Number(Boolean(b.featured||b.homeFeatured||b.badge==='Destaque'))-Number(Boolean(a.featured||a.homeFeatured||a.badge==='Destaque'));
+  return 0;
+ });
+}
 function renderCatalog(){
  const searchField=document.querySelector('#search');
  const q=normaliseSearch(searchField?.value||'');
@@ -293,9 +314,7 @@ function renderCatalog(){
  if(assistantResultIds instanceof Set)list=list.filter(p=>assistantResultIds.has(Number(p.id)));
  if(offersOnly)list=list.filter(p=>p.badge==='Oferta'||p.discount>=25);
  if(q)list=list.filter(p=>normaliseSearch(p.searchTerms||'').includes(q));
- let sort=document.querySelector('#sort').value;
- if(sort==='Menor preço')list.sort((a,b)=>a.price-b.price);
- if(sort==='Maior preço')list.sort((a,b)=>b.price-a.price);
+ sortCatalogProducts(list,document.querySelector('#sort').value);
  const total=list.length;
  const visibleList=categoryMode?list.slice(0,categoryVisibleLimit):list;
  const emptyMessage=homeMode?'Os produtos destacados serão publicados aqui em breve.':activeType&&!q?'Ainda não há produtos cadastrados neste tipo.':'Nenhum produto encontrado.';

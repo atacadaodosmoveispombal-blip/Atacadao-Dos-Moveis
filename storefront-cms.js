@@ -433,7 +433,7 @@
       productOptions,
       whatsappEnabled: row.whatsapp_enabled !== false, cartEnabled: row.cart_enabled !== false,
       freeCityShipping: Boolean(row.free_city_shipping), freeAssembly: Boolean(row.free_assembly),
-      homeFeatured: Boolean(row.home_featured)
+      homeFeatured: Boolean(row.home_featured), featured: Boolean(row.featured), createdAt: row.created_at || ''
     };
   }
   async function loadStorefrontCategories() {
@@ -452,7 +452,7 @@
     return legacy;
   }
   async function loadStorefrontProducts() {
-    const compatibleProductFields = 'id,name,sku,short_description,description,category_id,type_id,price,promotional_price,stock_quantity,best_seller,featured,new_arrival,on_sale,og_image_url,installment_enabled,max_installments,dimensions,material,color,specifications,warranty,whatsapp_enabled,cart_enabled,free_city_shipping,free_assembly,is_campaign,variants_enabled,variation_type';
+    const compatibleProductFields = 'id,name,sku,short_description,description,category_id,type_id,price,promotional_price,stock_quantity,best_seller,featured,new_arrival,on_sale,created_at,og_image_url,installment_enabled,max_installments,dimensions,material,color,specifications,warranty,whatsapp_enabled,cart_enabled,free_city_shipping,free_assembly,is_campaign,variants_enabled,variation_type';
     const publicProductFields = `${compatibleProductFields},mirror_feature,ribbed_feature,home_featured`;
     const variantRelation = 'product_variants(id,name,type,sku,color_name,color_hex,secondary_color_hex,swatch_mode,swatch_image,price,price_adjustment,stock,active,default_variant,display_order,variant_images(image_url,is_cover,sort_order))';
     const catalogVariantRelation = 'product_variants(id,name,type,sku,color_name,color_hex,secondary_color_hex,swatch_mode,swatch_image,price,price_adjustment,stock,active,default_variant,display_order,color_id,combination_color_id,primary_color:product_colors!product_variants_color_id_fkey(name,hex,secondary_hex,type),secondary_color:product_colors!product_variants_combination_color_id_fkey(name,hex,secondary_hex,type),variant_images(image_url,is_cover,sort_order))';
