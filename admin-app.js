@@ -5599,19 +5599,36 @@
     const pages = total <= 7 ? Array.from({ length: total }, (_, index) => index + 1) : [1, ...(current > 3 ? ['…'] : []), ...[current - 1, current, current + 1].filter(page => page > 1 && page < total), ...(current < total - 2 ? ['…'] : []), total];
     return `<button type="button" data-product-page="${Math.max(1, current - 1)}" ${current === 1 ? 'disabled' : ''} aria-label="Página anterior">‹</button>${pages.map(page => page === '…' ? '<span>…</span>' : `<button type="button" data-product-page="${page}" class="${page === current ? 'current' : ''}" ${page === current ? 'aria-current="page"' : ''}>${page}</button>`).join('')}<button type="button" data-product-page="${Math.min(total, current + 1)}" ${current === total ? 'disabled' : ''} aria-label="Próxima página">›</button>`;
   }
+  async function fetchAdminProducts(client) {
+    const selections = [
+      '*,categories(name),product_images(*),product_variants(*,variant_images(id,image_url,storage_path,alt_text,is_cover,sort_order)),product_option_groups(id,name,slug,display_order,active,product_option_values(id,label,slug,display_order,active))',
+      '*,categories(name),product_images(*),product_variants(*,variant_images(id,image_url,storage_path,alt_text,is_cover,sort_order))',
+      '*,categories(name),product_images(*)'
+    ];
+    for (const selection of selections) {
+      const collected = [];
+      let error = null;
+      for (let offset = 0; ; offset += 500) {
+        const result = await client.from('products').select(selection).is('deleted_at', null).order('created_at', { ascending: false }).order('id').range(offset, offset + 499);
+        if (result.error) { error = result.error; break; }
+        collected.push(...(result.data || []));
+        if ((result.data || []).length < 500) break;
+      }
+      if (!error) return collected;
+      const missingOptions = /product_option_groups|product_option_values/i.test(error.message || '') || ['42P01','PGRST200','PGRST205'].includes(error.code);
+      const missingVariants = /product_variants|variants_enabled|variation_type|relationship/i.test(error.message || '') || ['42703','42P01','PGRST200','PGRST205'].includes(error.code);
+      if ((selection === selections[0] && (missingOptions || missingVariants)) || (selection === selections[1] && missingVariants)) continue;
+      throw error;
+    }
+    return [];
+  }
+  function selectFilteredProductIds(selected, filtered) {
+    filtered.forEach(row => selected.add(row.id));
+    return selected;
+  }
   async function renderProducts(revision) {
-    let { data, error } = await db.from('products').select('*,categories(name),product_images(*),product_variants(*,variant_images(id,image_url,storage_path,alt_text,is_cover,sort_order)),product_option_groups(id,name,slug,display_order,active,product_option_values(id,label,slug,display_order,active))').is('deleted_at', null).order('created_at', { ascending: false }).limit(1000);
-    if (error && (/product_option_groups|product_option_values/i.test(error.message || '') || ['42P01','PGRST200','PGRST205'].includes(error.code))) {
-      const withoutOptions = await db.from('products').select('*,categories(name),product_images(*),product_variants(*,variant_images(id,image_url,storage_path,alt_text,is_cover,sort_order))').is('deleted_at', null).order('created_at', { ascending: false }).limit(1000);
-      data = withoutOptions.data; error = withoutOptions.error;
-    }
-    if (error && (/product_variants|variants_enabled|variation_type|relationship/i.test(error.message || '') || ['42703','42P01','PGRST200','PGRST205'].includes(error.code))) {
-      const legacy = await db.from('products').select('*,categories(name),product_images(*)').is('deleted_at', null).order('created_at', { ascending: false }).limit(1000);
-      data = legacy.data; error = legacy.error;
-    }
-    if (error) throw error;
+    let rows = await fetchAdminProducts(db);
     if (revision !== viewRevision) return;
-    const rows = data || [];
     const rowFor = id => rows.find(row => row.id === id);
     const categories = [...new Set(rows.map(row => row.categories?.name).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
     productViewState.selected = new Set([...productViewState.selected].filter(id => rowFor(id)));
@@ -5639,6 +5656,21 @@
     <div class="card product-table-card ${productViewState.view === 'grid' ? 'grid-mode' : ''}" id="productTableCard"><div class="table-wrap"><table class="data-table product-table" id="productTable"><thead><tr><th><input id="selectPageProducts" type="checkbox" aria-label="Selecionar produtos desta página"></th><th>Produto</th><th>Categoria</th><th>Preço</th><th>Estoque</th><th>Status</th><th>Destaque</th><th>⭐ Home</th><th>Ações</th></tr></thead><tbody id="productRows"></tbody></table></div><div class="empty product-empty admin-empty" id="productEmpty" hidden><span class="admin-empty-icon" aria-hidden="true">⌕</span><h2>Nenhum produto encontrado</h2><p>Ajuste os filtros ou cadastre um novo produto.</p><button id="emptyNewProduct" class="secondary" type="button">+ Novo produto</button></div><footer class="product-pagination" id="productPagination"></footer></div>
     <div class="product-filter-drawer" id="productFilterDrawer" hidden><button class="product-filter-backdrop" type="button" data-product-filters-close aria-label="Fechar filtros"></button><aside role="dialog" aria-modal="true" aria-labelledby="productFilterTitle"><header><div><small>CATÁLOGO</small><h2 id="productFilterTitle">Filtros avançados</h2></div><button type="button" data-product-filters-close aria-label="Fechar filtros">×</button></header><div class="product-filter-fields"><label>Categoria<select id="mobileCategoryFilter"><option value="">Todas as categorias</option>${categories.map(name => `<option value="${esc(name)}" ${productViewState.category === name ? 'selected' : ''}>${esc(name)}</option>`).join('')}</select></label><label>Status<select id="mobileStatusFilter"><option value="">Todos os status</option><option value="active" ${productViewState.status === 'active' ? 'selected' : ''}>Publicados</option><option value="inactive" ${productViewState.status === 'inactive' ? 'selected' : ''}>Inativos</option></select></label><label>Estoque<select id="mobileStockFilter"><option value="">Todo estoque</option><option value="out" ${productViewState.stock === 'out' ? 'selected' : ''}>Sem estoque</option><option value="low" ${productViewState.stock === 'low' ? 'selected' : ''}>Estoque baixo</option><option value="in" ${productViewState.stock === 'in' ? 'selected' : ''}>Em estoque</option></select></label><label>Ordenação<select id="mobileProductSort"><option value="newest" ${productViewState.sort === 'newest' ? 'selected' : ''}>Mais recentes</option><option value="name" ${productViewState.sort === 'name' ? 'selected' : ''}>Nome (A–Z)</option><option value="price-asc" ${productViewState.sort === 'price-asc' ? 'selected' : ''}>Menor preço</option><option value="price-desc" ${productViewState.sort === 'price-desc' ? 'selected' : ''}>Maior preço</option><option value="stock" ${productViewState.sort === 'stock' ? 'selected' : ''}>Menor estoque</option></select></label><label class="drawer-check"><input id="featuredOnly" type="checkbox" ${productViewState.featuredOnly ? 'checked' : ''}> Somente produtos em destaque</label><label class="drawer-check"><input id="promotionOnly" type="checkbox" ${productViewState.promotionOnly ? 'checked' : ''}> Somente produtos em promoção</label></div><footer><button class="secondary" id="clearProductFilters" type="button">Limpar filtros</button><button type="button" data-product-filters-close>Aplicar filtros</button></footer></aside></div>`;
 
+    $('#productTableCard').insertAdjacentHTML('beforebegin', `<div class="product-bulk-bar card" id="productBulkBar">
+      <strong id="productBulkCount">0 produtos selecionados</strong>
+      <button class="secondary" id="selectFilteredProducts" type="button">Selecionar todos os resultados</button>
+      <button class="secondary" id="clearSelectedProducts" type="button">Limpar seleção</button>
+      <select id="productBulkAction" aria-label="Ação para produtos selecionados"><option value="">Escolha uma ação</option><option value="move">Mover para outra categoria</option><option value="activate">Ativar</option><option value="deactivate">Desativar</option><option value="delete">Excluir</option></select>
+      <button id="applyProductBulkAction" type="button">Continuar</button>
+    </div>`);
+    $('#productTableCard').insertAdjacentHTML('afterend', `<dialog id="productBulkMoveDialog" class="product-bulk-dialog" aria-labelledby="productBulkMoveTitle"><div class="product-bulk-dialog-body">
+      <h2 id="productBulkMoveTitle">Mover produtos</h2><p id="productBulkMoveCount"></p>
+      <label>Ambiente<select id="productBulkEnvironment"><option value="">Selecione o ambiente</option></select></label>
+      <label>Subcategoria<select id="productBulkCategory" disabled><option value="">Selecione a subcategoria</option></select></label>
+      <label>Tipo (opcional)<select id="productBulkType" disabled><option value="">Sem tipo</option></select></label>
+      <div class="product-bulk-dialog-actions"><button class="secondary" id="cancelProductBulkMove" type="button">Cancelar</button><button id="confirmProductBulkMove" type="button">Confirmar movimentação</button></div>
+    </div></dialog>`);
+
     const filteredProducts = () => {
       const term = productViewState.search.trim().toLowerCase();
       const filtered = rows.filter(row => {
@@ -5657,6 +5689,102 @@
         if (productViewState.sort === 'stock') return Number(left.stock_quantity) - Number(right.stock_quantity);
         return new Date(right.created_at) - new Date(left.created_at);
       });
+    };
+    const updateBulkBar = () => {
+      const count = productViewState.selected.size;
+      $('#productBulkBar').classList.toggle('has-selection', Boolean(count));
+      $('#productBulkCount').textContent = `${count} produto${count === 1 ? '' : 's'} selecionado${count === 1 ? '' : 's'}`;
+      const filtered = filteredProducts();
+      const remaining = filtered.filter(row => !productViewState.selected.has(row.id)).length;
+      const selectFiltered = $('#selectFilteredProducts');
+      selectFiltered.textContent = `Selecionar todos os ${filtered.length} resultados filtrados`;
+      selectFiltered.disabled = !remaining;
+      $('#clearSelectedProducts').disabled = !count;
+      $('#productBulkAction').disabled = !count;
+      $('#applyProductBulkAction').disabled = !count;
+    };
+    const runBulkAction = async (action, categoryId = null, typeId = null) => {
+      if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
+      const ids = [...productViewState.selected];
+      if (!ids.length) return toast('Selecione ao menos um produto.', 'info');
+      const labels = { move: 'mover', activate: 'ativar', deactivate: 'desativar', delete: 'excluir' };
+      if (!labels[action]) return;
+      const confirmed = await confirmAction({
+        title: `${labels[action][0].toUpperCase()}${labels[action].slice(1)} ${ids.length} produto${ids.length === 1 ? '' : 's'}?`,
+        message: action === 'move' ? `Os ${ids.length} produtos serão transferidos para a subcategoria escolhida. Fotos, preços, estoque e status serão preservados.` : action === 'delete' ? `Os ${ids.length} produtos serão removidos do catálogo. Esta ação não poderá ser desfeita pelo painel.` : `O status de publicação de ${ids.length} produto${ids.length === 1 ? '' : 's'} será alterado.`,
+        confirmLabel: 'Confirmar', tone: action === 'delete' ? 'danger' : 'default'
+      });
+      if (!confirmed) return;
+      const button = $('#applyProductBulkAction');
+      button.disabled = true;
+      $('#confirmProductBulkMove').disabled = true;
+      try {
+        const { data: changed, error } = await db.rpc('bulk_product_action', {
+          product_ids: ids, action_name: action,
+          destination_category_id: categoryId, destination_type_id: typeId
+        });
+        if (error) throw error;
+        productViewState.selected.clear();
+        $('#productBulkMoveDialog').close();
+        notifyStorefront('products');
+        toast(`${changed} produto${changed === 1 ? '' : 's'} alterado${changed === 1 ? '' : 's'} com sucesso.`);
+        await render('products');
+      } catch (error) {
+        toast(error.code === 'PGRST202' ? 'A atualização do banco para ações em massa ainda não foi aplicada.' : explain(error), 'error');
+      } finally {
+        button.disabled = false;
+        const moveButton = $('#confirmProductBulkMove');
+        if (moveButton) moveButton.disabled = false;
+      }
+    };
+    let bulkTaxonomy;
+    const openBulkMove = async () => {
+      if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
+      try {
+        if (!bulkTaxonomy) {
+          const [environments, categoriesResult, typesResult] = await Promise.all([
+            db.from('environments').select('id,name,active').order('name'),
+            db.from('categories').select('id,name,environment_id,active').order('name'),
+            db.from('category_types').select('id,name,category_id,active').order('name')
+          ]);
+          for (const result of [environments, categoriesResult, typesResult]) if (result.error) throw result.error;
+          bulkTaxonomy = { environments: environments.data || [], categories: categoriesResult.data || [], types: typesResult.data || [] };
+        }
+        const environmentSelect = $('#productBulkEnvironment');
+        const categorySelect = $('#productBulkCategory');
+        const typeSelect = $('#productBulkType');
+        environmentSelect.innerHTML = '<option value="">Selecione o ambiente</option>' + bulkTaxonomy.environments.filter(item => item.active !== false).map(item => `<option value="${esc(item.id)}">${esc(item.name)}</option>`).join('');
+        const updateCategories = () => {
+          categorySelect.innerHTML = '<option value="">Selecione a subcategoria</option>' + bulkTaxonomy.categories.filter(item => item.environment_id === environmentSelect.value && item.active !== false).map(item => `<option value="${esc(item.id)}">${esc(item.name)}</option>`).join('');
+          categorySelect.disabled = !environmentSelect.value;
+          updateTypes();
+        };
+        const updateTypes = () => {
+          typeSelect.innerHTML = '<option value="">Sem tipo</option>' + bulkTaxonomy.types.filter(item => item.category_id === categorySelect.value && item.active !== false).map(item => `<option value="${esc(item.id)}">${esc(item.name)}</option>`).join('');
+          typeSelect.disabled = !categorySelect.value;
+        };
+        environmentSelect.onchange = updateCategories;
+        categorySelect.onchange = updateTypes;
+        environmentSelect.value = '';
+        updateCategories();
+        $('#productBulkMoveCount').textContent = `${productViewState.selected.size} produtos selecionados`;
+        $('#productBulkMoveDialog').showModal();
+        environmentSelect.focus();
+      } catch (error) { toast(explain(error), 'error'); }
+    };
+    $('#selectFilteredProducts').onclick = () => { selectFilteredProductIds(productViewState.selected, filteredProducts()); paintProducts(); };
+    $('#clearSelectedProducts').onclick = () => { productViewState.selected.clear(); paintProducts(); };
+    $('#applyProductBulkAction').onclick = () => {
+      const action = $('#productBulkAction').value;
+      if (!action) return toast('Escolha uma ação.', 'info');
+      if (action === 'move') openBulkMove();
+      else runBulkAction(action);
+    };
+    $('#cancelProductBulkMove').onclick = () => $('#productBulkMoveDialog').close();
+    $('#confirmProductBulkMove').onclick = () => {
+      const categoryId = $('#productBulkCategory').value;
+      if (!categoryId) return toast('Escolha a subcategoria de destino.', 'info');
+      runBulkAction('move', categoryId, $('#productBulkType').value || null);
     };
     const duplicateProduct = async source => {
       if (!canWrite()) return toast('Seu perfil possui acesso somente para consulta.', 'error');
@@ -5739,6 +5867,7 @@
           selectAll.indeterminate = selectedOnPage > 0 && selectedOnPage < pageRows.length;
         }
         $('#selectedProductCount').textContent = `${productViewState.selected.size} produto${productViewState.selected.size === 1 ? '' : 's'} selecionado${productViewState.selected.size === 1 ? '' : 's'}`;
+        updateBulkBar();
       };
       $$('[data-product-select]').forEach(input => input.onchange = () => {
         if (input.checked) productViewState.selected.add(input.dataset.productSelect);
@@ -5762,6 +5891,7 @@
       $('#productTable').hidden = !filtered.length;
       $('#productEmpty').hidden = Boolean(filtered.length);
       $('#productPagination').innerHTML = `<span id="selectedProductCount">${productViewState.selected.size} produtos selecionados</span><div><label>Itens por página <select id="productPageSize"><option value="10" ${productViewState.pageSize === 10 ? 'selected' : ''}>10</option><option value="20" ${productViewState.pageSize === 20 ? 'selected' : ''}>20</option><option value="50" ${productViewState.pageSize === 50 ? 'selected' : ''}>50</option></select></label><nav aria-label="Paginação dos produtos">${productPagination(productViewState.page, totalPages)}</nav></div>`;
+      updateBulkBar();
       bindProductRows(pageRows);
       $$('[data-product-page]').forEach(button => button.onclick = () => { productViewState.page = Number(button.dataset.productPage); paintProducts(); $('#productTableCard').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
       $('#productPageSize').onchange = event => { productViewState.pageSize = Number(event.target.value); productViewState.page = 1; paintProducts(); };
