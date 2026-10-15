@@ -19,13 +19,14 @@
       "quatro produtos manuais na Home e carregamento progressivo por categoria",
       "logo oficial atualizada em todo o site e painel",
       "tipos dinâmicos abaixo das subcategorias no catálogo e no painel",
-      "publicação automática de novos produtos"
+      "publicação automática de novos produtos",
+      "seleção e ações em massa no catálogo"
     ]
   },
   "database": {
     "executionMode": "manual-incremental-only",
-    "lastVerifiedAt": "2026-10-02",
-    "lastVerifiedSchema": "20261019_products_active_by_default.sql",
+    "lastVerifiedAt": "2026-10-15",
+    "lastVerifiedSchema": "20261020_bulk_product_actions.sql",
     "pendingMigrations": [],
     "appliedMigrations": [
       "20261005_product_dimensions_numeric.sql",
@@ -42,7 +43,8 @@
       "20261016_category_type_assignments_and_seed.sql",
       "20261017_category_type_icons.sql",
       "20261018_existing_product_type_links.sql",
-      "20261019_products_active_by_default.sql"
+      "20261019_products_active_by_default.sql",
+      "20261020_bulk_product_actions.sql"
     ]
   },
   "features": [
@@ -61,6 +63,14 @@
     {
       "name": "cadastro em massa",
       "checks": [{ "file": "admin-app.js", "contains": ["function massProductEditorMarkup(", "async function massProductEditor(", "async function saveMassProducts("] }]
+    },
+    {
+      "name": "ações em massa de produtos",
+      "checks": [
+        { "file": "admin-app.js", "contains": ["function selectFilteredProductIds(", "bulk_product_action", "Selecionar todos os", "productBulkCategory", "notifyStorefront('products')"] },
+        { "file": "supabase/migrations/20261020_bulk_product_actions.sql", "contains": ["create function public.bulk_product_action", "delete from public.product_category_types", "set category_id = destination_category_id", "return affected"] },
+        { "file": "scripts/test-bulk-product-actions.mjs", "contains": ["1251", "deduplicação", "transacionais"] }
+      ]
     },
     {
       "name": "publicação automática de produtos novos",
