@@ -33,7 +33,7 @@ const defaultEnvironmentNavigation=[
  {name:'Escritório',slug:'escritorio',description:'Produtividade com conforto e estilo',image:'https://images.unsplash.com/photo-1497366811353-6870744d04b2?auto=format&fit=crop&w=700&q=80',subcategories:['Mesa de Computador','Escrivaninha','Cadeira Giratória']},
  {name:'Cozinha',slug:'cozinha',description:'Praticidade para o coração da casa',image:'https://images.unsplash.com/photo-1556911220-bff31c812dba?auto=format&fit=crop&w=700&q=80',subcategories:['Armário de Parede','Balcão','Mesa Granito','Cristaleira','Multiuso','Mesa Plástica','Tábua de Passar','Fruteira','Cantoneira']},
  {name:'Infantil',slug:'infantil',description:'Tudo para o quarto do seu pequeno',image:'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=700&q=80',subcategories:['Berço','Colchão Berço','Roupeiro Infantil']},
- {name:'Eletros',slug:'eletros',description:'Tecnologia e praticidade para sua rotina',image:'https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?auto=format&fit=crop&w=700&q=80',subcategories:['Ventiladores','Ferro de Passar','Liquidificador','Fogão','Lavadora e Tanquinho','Cabelo e Beleza','Espremedor','Ar-Condicionado e Climatizador']}
+ {name:'Eletros',slug:'eletros',description:'Tecnologia e praticidade para sua rotina',image:'https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?auto=format&fit=crop&w=700&q=80',subcategories:['Fogões','Cooktops','Fornos','Micro-ondas','Geladeiras','Freezers','Máquinas de Lavar']}
 ];
 let environmentNavigation=defaultEnvironmentNavigation.map(item=>({...item,subcategories:[...item.subcategories]}));
 const HOME_PRODUCT_LIMIT=4,CATEGORY_PAGE_SIZE=8;
@@ -41,6 +41,9 @@ let cart=JSON.parse(localStorage.getItem('movel-cart')||'[]'), favs=JSON.parse(l
 const brl=n=>n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const storeHtml=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[char]);
 const normaliseSearch=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+// Product data occasionally arrives from an import with the original image
+// filename in a display field. File extensions must never be customer-facing.
+const cleanCatalogLabel=(value,fallback='')=>String(value??'').trim().replace(/\.(?:avif|gif|jpe?g|png|webp)$/i,'').trim()||fallback;
 function environmentRecord(value){const term=normaliseSearch(value);return environmentNavigation.find(item=>normaliseSearch(item.name)===term||normaliseSearch(item.slug)===term)}
 function inferProductEnvironment(product){
  const source=normaliseSearch(`${product.n} ${product.cat}`);
@@ -59,11 +62,16 @@ function inferProductSubcategory(product,environment){
   Escritório:[['Cadeira Giratória',/cadeira/],['Escrivaninha',/escrivaninha/],['Mesa de Computador',/mesa|office|computador/]],
   Cozinha:[['Armário de Parede',/armario de cozinha|armario de parede/],['Balcão',/balcao/],['Mesa Granito',/granito/],['Cristaleira',/cristaleira/],['Multiuso',/multiuso/],['Mesa Plástica',/mesa plastica/],['Tábua de Passar',/tabua/],['Fruteira',/fruteira/],['Cantoneira',/cantoneira/]],
   Infantil:[['Colchão Berço',/colchao/],['Roupeiro Infantil',/roupeiro|guarda-roupa/],['Berço',/berco/]],
-  Eletros:[['Ventiladores',/ventilador/],['Ferro de Passar',/ferro/],['Liquidificador',/liquidificador/],['Fogão',/fogao/],['Lavadora e Tanquinho',/lavadora|tanquinho|lava e seca/],['Cabelo e Beleza',/cabelo|beleza|secador|chapinha/],['Espremedor',/espremedor/],['Ar-Condicionado e Climatizador',/ar-condicionado|climatizador/]]
+  Eletros:[['Cooktops',/cooktop/],['Fornos',/forno/],['Micro-ondas',/micro-ondas|microondas/],['Geladeiras',/geladeira|refrigerador/],['Freezers',/freezer/],['Máquinas de Lavar',/lavadora|maquina de lavar|lava e seca|tanquinho/],['Fogões',/fogao/]]
  };
  return (rules[environment]||[]).find(([,pattern])=>pattern.test(source))?.[0]||'';
 }
 function hydrateProductTaxonomy(product){
+ product.n=cleanCatalogLabel(product.n,'Produto sem nome');
+ product.environment=cleanCatalogLabel(product.environment);
+ product.subcategory=cleanCatalogLabel(product.subcategory);
+ product.cat=cleanCatalogLabel(product.cat);
+ product.type=cleanCatalogLabel(product.type);
  product.environment=product.environment||inferProductEnvironment(product);
  product.subcategory=product.subcategory||inferProductSubcategory(product,product.environment)||product.cat;
  product.cat=product.subcategory||product.cat;
@@ -268,9 +276,8 @@ function renderDesktopTextNavigation(){
  const subcategoryRows=environment=>environment.subcategories.map(subcategory=>`<div class="desktop-text-row"><button type="button" data-desktop-action="subcategory" data-environment="${storeHtml(environment.name)}" data-subcategory="${storeHtml(subcategoryName(subcategory))}">${storeHtml(subcategoryName(subcategory))}${subcategory?.types?.length?'<span aria-hidden="true">›</span>':''}</button>${typeRows(environment,subcategory)}</div>`).join('');
  const environmentItem=environment=>`<div class="desktop-text-item"><button type="button" data-desktop-action="environment" data-environment="${storeHtml(environment.name)}" aria-haspopup="true">${storeHtml(environment.name)}<span aria-hidden="true">⌄</span></button><div class="desktop-text-menu">${subcategoryRows(environment)}</div></div>`;
  const category=(name)=>environmentRecord(name);
- const primary=['Sala','Quarto','Cozinha','Escritório'].map(category).filter(Boolean);
- const bedroom=category('Quarto');const mattresses=bedroom?.subcategories.find(item=>normaliseSearch(subcategoryName(item))==='colchoes');
- nav.innerHTML=`<div class="desktop-text-item desktop-text-all"><button type="button" data-desktop-action="menu" aria-haspopup="true" aria-expanded="false">Móveis<span aria-hidden="true">⌄</span></button><div class="desktop-text-menu">${environmentNavigation.map(environment=>`<div class="desktop-text-row"><button type="button" data-desktop-action="environment" data-environment="${storeHtml(environment.name)}">${storeHtml(environment.name)}<span aria-hidden="true">›</span></button><div class="desktop-text-flyout">${subcategoryRows(environment)}</div></div>`).join('')}</div></div>${primary.slice(0,3).map(environmentItem).join('')}${mattresses?`<div class="desktop-text-item"><button type="button" data-desktop-action="subcategory" data-environment="${storeHtml(bedroom.name)}" data-subcategory="${storeHtml(subcategoryName(mattresses))}" ${mattresses.types?.length?'aria-haspopup="true"':''}>Colchões${mattresses.types?.length?'<span aria-hidden="true">⌄</span>':''}</button>${mattresses.types?.length?`<div class="desktop-text-menu">${mattresses.types.map(type=>`<button type="button" data-desktop-action="type" data-environment="${storeHtml(bedroom.name)}" data-subcategory="${storeHtml(subcategoryName(mattresses))}" data-type="${storeHtml(type.id)}">${storeHtml(type.name)}</button>`).join('')}</div>`:''}</div>`:''}${primary.slice(3).map(environmentItem).join('')}<div class="desktop-text-item"><button type="button" data-desktop-action="offers">Ofertas</button></div><div class="desktop-text-item"><button type="button" data-desktop-action="contact">Contato</button></div>`;
+ const primary=['Sala','Quarto','Cozinha','Escritório','Eletros'].map(category).filter(Boolean);
+ nav.innerHTML=`<div class="desktop-text-item desktop-text-all"><button type="button" data-desktop-action="menu" aria-haspopup="true" aria-expanded="false">Móveis<span aria-hidden="true">⌄</span></button><div class="desktop-text-menu">${environmentNavigation.map(environment=>`<div class="desktop-text-row"><button type="button" data-desktop-action="environment" data-environment="${storeHtml(environment.name)}">${storeHtml(environment.name)}<span aria-hidden="true">›</span></button><div class="desktop-text-flyout">${subcategoryRows(environment)}</div></div>`).join('')}</div></div>${primary.map(environmentItem).join('')}<div class="desktop-text-item"><button type="button" data-desktop-action="offers">Ofertas</button></div><div class="desktop-text-item"><button type="button" data-desktop-action="contact">Contato</button></div>`;
 }
 function renderEnvironmentNavigation(){
  const desktop=document.querySelector('#desktopEnvironmentNav');const mobile=document.querySelector('#mobileEnvironmentTabs');if(!desktop||!mobile)return;

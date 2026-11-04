@@ -20,13 +20,14 @@
       "logo oficial atualizada em todo o site e painel",
       "tipos dinâmicos abaixo das subcategorias no catálogo e no painel",
       "publicação automática de novos produtos",
-      "seleção e ações em massa no catálogo"
+      "seleção e ações em massa no catálogo",
+      "navegação de Eletros e Colchões sem duplicar produtos"
     ]
   },
   "database": {
     "executionMode": "manual-incremental-only",
-    "lastVerifiedAt": "2026-10-15",
-    "lastVerifiedSchema": "20261020_bulk_product_actions.sql",
+    "lastVerifiedAt": "2026-11-04",
+    "lastVerifiedSchema": "20261104_electros_menu_and_mattresses.sql",
     "pendingMigrations": [],
     "appliedMigrations": [
       "20261005_product_dimensions_numeric.sql",
@@ -44,7 +45,8 @@
       "20261017_category_type_icons.sql",
       "20261018_existing_product_type_links.sql",
       "20261019_products_active_by_default.sql",
-      "20261020_bulk_product_actions.sql"
+      "20261020_bulk_product_actions.sql",
+      "20261104_electros_menu_and_mattresses.sql"
     ]
   },
   "features": [
