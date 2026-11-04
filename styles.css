@@ -906,6 +906,16 @@ button{touch-action:manipulation}
  .desktop-text-item:nth-child(n+5)>.desktop-text-menu{left:auto;right:0}
  .desktop-text-item:nth-child(n+5) .desktop-text-flyout{left:auto;right:100%}
 }
+
+/* Search results use independent rows so long names, prices and categories
+   cannot overlap at narrow widths or when imported catalog data is verbose. */
+.search-wrap #suggestions{overflow:hidden;isolation:isolate}
+.search-wrap .suggestion{width:100%;min-height:0;display:grid;gap:3px;padding:12px 16px;background:#fff;color:#173766;text-align:left;white-space:normal;line-height:1.3}
+.search-wrap .suggestion:hover,.search-wrap .suggestion:focus-visible{background:#f1f6fd}
+.search-wrap .suggestion:last-child{border-bottom:0}
+.search-wrap .suggestion b,.search-wrap .suggestion small{display:block;min-width:0;overflow-wrap:anywhere}
+.search-wrap .suggestion b{font-size:.875rem;color:#143f80}
+.search-wrap .suggestion small{font-size:.75rem;color:#61728d}
 @media(min-width:1200px) and (prefers-reduced-motion:reduce){.desktop-text-item>button{transition:none}}
 .hero-dots[hidden],.hero-arrow[hidden]{display:none}
 
